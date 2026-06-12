@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Guerilla Golf controller: a dark touchpad. Drag back like a slingshot,
-/// release to fire. Aim updates stream to the host board (throttled ~30/s,
-/// per the design doc's network budget).
+/// Guerilla Golf controller — turn-based. On your turn the screen becomes a
+/// slingshot touchpad (drag back, release to fire, aim streamed ~30/s).
+/// Off-turn you see who's shooting; once you sink you spectate.
 struct PhoneGolfView: View {
     @EnvironmentObject var client: GameClient
 
@@ -15,10 +15,16 @@ struct PhoneGolfView: View {
 
     private var golf: GolfState? { client.room?.golf }
     private var anviled: Bool { golf?.debuffs[client.playerId] == "anvil" }
+    private var myTurn: Bool { golf?.turnId == client.playerId }
+
     private var finishedPlace: Int? {
-        guard let order = golf?.results?.order, let idx = order.firstIndex(of: client.playerId)
-        else { return nil }
-        return idx + 1
+        if let order = golf?.results?.order, let idx = order.firstIndex(of: client.playerId) {
+            return idx + 1
+        }
+        if let sunk = golf?.sunk, let idx = sunk.firstIndex(of: client.playerId) {
+            return idx + 1
+        }
+        return nil
     }
 
     private var launch: (angle: Double, power: Double)? {
@@ -38,49 +44,23 @@ struct PhoneGolfView: View {
         VStack(spacing: 0) {
             header
 
-            GeometryReader { geo in
-                ZStack {
-                    RoundedRectangle(cornerRadius: 28)
-                        .fill(Color.black.opacity(0.45))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 28)
-                                .strokeBorder(Theme.cyan.opacity(0.25), lineWidth: 1.5)
-                        )
-
-                    if let start = dragStart, let current = dragCurrent {
-                        slingshotOverlay(start: start, current: current)
-                    } else {
-                        VStack(spacing: 10) {
-                            Image(systemName: "hand.draw.fill")
-                                .font(.system(size: 44))
-                                .foregroundStyle(Theme.cyan.opacity(0.5))
-                            Text("Drag back. Release to launch.\nWatch the TV — knock your friends off the map.")
-                                .font(Theme.body(15))
-                                .foregroundStyle(.white.opacity(0.45))
-                                .multilineTextAlignment(.center)
-                        }
-                    }
-                }
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            if dragStart == nil { dragStart = value.startLocation }
-                            dragCurrent = value.location
-                            streamAim()
-                        }
-                        .onEnded { _ in
-                            release()
-                        }
-                )
-                .frame(width: geo.size.width, height: geo.size.height)
+            if finishedPlace != nil {
+                Spacer()
+            } else if myTurn {
+                touchpad
+            } else {
+                waitingView
             }
-            .padding(16)
         }
         .overlay {
             if let place = finishedPlace {
                 sunkOverlay(place: place)
             }
+        }
+        .onChange(of: golf?.turnId) { _, _ in
+            // New shooter: drop any half-finished drag.
+            dragStart = nil
+            dragCurrent = nil
         }
     }
 
@@ -103,7 +83,7 @@ struct PhoneGolfView: View {
                     .padding(.vertical, 6)
                     .background(Capsule().fill(Theme.yellow))
             }
-            if let l = launch {
+            if myTurn, let l = launch {
                 Text("POWER \(Int(l.power * 100))%")
                     .font(Theme.body(15))
                     .foregroundStyle(l.power > 0.85 ? Theme.red : Theme.cyan)
@@ -114,9 +94,85 @@ struct PhoneGolfView: View {
         .padding(.top, 8)
     }
 
+    // MARK: your shot
+
+    private var touchpad: some View {
+        VStack(spacing: 10) {
+            Text("🎯 YOUR SHOT")
+                .font(Theme.title(24))
+                .foregroundStyle(Theme.yellow)
+                .neonGlow(Theme.yellow)
+                .padding(.top, 6)
+
+            GeometryReader { geo in
+                ZStack {
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(Color.black.opacity(0.45))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 28)
+                                .strokeBorder(Theme.cyan.opacity(0.25), lineWidth: 1.5)
+                        )
+
+                    if let start = dragStart, let current = dragCurrent {
+                        slingshotOverlay(start: start, current: current)
+                    } else {
+                        VStack(spacing: 10) {
+                            Image(systemName: "hand.draw.fill")
+                                .font(.system(size: 44))
+                                .foregroundStyle(Theme.cyan.opacity(0.5))
+                            Text("Drag back. Release to launch.\nOne shot — make it count.")
+                                .font(Theme.body(15))
+                                .foregroundStyle(.white.opacity(0.45))
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            if dragStart == nil { dragStart = value.startLocation }
+                            dragCurrent = value.location
+                            streamAim()
+                        }
+                        .onEnded { _ in
+                            release()
+                        }
+                )
+                .frame(width: geo.size.width, height: geo.size.height)
+            }
+            .padding([.horizontal, .bottom], 16)
+        }
+    }
+
+    // MARK: someone else's shot
+
+    private var waitingView: some View {
+        let shooter = client.room?.player(golf?.turnId)
+        return VStack(spacing: 16) {
+            Spacer()
+            Text(shooter?.avatar ?? "⏳")
+                .font(.system(size: 80))
+            if let shooter {
+                Text("\(shooter.name.uppercased()) IS SHOOTING")
+                    .font(Theme.title(24))
+                    .foregroundStyle(Color(hex: shooter.color))
+                    .multilineTextAlignment(.center)
+            } else {
+                Text("GET READY…")
+                    .font(Theme.title(24))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            Text("👀 Watch the TV — your turn is coming.")
+                .font(Theme.body(15))
+                .foregroundStyle(.white.opacity(0.45))
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private func slingshotOverlay(start: CGPoint, current: CGPoint) -> some View {
         ZStack {
-            // Rubber band from anchor to thumb.
             Path { p in
                 p.move(to: start)
                 p.addLine(to: current)
@@ -126,7 +182,6 @@ struct PhoneGolfView: View {
                 style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [10, 8])
             )
 
-            // Anchor + projected launch direction.
             Circle()
                 .fill(Theme.cyan)
                 .frame(width: 18, height: 18)
@@ -136,8 +191,8 @@ struct PhoneGolfView: View {
             if let l = launch {
                 let len = 60 + 120 * l.power
                 let end = CGPoint(
-                    x: start.x + cos(l.angle) * len,
-                    y: start.y - sin(l.angle) * len
+                    x: start.x + Foundation.cos(l.angle) * len,
+                    y: start.y - Foundation.sin(l.angle) * len
                 )
                 Path { p in
                     p.move(to: start)
@@ -169,7 +224,7 @@ struct PhoneGolfView: View {
                     .font(Theme.title(32))
                     .foregroundStyle(Theme.cyan)
                     .neonGlow(Theme.cyan)
-                Text("You finished #\(place)")
+                Text("You finished #\(place) — enjoy the show")
                     .font(Theme.body(18))
                     .foregroundStyle(.white.opacity(0.7))
             }
@@ -179,7 +234,7 @@ struct PhoneGolfView: View {
     // MARK: input -> network
 
     private func streamAim() {
-        guard let l = launch else { return }
+        guard myTurn, let l = launch else { return }
         let now = Date()
         guard now.timeIntervalSince(lastAimSent) >= aimInterval else { return }
         lastAimSent = now
@@ -187,13 +242,16 @@ struct PhoneGolfView: View {
     }
 
     private func release() {
+        defer {
+            dragStart = nil
+            dragCurrent = nil
+        }
+        guard myTurn else { return }
         if let l = launch, l.power > 0.06 {
             Haptics.thump(intensity: l.power)
             client.fire(angle: l.angle, power: l.power)
         } else {
             client.sendAimClear()
         }
-        dragStart = nil
-        dragCurrent = nil
     }
 }

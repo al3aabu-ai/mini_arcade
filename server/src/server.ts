@@ -140,6 +140,13 @@ export function startServer(port: number) {
               case "golf_finished":
                 room.golfFinished(playerId, Array.isArray(msg.order) ? msg.order.map(String) : []);
                 break;
+              case "golf_progress":
+                room.golfProgress(
+                  playerId,
+                  typeof msg.turnId === "string" ? msg.turnId : null,
+                  Array.isArray(msg.sunk) ? msg.sunk.map(String) : [],
+                );
+                break;
               case "pass_bomb":
                 room.passBomb(playerId, msg.direction === "left" ? "left" : "right");
                 break;

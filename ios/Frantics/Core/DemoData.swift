@@ -43,8 +43,8 @@ enum DemoData {
         state(
             phase: "golf",
             golf: GolfState(
-                endsAt: Date().addingTimeInterval(70).timeIntervalSince1970 * 1000,
-                debuffs: ["p3": "anvil"], results: nil
+                endsAt: Date().addingTimeInterval(140).timeIntervalSince1970 * 1000,
+                debuffs: ["p3": "anvil"], turnId: "p2", sunk: [], results: nil
             )
         )
     }

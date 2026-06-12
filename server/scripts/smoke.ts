@@ -166,9 +166,22 @@ async function main() {
   ok(reveal.auction!.targetId === bob.playerId, "Bob is the anvil target");
   ok(reveal.players.find((p) => p.id === bob.playerId)?.debuff === "anvil", "Bob carries the anvil debuff");
 
-  console.log("\n— guerilla golf —");
+  console.log("\n— guerilla golf (turn-based) —");
   await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "golf", "golf phase")));
   ok(host.state!.golf!.debuffs[bob.playerId] === "anvil", "board is told about Bob's anvil");
+
+  // The host board owns the rotation: it makes it Alice's turn.
+  host.send({ t: "golf_progress", turnId: alice.playerId, sunk: [] });
+  await bob.waitForState((s) => s.golf?.turnId === alice.playerId, "phones learn it's Alice's turn");
+  ok(true, "turnId propagates to every phone");
+
+  // Bob mashes fire off-turn — the server must NOT relay it to the board.
+  bob.send({ t: "fire", angle: 1.2, power: 0.9 });
+  await new Promise((r) => setTimeout(r, 250));
+  ok(
+    !host.inbox.some((m) => m.t === "fire" && m.playerId === bob.playerId),
+    "off-turn fire is blocked by the server",
+  );
 
   alice.send({ t: "aim", angle: 0.9, power: 0.5 });
   const aimRelay = await host.waitForMsg((m) => m.t === "aim" && m.playerId === alice.playerId, "aim relay");
@@ -176,6 +189,14 @@ async function main() {
   alice.send({ t: "fire", angle: 0.9, power: 1.0 });
   await host.waitForMsg((m) => m.t === "fire" && m.playerId === alice.playerId, "fire relay");
   ok(true, "host board receives Alice's fire relay");
+
+  // Alice sinks; the board reports progress, then the final order.
+  host.send({ t: "golf_progress", turnId: bob.playerId, sunk: [alice.playerId] });
+  await cara.waitForState(
+    (s) => s.golf?.sunk.includes(alice.playerId) === true && s.golf?.turnId === bob.playerId,
+    "sunk list + next turn propagate",
+  );
+  ok(true, "sunk list + next turn propagate");
 
   // The host board's physics decides the finish order and reports it.
   host.send({ t: "golf_finished", order: [alice.playerId, host.playerId, bob.playerId] });

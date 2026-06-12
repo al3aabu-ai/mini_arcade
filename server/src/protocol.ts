@@ -21,7 +21,7 @@ export const CONST = {
   AUCTION_TARGET_MS: FAST ? 600 : 12_000,
   AUCTION_REVEAL_MS: FAST ? 400 : 5_000,
 
-  GOLF_TIME_LIMIT_MS: FAST ? 1_500 : 75_000,
+  GOLF_TIME_LIMIT_MS: FAST ? 1_500 : 150_000, // turn-based: everyone needs shots
   GOLF_RESULTS_MS: FAST ? 400 : 6_000,
   GOLF_BOUNTIES: [500, 300, 200],
   GOLF_FINISH_POINTS: 100,
@@ -111,6 +111,10 @@ export interface GolfState {
   endsAt: number;
   /** playerId -> debuff applying to this game */
   debuffs: Record<string, Debuff>;
+  /** whose shot it is right now (host board drives the rotation) */
+  turnId: string | null;
+  /** players already in the cup, in sink order */
+  sunk: string[];
   results: GolfResults | null;
 }
 
@@ -165,6 +169,7 @@ export type ClientMessage =
   | { t: "aim_clear" }
   | { t: "fire"; angle: number; power: number }
   | { t: "golf_finished"; order: string[] } // host board only
+  | { t: "golf_progress"; turnId: string | null; sunk: string[] } // host board only
   | { t: "pass_bomb"; direction: "left" | "right" }
   | { t: "replay" }
   | { t: "leave" };

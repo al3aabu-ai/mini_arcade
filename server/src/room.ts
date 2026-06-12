@@ -44,6 +44,8 @@ interface AuctionInternal {
 interface GolfInternal {
   endsAt: number;
   debuffs: Record<string, Debuff>;
+  turnId: string | null;
+  sunk: string[];
   results: { order: string[]; awarded: Record<string, number> } | null;
 }
 
@@ -202,7 +204,13 @@ export class Room {
     }
     let golf: GolfState | null = null;
     if (this.phase === "golf" && this.golf) {
-      golf = { endsAt: this.golf.endsAt, debuffs: this.golf.debuffs, results: this.golf.results };
+      golf = {
+        endsAt: this.golf.endsAt,
+        debuffs: this.golf.debuffs,
+        turnId: this.golf.turnId,
+        sunk: this.golf.sunk,
+        results: this.golf.results,
+      };
     }
     let bomb: BombState | null = null;
     if (this.phase === "bomb" && this.bomb) {
@@ -377,14 +385,26 @@ export class Room {
     for (const p of this.players) {
       if (p.debuff === "anvil") debuffs[p.id] = "anvil";
     }
-    this.golf = { endsAt: Date.now() + CONST.GOLF_TIME_LIMIT_MS, debuffs, results: null };
+    this.golf = {
+      endsAt: Date.now() + CONST.GOLF_TIME_LIMIT_MS,
+      debuffs,
+      turnId: null,
+      sunk: [],
+      results: null,
+    };
     // Backstop: if the host board never reports (e.g. host died), finish with no finishers.
     this.after(CONST.GOLF_TIME_LIMIT_MS + 5000, () => this.finishGolf([]));
     this.broadcast();
   }
 
+  /** Turn-based: only the active player's inputs reach the board. */
+  private isOnTurn(playerId: string): boolean {
+    const turn = this.golf?.turnId;
+    return !turn || turn === playerId;
+  }
+
   relayAim(playerId: string, angle: number, power: number) {
-    if (this.phase !== "golf") return;
+    if (this.phase !== "golf" || !this.isOnTurn(playerId)) return;
     this.sendToHost({ t: "aim", playerId, angle, power });
   }
 
@@ -394,7 +414,7 @@ export class Room {
   }
 
   relayFire(playerId: string, angle: number, power: number) {
-    if (this.phase !== "golf") return;
+    if (this.phase !== "golf" || !this.isOnTurn(playerId)) return;
     this.touch();
     this.sendToHost({
       t: "fire",
@@ -402,6 +422,18 @@ export class Room {
       angle,
       power: Math.max(0, Math.min(1, power)),
     });
+  }
+
+  /** Host board reports whose turn it is and who has sunk so far. */
+  golfProgress(reporterId: string, turnId: string | null, sunk: string[]) {
+    const reporter = this.players.find((p) => p.id === reporterId);
+    if (!reporter?.isHost) return;
+    if (this.phase !== "golf" || !this.golf || this.golf.results) return;
+    this.golf.turnId =
+      turnId && this.players.some((p) => p.id === turnId) ? turnId : null;
+    this.golf.sunk = sunk.filter((id) => this.players.some((p) => p.id === id));
+    this.touch();
+    this.broadcast();
   }
 
   golfFinished(reporterId: string, order: string[]) {

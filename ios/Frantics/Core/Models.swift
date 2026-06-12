@@ -47,6 +47,8 @@ struct GolfResults: Codable, Equatable {
 struct GolfState: Codable, Equatable {
     let endsAt: Double
     let debuffs: [String: String]
+    let turnId: String?
+    let sunk: [String]
     let results: GolfResults?
 
     var endsAtDate: Date { Date(timeIntervalSince1970: endsAt / 1000) }

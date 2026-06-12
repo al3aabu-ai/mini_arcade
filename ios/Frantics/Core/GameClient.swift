@@ -221,6 +221,9 @@ final class GameClient: NSObject, ObservableObject {
     func sendAimClear() { send(["t": "aim_clear"]) }
     func fire(angle: Double, power: Double) { send(["t": "fire", "angle": angle, "power": power]) }
     func golfFinished(order: [String]) { send(["t": "golf_finished", "order": order]) }
+    func golfProgress(turnId: String?, sunk: [String]) {
+        send(["t": "golf_progress", "turnId": turnId ?? NSNull(), "sunk": sunk])
+    }
     func passBomb(direction: String) { send(["t": "pass_bomb", "direction": direction]) }
     func voteReplay() { send(["t": "replay"]) }
 }

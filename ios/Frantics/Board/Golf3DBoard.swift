@@ -9,10 +9,14 @@ struct GolfPlayerInfo {
     let anviled: Bool
 }
 
-/// Guerilla Golf on the TV — a juicy low-poly 3D island course.
-/// Procedural textures (no asset files), PBR materials, HDR bloom, SSAO and
-/// particle trails do the heavy lifting. The host device runs the physics
-/// and reports the finish order; phones send the same `aim`/`fire` messages.
+/// Guerilla Golf on the TV — one continuous low-poly fairway, played in
+/// rounds: one player shoots at a time, rotation driven by this board and
+/// mirrored to every phone through the server (`golf_progress`).
+///
+/// Crash safety: every input coming from the network thread is queued and
+/// applied inside the SceneKit render callback, never mid-simulation. The
+/// HDR post-processing stack only runs when the scene draws on the device's
+/// own screen — AirPlay external displays get the standard pipeline.
 struct GolfBoardView: View {
     @EnvironmentObject var client: GameClient
     @State private var controller: GolfSceneController?
@@ -59,6 +63,8 @@ struct GolfBoardView: View {
             .padding(.horizontal, 30)
             .padding(.top, 16)
 
+            turnBanner
+
             HStack(spacing: 12) {
                 ForEach(Array(finished.enumerated()), id: \.element.id) { index, player in
                     HStack(spacing: 6) {
@@ -79,6 +85,27 @@ struct GolfBoardView: View {
         }
     }
 
+    @ViewBuilder
+    private var turnBanner: some View {
+        if let golf = client.room?.golf,
+           let shooter = client.room?.player(golf.turnId) {
+            HStack(spacing: 10) {
+                Text(shooter.avatar).font(.system(size: 30))
+                Text("\(shooter.name.uppercased())'S SHOT")
+                    .font(Theme.title(26))
+                    .foregroundStyle(Color(hex: shooter.color))
+                    .neonGlow(Color(hex: shooter.color), radius: 10)
+                Text("🎯")
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Theme.panel.opacity(0.92)))
+            .padding(.top, 6)
+            .transition(.scale.combined(with: .opacity))
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: golf.turnId)
+        }
+    }
+
     private func setup() {
         guard controller == nil, let room = client.room, let golf = room.golf else { return }
         let infos = room.players.map { player in
@@ -93,10 +120,16 @@ struct GolfBoardView: View {
         let sceneController = GolfSceneController(
             players: infos,
             endsAt: golf.endsAtDate,
+            // The HDR stack is the prime suspect for the AirPlay crash, so it
+            // stays off whenever the board is on the external display.
+            useHDR: !client.boardDisplayConnected,
             onSank: { playerId in
                 if let p = room.player(playerId) {
                     finished.append(p)
                 }
+            },
+            onProgress: { turnId, sunk in
+                client.golfProgress(turnId: turnId, sunk: sunk)
             },
             onFinished: { order in
                 client.golfFinished(order: order)
@@ -112,6 +145,7 @@ struct GolfBoardView: View {
             sceneController?.fire(playerId: id, angle: angle, power: power)
         }
         controller = sceneController
+        sceneController.begin()
     }
 }
 
@@ -132,7 +166,7 @@ private enum Tex {
         }
     }
 
-    /// Island cliffs: layered earth strata.
+    /// Course flanks: layered earth strata.
     static func cliff() -> UIImage {
         draw(512) { ctx, size in
             let strata: [UIColor] = [
@@ -182,7 +216,6 @@ private enum Tex {
     }
 
     /// Night-party sky: deep purple gradient + stars + warm horizon glow.
-    /// Used both as the visible background and the PBR lighting environment.
     static func sky() -> UIImage {
         draw(1024, height: 512) { ctx, size in
             let colors = [
@@ -202,7 +235,6 @@ private enum Tex {
                 end: CGPoint(x: 0, y: size.height),
                 options: []
             )
-            // Stars, denser near the top.
             for _ in 0..<240 {
                 let y = CGFloat.random(in: 0...(size.height * 0.7))
                 let x = CGFloat.random(in: 0...size.width)
@@ -243,7 +275,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         let tagHeight: Float
         var sunk = false
         var respawning = false
-        var lastFire: TimeInterval = 0
+    }
+
+    private enum ShotPhase {
+        case waitingForShot
+        case settling
     }
 
     let scene = SCNScene()
@@ -251,42 +287,86 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
 
     private let players: [GolfPlayerInfo]
     private let endsAt: Date
+    private let useHDR: Bool
     private let onSank: (String) -> Void
+    private let onProgress: (String?, [String]) -> Void
     private let onFinished: ([String]) -> Void
 
+    // Render-thread state. Only touched inside renderer(_:updateAtTime:).
     private var balls: [String: Ball] = [:]
     private var aimNodes: [String: SCNNode] = [:]
-    private var finishOrder: [String] = []
+    private var sunkOrder: [String] = []
     private var done = false
+    private var turnQueue: [String] = []
+    private var turnIndex = -1
+    private var currentTurnId: String?
+    private var shotPhase: ShotPhase = .waitingForShot
+    private var turnDeadline: TimeInterval = 0
+    private var settleMinTime: TimeInterval = 0
+    private var settleMaxTime: TimeInterval = 0
 
-    // Course coordinates: x = width, z = depth. Tee at +z, hole at -z.
+    private let shotClock: TimeInterval = 14
     private let holeCenter = SCNVector3(2.6, 0, -13)
+
+    // Inputs arrive on the main/network thread; they are applied here, on the
+    // render thread, at a safe point in the frame. (Mutating physics from
+    // another thread mid-step is the classic SceneKit crash.)
+    private let pendingLock = NSLock()
+    private var pending: [(GolfSceneController) -> Void] = []
 
     init(
         players: [GolfPlayerInfo],
         endsAt: Date,
+        useHDR: Bool,
         onSank: @escaping (String) -> Void,
+        onProgress: @escaping (String?, [String]) -> Void,
         onFinished: @escaping ([String]) -> Void
     ) {
         self.players = players
         self.endsAt = endsAt
+        self.useHDR = useHDR
         self.onSank = onSank
+        self.onProgress = onProgress
         self.onFinished = onFinished
+        self.turnQueue = players.map(\.id)
         super.init()
         buildWorld()
         spawnBalls()
     }
 
+    // MARK: thread-safe entry points (callable from any thread)
+
+    private func enqueue(_ block: @escaping (GolfSceneController) -> Void) {
+        pendingLock.lock()
+        pending.append(block)
+        pendingLock.unlock()
+    }
+
+    func begin() {
+        enqueue { s in s.advanceTurn(now: CACurrentMediaTime()) }
+    }
+
+    func setAim(playerId: String, angle: Double, power: Double) {
+        enqueue { s in s.applyAim(playerId: playerId, angle: angle, power: power) }
+    }
+
+    func clearAim(playerId: String) {
+        enqueue { s in s.removeAim(playerId: playerId) }
+    }
+
+    func fire(playerId: String, angle: Double, power: Double) {
+        enqueue { s in s.applyFire(playerId: playerId, angle: angle, power: power) }
+    }
+
     // MARK: materials
 
     private func pbr(_ contents: Any, roughness: CGFloat = 0.85,
-                     metalness: CGFloat = 0.0, emissive: UIColor? = nil,
-                     tile: (Float, Float)? = nil) -> SCNMaterial {
+                     emissive: UIColor? = nil, tile: (Float, Float)? = nil) -> SCNMaterial {
         let m = SCNMaterial()
         m.lightingModel = .physicallyBased
         m.diffuse.contents = contents
         m.roughness.contents = roughness
-        m.metalness.contents = metalness
+        m.metalness.contents = 0.0
         if let emissive { m.emission.contents = emissive }
         if let tile {
             m.diffuse.wrapS = .repeat
@@ -304,27 +384,25 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         scene.lightingEnvironment.contents = skyImage
         scene.lightingEnvironment.intensity = 1.3
         scene.fogColor = UIColor(red: 0.16, green: 0.07, blue: 0.30, alpha: 1)
-        scene.fogStartDistance = 48
+        scene.fogStartDistance = 52
         scene.fogEndDistance = 110
         scene.physicsWorld.gravity = SCNVector3(0, -9.8, 0)
 
-        // Camera with the juice turned on: HDR bloom, SSAO, gentle vignette.
-        // The simulator compiles SceneKit shaders on the CPU (10s+ of blank
-        // screen per variant), so the post-processing stack — which adds
-        // several more shader variants — only ships on real hardware.
         let camera = SCNCamera()
         camera.fieldOfView = 52
         camera.zFar = 220
         #if !targetEnvironment(simulator)
-        camera.wantsHDR = true
-        camera.wantsExposureAdaptation = false
-        camera.bloomIntensity = 0.85
-        camera.bloomThreshold = 0.55
-        camera.bloomBlurRadius = 14
-        camera.screenSpaceAmbientOcclusionIntensity = 1.1
-        camera.screenSpaceAmbientOcclusionRadius = 1.4
-        camera.vignettingPower = 0.7
-        camera.vignettingIntensity = 0.55
+        if useHDR {
+            camera.wantsHDR = true
+            camera.wantsExposureAdaptation = false
+            camera.bloomIntensity = 0.85
+            camera.bloomThreshold = 0.55
+            camera.bloomBlurRadius = 14
+            camera.screenSpaceAmbientOcclusionIntensity = 1.1
+            camera.screenSpaceAmbientOcclusionRadius = 1.4
+            camera.vignettingPower = 0.7
+            camera.vignettingIntensity = 0.55
+        }
         #endif
         cameraNode.camera = camera
         cameraNode.position = SCNVector3(0, 19, 29)
@@ -336,7 +414,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         cameraNode.constraints = [look]
         scene.rootNode.addChildNode(cameraNode)
 
-        // Warm key light + cool purple fill = depth on every face.
+        // Warm key light + cool purple fill.
         let sun = SCNNode()
         sun.light = SCNLight()
         sun.light?.type = .directional
@@ -356,33 +434,38 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         fill.light?.color = UIColor(red: 0.55, green: 0.45, blue: 0.95, alpha: 1)
         scene.rootNode.addChildNode(fill)
 
-        // Three fairway islands separated by void gaps (fall = respawn).
-        addIsland(centerZ: 12)   // tee
-        addIsland(centerZ: 0)    // middle
-        addIsland(centerZ: -12)  // green
+        // ONE continuous flat fairway — a single floating slab, no gaps.
+        // Fall off the open sides or the far end and you respawn at the tee.
+        let slab = SCNBox(width: 15, height: 2.6, length: 36, chamferRadius: 0.18)
+        let top = pbr(Tex.fairway(), roughness: 0.9, tile: (2.2, 5))
+        let side = pbr(Tex.cliff(), roughness: 0.95, tile: (4, 1))
+        let bottom = pbr(UIColor(red: 0.20, green: 0.12, blue: 0.09, alpha: 1))
+        slab.materials = [side, side, side, side, top, bottom] // +z +x -z -x +y -y
+        let ground = SCNNode(geometry: slab)
+        ground.position = SCNVector3(0, -1.3, -1)
+        ground.physicsBody = SCNPhysicsBody(type: .static, shape: nil)
+        ground.physicsBody?.friction = 0.55
+        ground.physicsBody?.restitution = 0.25
+        scene.rootNode.addChildNode(ground)
 
-        // Neon edge trim along the long sides — pops hard with bloom.
-        for z: Float in [12, 0, -12] {
-            for (x, color) in [(Float(-6.9), Theme.cyan), (Float(6.9), Theme.pink)] {
-                let trim = SCNNode(geometry: SCNBox(width: 0.18, height: 0.14, length: 9.9, chamferRadius: 0.05))
-                trim.geometry?.materials = [pbr(UIColor(color), roughness: 0.3, emissive: UIColor(color))]
-                trim.position = SCNVector3(x, 0.07, z)
-                scene.rootNode.addChildNode(trim)
-            }
+        // Low lip behind the tee so weak shots don't dribble off the back.
+        let lip = SCNNode(geometry: SCNBox(width: 15, height: 0.6, length: 0.5, chamferRadius: 0.1))
+        lip.geometry?.materials = [pbr(UIColor(Theme.purple), roughness: 0.35,
+                                       emissive: UIColor(Theme.purple).withAlphaComponent(0.6))]
+        lip.position = SCNVector3(0, 0.3, 16.8)
+        lip.physicsBody = SCNPhysicsBody(type: .static, shape: nil)
+        lip.physicsBody?.restitution = 0.6
+        scene.rootNode.addChildNode(lip)
+
+        // Neon edge trim along both long sides.
+        for (x, color) in [(Float(-7.35), Theme.cyan), (Float(7.35), Theme.pink)] {
+            let trim = SCNNode(geometry: SCNBox(width: 0.18, height: 0.14, length: 35.8, chamferRadius: 0.05))
+            trim.geometry?.materials = [pbr(UIColor(color), roughness: 0.3, emissive: UIColor(color))]
+            trim.position = SCNVector3(x, 0.07, -1)
+            scene.rootNode.addChildNode(trim)
         }
 
-        // Side rails on the tee island only — everywhere else you can fall off.
-        for x: Float in [-7.25, 7.25] {
-            let rail = SCNNode(geometry: SCNBox(width: 0.4, height: 1.0, length: 10, chamferRadius: 0.1))
-            rail.geometry?.materials = [pbr(UIColor(Theme.purple), roughness: 0.35,
-                                            emissive: UIColor(Theme.purple).withAlphaComponent(0.65))]
-            rail.position = SCNVector3(x, 0.5, 12)
-            rail.physicsBody = SCNPhysicsBody(type: .static, shape: nil)
-            rail.physicsBody?.restitution = 0.7
-            scene.rootNode.addChildNode(rail)
-        }
-
-        // Candy-striped bumpers on the middle island.
+        // Candy-striped bumpers mid-course.
         let bumperTex = Tex.candy(
             UIColor(red: 0.98, green: 0.96, blue: 0.92, alpha: 1),
             UIColor(Theme.orange)
@@ -390,7 +473,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         for x: Float in [-3.6, 3.6] {
             let bumper = SCNNode(geometry: SCNCylinder(radius: 1.15, height: 1.6))
             bumper.geometry?.materials = [pbr(bumperTex, roughness: 0.4)]
-            bumper.position = SCNVector3(x, 0.8, 0)
+            bumper.position = SCNVector3(x, 0.8, -1)
             bumper.physicsBody = SCNPhysicsBody(type: .static, shape: nil)
             bumper.physicsBody?.restitution = 1.15
             scene.rootNode.addChildNode(bumper)
@@ -398,51 +481,34 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             let halo = SCNNode(geometry: SCNTorus(ringRadius: 1.18, pipeRadius: 0.07))
             halo.geometry?.materials = [pbr(UIColor(Theme.orange), roughness: 0.3,
                                             emissive: UIColor(Theme.orange))]
-            halo.position = SCNVector3(x, 1.62, 0)
+            halo.position = SCNVector3(x, 1.62, -1)
             scene.rootNode.addChildNode(halo)
         }
 
         // Spinning candy paddle guarding the green.
         let paddle = SCNNode(geometry: SCNBox(width: 6.5, height: 0.9, length: 0.45, chamferRadius: 0.12))
         paddle.geometry?.materials = [pbr(Tex.candy(.white, UIColor(Theme.pink)), roughness: 0.35)]
-        paddle.position = SCNVector3(0, 0.45, -8.6)
+        paddle.position = SCNVector3(0, 0.45, -7.8)
         paddle.physicsBody = SCNPhysicsBody(type: .kinematic, shape: nil)
         paddle.runAction(.repeatForever(.rotateBy(x: 0, y: .pi * 2, z: 0, duration: 1.9)))
         scene.rootNode.addChildNode(paddle)
 
-        // Sand bunker near the hole (visual hazard flavor).
+        // Sand bunker flavor near the green.
         let bunker = SCNNode(geometry: SCNCylinder(radius: 2.0, height: 0.06))
         bunker.geometry?.materials = [pbr(Tex.sand(), roughness: 0.95, tile: (2, 2))]
-        bunker.position = SCNVector3(-2.6, 0.03, -11.2)
+        bunker.position = SCNVector3(-2.6, 0.03, -10.5)
         scene.rootNode.addChildNode(bunker)
 
         buildHole()
         buildScenery()
     }
 
-    private func addIsland(centerZ: Float) {
-        let box = SCNBox(width: 14, height: 2.6, length: 10, chamferRadius: 0.15)
-        let top = pbr(Tex.fairway(), roughness: 0.9, tile: (2, 1.4))
-        let side = pbr(Tex.cliff(), roughness: 0.95, tile: (3, 1))
-        let bottom = pbr(UIColor(red: 0.20, green: 0.12, blue: 0.09, alpha: 1))
-        // SCNBox materials order: +z, +x, -z, -x, +y (top), -y (bottom)
-        box.materials = [side, side, side, side, top, bottom]
-        let node = SCNNode(geometry: box)
-        node.position = SCNVector3(0, -1.3, centerZ)
-        node.physicsBody = SCNPhysicsBody(type: .static, shape: nil)
-        node.physicsBody?.friction = 0.55
-        node.physicsBody?.restitution = 0.25
-        scene.rootNode.addChildNode(node)
-    }
-
     private func buildHole() {
-        // Dark cup inset into the green.
         let cup = SCNNode(geometry: SCNCylinder(radius: 0.62, height: 0.08))
         cup.geometry?.materials = [pbr(UIColor(white: 0.02, alpha: 1), roughness: 1)]
         cup.position = SCNVector3(holeCenter.x, 0.05, holeCenter.z)
         scene.rootNode.addChildNode(cup)
 
-        // Pulsing neon ring so the target reads from the couch.
         let ring = SCNNode(geometry: SCNTorus(ringRadius: 0.85, pipeRadius: 0.08))
         ring.geometry?.materials = [pbr(UIColor(Theme.yellow), roughness: 0.3,
                                         emissive: UIColor(Theme.yellow))]
@@ -453,7 +519,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         ])))
         scene.rootNode.addChildNode(ring)
 
-        // Beacon: a soft additive light column rising from the cup.
+        // Soft additive light column rising from the cup.
         let beamGeo = SCNCylinder(radius: 0.5, height: 8)
         let beamMat = SCNMaterial()
         beamMat.lightingModel = .constant
@@ -472,7 +538,6 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         ])))
         scene.rootNode.addChildNode(beam)
 
-        // Flag: pole + red pennant.
         let pole = SCNNode(geometry: SCNCylinder(radius: 0.06, height: 2.6))
         pole.geometry?.materials = [pbr(UIColor.white, roughness: 0.4,
                                         emissive: UIColor(white: 0.7, alpha: 1))]
@@ -487,22 +552,21 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         scene.rootNode.addChildNode(pennant)
     }
 
-    /// Set dressing: party palms, floating rocks, drifting clouds.
+    /// Set dressing: party palms on the corners, floating rocks, clouds.
     private func buildScenery() {
-        let palmSpots: [(Float, Float)] = [(-6.1, 8.2), (6.1, 15.6), (-6.1, -15.5), (5.9, -9.0)]
+        let palmSpots: [(Float, Float)] = [(-6.4, 15.8), (6.4, 15.8), (-6.4, -17.2), (6.2, -8.6)]
         for (i, spot) in palmSpots.enumerated() {
             addPalm(at: SCNVector3(spot.0, 0, spot.1), tint: i % 2 == 0 ? Theme.cyan : Theme.pink)
         }
 
-        // Low-poly rocks floating in the void around the course.
         for _ in 0..<7 {
             let r = CGFloat.random(in: 0.5...1.3)
             let rock = SCNSphere(radius: r)
-            rock.segmentCount = 5 // faceted = low-poly look
+            rock.segmentCount = 5
             let node = SCNNode(geometry: rock)
             node.geometry?.materials = [pbr(UIColor(red: 0.36, green: 0.30, blue: 0.52, alpha: 1), roughness: 0.9)]
             node.position = SCNVector3(
-                Float.random(in: -16 ... 16),
+                Float.random(in: -17 ... 17),
                 Float.random(in: -7 ... -3),
                 Float.random(in: -22 ... 16)
             )
@@ -516,7 +580,6 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             scene.rootNode.addChildNode(node)
         }
 
-        // Puffy clouds drifting far behind the green.
         for i in 0..<3 {
             let cloud = SCNNode()
             for j in 0..<3 {
@@ -543,15 +606,12 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         let trunk = SCNNode(geometry: SCNCylinder(radius: 0.16, height: 2.4))
         trunk.geometry?.materials = [pbr(Tex.cliff(), roughness: 0.95, tile: (1, 2))]
         trunk.position = SCNVector3(0, 1.2, 0)
-        trunk.eulerAngles = SCNVector3(0, 0, 0.12)
-        trunk.physicsBody = SCNPhysicsBody(type: .static, shape: nil)
         palm.addChildNode(trunk)
 
-        // Stylized canopy: three stacked faceted cones in party colors.
         let greens = [
             UIColor(red: 0.16, green: 0.62, blue: 0.34, alpha: 1),
             UIColor(red: 0.20, green: 0.72, blue: 0.40, alpha: 1),
-            UIColor(tint).withAlphaComponent(1.0),
+            UIColor(tint),
         ]
         for (i, color) in greens.enumerated() {
             let cone = SCNCone(topRadius: 0.02, bottomRadius: CGFloat(1.3 - Double(i) * 0.32), height: 0.85)
@@ -562,23 +622,18 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             palm.addChildNode(layer)
         }
         palm.position = position
-        // A gentle sway sells the breeze.
-        palm.runAction(.repeatForever(.sequence([
-            .rotateBy(x: 0, y: 0, z: 0.05, duration: 1.8),
-            .rotateBy(x: 0, y: 0, z: -0.05, duration: 1.8),
-        ])))
+        // Canopy sway only — the trunk's physics stays put.
+        trunk.physicsBody = SCNPhysicsBody(type: .static, shape: nil)
         scene.rootNode.addChildNode(palm)
     }
 
     // MARK: balls
 
-    /// Renders the player's emoji on a colored disc — used as the ball texture.
     private func ballTexture(avatar: String, colorHex: String) -> UIImage {
         let size = CGSize(width: 256, height: 256)
         return UIGraphicsImageRenderer(size: size).image { ctx in
             UIColor(Color(hex: colorHex)).setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
-            // A lighter band gives the sphere a beach-ball read as it rolls.
             UIColor(white: 1, alpha: 0.22).setFill()
             ctx.fill(CGRect(x: 0, y: 0, width: size.width, height: 52))
             let font = UIFont.systemFont(ofSize: 150)
@@ -615,7 +670,6 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             node.physicsBody = body
             scene.rootNode.addChildNode(node)
 
-            // Color trail — only emits while the ball is moving (see update loop).
             let trail = SCNParticleSystem()
             trail.birthRate = 0
             trail.particleLifeSpan = 0.55
@@ -628,8 +682,6 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             trail.emitterShape = SCNSphere(radius: 0.18)
             node.addParticleSystem(trail)
 
-            // Floating name tag (kept upright separately from the rolling ball).
-            // Heights alternate so tags don't overlap while balls sit on the tee.
             let tagHeight: Float = index % 2 == 0 ? 0.95 : 1.65
             let text = SCNText(string: info.name, extrusionDepth: 0.06)
             text.font = UIFont.systemFont(ofSize: 0.42, weight: .heavy)
@@ -660,23 +712,22 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         }
     }
 
-    // MARK: relayed input
+    // MARK: input application (render thread only)
 
-    /// Phone drag angle -> ground plane: drag up means "toward the hole" (-z).
     private func groundDirection(_ angle: Double) -> SCNVector3 {
         SCNVector3(Float(cos(angle)), 0, Float(-sin(angle)))
     }
 
-    func setAim(playerId: String, angle: Double, power: Double) {
-        guard let ball = balls[playerId], !ball.sunk else { return }
-        clearAim(playerId: playerId)
+    private func applyAim(playerId: String, angle: Double, power: Double) {
+        guard playerId == currentTurnId, let ball = balls[playerId], !ball.sunk else { return }
+        removeAim(playerId: playerId)
 
         let dir = groundDirection(angle)
         let length = CGFloat(1.6 + 5.2 * power)
         let color = UIColor(Color(hex: ball.info.colorHex))
         let arrowBody = SCNNode(geometry: SCNCylinder(radius: 0.1, height: length))
         arrowBody.geometry?.materials = [pbr(color, roughness: 0.3, emissive: color)]
-        arrowBody.eulerAngles = SCNVector3(Float.pi / 2, 0, 0) // lie along +z
+        arrowBody.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
         arrowBody.position = SCNVector3(0, 0, Float(length) / 2)
 
         let tip = SCNNode(geometry: SCNCone(topRadius: 0, bottomRadius: 0.26, height: 0.55))
@@ -687,25 +738,22 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         let holder = SCNNode()
         holder.addChildNode(arrowBody)
         holder.addChildNode(tip)
-        holder.position = SCNVector3(ball.node.presentation.position.x, 0.25,
-                                     ball.node.presentation.position.z)
+        let p = ball.node.presentation.position
+        holder.position = SCNVector3(p.x, 0.25, p.z)
         holder.eulerAngles = SCNVector3(0, atan2(dir.x, dir.z), 0)
         scene.rootNode.addChildNode(holder)
         aimNodes[playerId] = holder
     }
 
-    func clearAim(playerId: String) {
+    private func removeAim(playerId: String) {
         aimNodes[playerId]?.removeFromParentNode()
         aimNodes[playerId] = nil
     }
 
-    func fire(playerId: String, angle: Double, power: Double) {
-        clearAim(playerId: playerId)
-        guard var ball = balls[playerId], !ball.sunk, !ball.respawning else { return }
-        let now = CACurrentMediaTime()
-        guard now - ball.lastFire > 0.45 else { return }
-        ball.lastFire = now
-        balls[playerId] = ball
+    private func applyFire(playerId: String, angle: Double, power: Double) {
+        removeAim(playerId: playerId)
+        guard playerId == currentTurnId, shotPhase == .waitingForShot,
+              let ball = balls[playerId], !ball.sunk, !ball.respawning else { return }
 
         let p = min(1.0, max(0.0, power))
         let factor: Float = ball.info.anviled ? 0.7 : 1.0 // the Heavy Anvil at work
@@ -716,29 +764,75 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             SCNVector3(dir.x * horizontal, loft, dir.z * horizontal),
             asImpulse: true
         )
+
+        let now = CACurrentMediaTime()
+        shotPhase = .settling
+        settleMinTime = now + 1.3
+        settleMaxTime = now + 5.0
+    }
+
+    // MARK: turn machine (render thread only)
+
+    private func advanceTurn(now: TimeInterval) {
+        guard !done else { return }
+        let remaining = turnQueue.filter { !sunkOrder.contains($0) }
+        guard !remaining.isEmpty else {
+            finishGame()
+            return
+        }
+        var idx = turnIndex
+        repeat {
+            idx = (idx + 1) % turnQueue.count
+        } while sunkOrder.contains(turnQueue[idx])
+        turnIndex = idx
+        currentTurnId = turnQueue[idx]
+        shotPhase = .waitingForShot
+        turnDeadline = now + shotClock
+        reportProgress()
+    }
+
+    private func reportProgress() {
+        let turn = currentTurnId
+        let sunk = sunkOrder
+        DispatchQueue.main.async { [onProgress] in
+            onProgress(turn, sunk)
+        }
+    }
+
+    private func allBallsSettled() -> Bool {
+        for ball in balls.values where !ball.sunk && !ball.respawning {
+            let v = ball.node.physicsBody?.velocity ?? SCNVector3Zero
+            if sqrt(v.x * v.x + v.y * v.y + v.z * v.z) > 0.9 { return false }
+        }
+        return true
     }
 
     // MARK: frame loop (render thread)
 
     func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
+        // Apply queued network inputs at a safe point in the frame.
+        pendingLock.lock()
+        let commands = pending
+        pending.removeAll()
+        pendingLock.unlock()
+        for command in commands { command(self) }
+
         guard !done else { return }
+        let now = CACurrentMediaTime()
 
         for (id, var ball) in balls where !ball.sunk {
             let p = ball.node.presentation.position
             let v = ball.node.physicsBody?.velocity ?? SCNVector3Zero
             let speed = sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
 
-            // Keep the name tag floating above the rolling ball; trail only
-            // burns while the ball is actually flying.
             ball.tag.position = SCNVector3(p.x, p.y + ball.tagHeight, p.z)
             ball.trail.birthRate = speed > 2.5 ? 110 : 0
 
-            // Sink: near the cup, on the green, slow enough.
             let horizontalDist = sqrt(pow(p.x - holeCenter.x, 2) + pow(p.z - holeCenter.z, 2))
             if horizontalDist < 0.7, p.y < 1.4, speed < 5.5 {
                 ball.sunk = true
                 balls[id] = ball
-                finishOrder.append(id)
+                sunkOrder.append(id)
                 celebrate(color: UIColor(Color(hex: ball.info.colorHex)))
                 ball.node.physicsBody = nil
                 ball.tag.removeFromParentNode()
@@ -749,11 +843,12 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
                     ]),
                     .fadeOut(duration: 0.12),
                 ]))
-                DispatchQueue.main.async { [onSank] in onSank(id) }
+                let sunkId = id
+                DispatchQueue.main.async { [onSank] in onSank(sunkId) }
+                reportProgress()
                 continue
             }
 
-            // Fell into the void -> respawn at the tee.
             if p.y < -9, !ball.respawning {
                 ball.respawning = true
                 balls[id] = ball
@@ -775,7 +870,22 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             }
         }
 
-        if finishOrder.count == balls.count || Date() >= endsAt {
+        // Turn rotation.
+        if currentTurnId != nil {
+            switch shotPhase {
+            case .waitingForShot:
+                let shooterSank = currentTurnId.map { sunkOrder.contains($0) } ?? false
+                if now > turnDeadline || shooterSank {
+                    advanceTurn(now: now) // shot clock expired or shooter is done
+                }
+            case .settling:
+                if now > settleMaxTime || (now > settleMinTime && allBallsSettled()) {
+                    advanceTurn(now: now)
+                }
+            }
+        }
+
+        if sunkOrder.count == balls.count || Date() >= endsAt {
             finishGame()
         }
     }
@@ -804,7 +914,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
     private func finishGame() {
         guard !done else { return }
         done = true
-        let order = finishOrder
+        let order = sunkOrder
         DispatchQueue.main.async { [onFinished] in
             onFinished(order)
         }
