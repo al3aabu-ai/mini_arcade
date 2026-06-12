@@ -4,6 +4,7 @@ server/dist/
 
 # Xcode / iOS
 ios/build/
+build/
 DerivedData/
 xcuserdata/
 *.xcuserstate
