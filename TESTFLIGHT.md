@@ -1,8 +1,33 @@
 # Shipping Frantics to TestFlight
 
-Everything in the repo is release-ready: app icon, iPhone-only target,
-encryption-exempt flag, export options, and a one-command upload script.
-Three account steps remain that only the Apple ID owner can do.
+> **Status (June 2026):** account enrolled ✅, app record "Frantics" created ✅,
+> API key working ✅, Apple Distribution certificate + "Frantics AppStore"
+> profile created via the ASC API ✅, signed IPA exported ✅ — but Apple now
+> **requires the iOS 26 SDK (Xcode 26)** for all uploads, and this Mac
+> (2019 Intel MBP, max macOS Sequoia, 16 GB free disk) can't reasonably host
+> it. **Use Xcode Cloud instead** — Apple's CI builds with the current SDK and
+> uploads to TestFlight automatically.
+
+## Recommended path: Xcode Cloud (no local Xcode upgrade)
+
+One-time setup in the browser (~15 min):
+
+1. appstoreconnect.apple.com → **Apps → Frantics → Xcode Cloud → Get Started**.
+2. Connect source control: **GitHub** → grant access to
+   `al3aabu-ai/franticc-game` (installs the Xcode Cloud GitHub app).
+3. It detects the `Frantics` scheme (already shared in the repo). Create the
+   default **Archive – iOS** workflow on branch `main`, environment =
+   **latest Xcode (26.x)**, post-action **TestFlight Internal Testing**.
+4. Start the first build. Every future `git push` to `main` rebuilds and
+   ships to TestFlight automatically.
+
+Free tier: 25 compute-hours/month — dozens of builds. Signing is cloud-managed
+by Xcode Cloud; no local certificates needed. Build status is visible in the
+Xcode Cloud tab (and via the ASC API).
+
+## Legacy path: local archive + upload (kept for reference)
+
+Works only on a Mac whose Xcode meets Apple's current minimum-SDK rule.
 
 ## One-time setup (you)
 
