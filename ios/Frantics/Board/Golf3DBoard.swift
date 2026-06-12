@@ -152,17 +152,20 @@ struct GolfBoardView: View {
 // MARK: - Procedural textures (drawn once, no asset files)
 
 private enum Tex {
-    /// Golf fairway: alternating mowing stripes + speckle so light has detail to catch.
+    /// Golf fairway: clean alternating mowing stripes (noise-free — noise is
+    /// what made the first pass read "cheap"), with a soft seam highlight.
     static func fairway() -> UIImage {
         draw(512) { ctx, size in
-            let a = UIColor(red: 0.30, green: 0.80, blue: 0.42, alpha: 1)
-            let b = UIColor(red: 0.24, green: 0.70, blue: 0.36, alpha: 1)
+            let a = UIColor(red: 0.33, green: 0.82, blue: 0.45, alpha: 1)
+            let b = UIColor(red: 0.26, green: 0.72, blue: 0.38, alpha: 1)
             let band = size.width / 8
             for i in 0..<8 {
                 (i % 2 == 0 ? a : b).setFill()
                 ctx.fill(CGRect(x: CGFloat(i) * band, y: 0, width: band, height: size.height))
+                // Subtle bright seam on each stripe edge sells the "mowed" look.
+                UIColor(white: 1, alpha: 0.07).setFill()
+                ctx.fill(CGRect(x: CGFloat(i) * band, y: 0, width: 3, height: size.height))
             }
-            speckle(ctx, size, count: 1400, light: 0.05, dark: 0.07)
         }
     }
 
@@ -184,16 +187,85 @@ private enum Tex {
                 y += h
                 i += 1
             }
-            speckle(ctx, size, count: 1000, light: 0.04, dark: 0.10)
+            // Darken toward the bottom so the cliff face reads grounded.
+            let shade = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: [UIColor(white: 0, alpha: 0).cgColor,
+                         UIColor(white: 0, alpha: 0.35).cgColor] as CFArray,
+                locations: [0.4, 1]
+            )!
+            ctx.cgContext.drawLinearGradient(shade, start: .zero,
+                                             end: CGPoint(x: 0, y: size.height), options: [])
         }
     }
 
-    /// Sand bunker grain.
+    /// Sand bunker: clean tan with a soft inner-shadow rim.
     static func sand() -> UIImage {
         draw(256) { ctx, size in
-            UIColor(red: 0.93, green: 0.83, blue: 0.58, alpha: 1).setFill()
+            UIColor(red: 0.95, green: 0.86, blue: 0.62, alpha: 1).setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
-            speckle(ctx, size, count: 1200, light: 0.10, dark: 0.08)
+            let rim = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: [UIColor(white: 0, alpha: 0).cgColor,
+                         UIColor(red: 0.45, green: 0.33, blue: 0.16, alpha: 0.35).cgColor] as CFArray,
+                locations: [0.62, 1]
+            )!
+            ctx.cgContext.drawRadialGradient(
+                rim,
+                startCenter: CGPoint(x: size.width / 2, y: size.height / 2), startRadius: 0,
+                endCenter: CGPoint(x: size.width / 2, y: size.height / 2), endRadius: size.width / 2,
+                options: []
+            )
+        }
+    }
+
+    /// Soft ambient-occlusion vignette laid over the fairway top — fakes the
+    /// baked contact shadows that make stylized games look "finished".
+    static func aoVignette() -> UIImage {
+        draw(512) { ctx, size in
+            let g = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: [UIColor(white: 0, alpha: 0).cgColor,
+                         UIColor(white: 0, alpha: 0.02).cgColor,
+                         UIColor(white: 0, alpha: 0.30).cgColor] as CFArray,
+                locations: [0, 0.62, 1]
+            )!
+            ctx.cgContext.drawRadialGradient(
+                g,
+                startCenter: CGPoint(x: size.width / 2, y: size.height / 2), startRadius: 0,
+                endCenter: CGPoint(x: size.width / 2, y: size.height / 2), endRadius: size.width * 0.72,
+                options: [.drawsAfterEndLocation]
+            )
+        }
+    }
+
+    /// Night ocean for under the course: deep blue with soft wave bands.
+    static func water() -> UIImage {
+        draw(512) { ctx, size in
+            let base = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: [UIColor(red: 0.10, green: 0.16, blue: 0.42, alpha: 1).cgColor,
+                         UIColor(red: 0.05, green: 0.07, blue: 0.24, alpha: 1).cgColor] as CFArray,
+                locations: [0, 1]
+            )!
+            ctx.cgContext.drawLinearGradient(base, start: .zero,
+                                             end: CGPoint(x: 0, y: size.height), options: [])
+            UIColor(red: 0.45, green: 0.75, blue: 1.0, alpha: 0.10).setStroke()
+            for row in 0..<9 {
+                let path = UIBezierPath()
+                let y = CGFloat(row) * size.height / 9 + 24
+                path.move(to: CGPoint(x: 0, y: y))
+                var x: CGFloat = 0
+                while x < size.width {
+                    path.addQuadCurve(
+                        to: CGPoint(x: x + 64, y: y),
+                        controlPoint: CGPoint(x: x + 32, y: y + (row % 2 == 0 ? 10 : -10))
+                    )
+                    x += 64
+                }
+                path.lineWidth = 5
+                path.stroke()
+            }
         }
     }
 
@@ -242,17 +314,19 @@ private enum Tex {
                 UIColor(white: 1, alpha: CGFloat.random(in: 0.25...0.95)).setFill()
                 ctx.cgContext.fillEllipse(in: CGRect(x: x, y: y, width: r, height: r))
             }
-        }
-    }
-
-    private static func speckle(_ ctx: UIGraphicsImageRendererContext, _ size: CGSize,
-                                count: Int, light: CGFloat, dark: CGFloat) {
-        for i in 0..<count {
-            let isLight = i % 2 == 0
-            UIColor(white: isLight ? 1 : 0, alpha: isLight ? light : dark).setFill()
-            let r = CGFloat.random(in: 1.5...4)
-            ctx.fill(CGRect(x: .random(in: 0...size.width), y: .random(in: 0...size.height),
-                            width: r, height: r))
+            // A soft moon with a glow halo.
+            let moonCenter = CGPoint(x: size.width * 0.76, y: size.height * 0.18)
+            let halo = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: [UIColor(red: 1, green: 0.95, blue: 0.8, alpha: 0.45).cgColor,
+                         UIColor(red: 1, green: 0.95, blue: 0.8, alpha: 0).cgColor] as CFArray,
+                locations: [0, 1]
+            )!
+            ctx.cgContext.drawRadialGradient(halo, startCenter: moonCenter, startRadius: 4,
+                                             endCenter: moonCenter, endRadius: 95, options: [])
+            UIColor(red: 1.0, green: 0.97, blue: 0.86, alpha: 0.95).setFill()
+            ctx.cgContext.fillEllipse(in: CGRect(x: moonCenter.x - 26, y: moonCenter.y - 26,
+                                                 width: 52, height: 52))
         }
     }
 
@@ -295,6 +369,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
     // Render-thread state. Only touched inside renderer(_:updateAtTime:).
     private var balls: [String: Ball] = [:]
     private var aimNodes: [String: SCNNode] = [:]
+    private var turnSpotlight: SCNNode?
     private var sunkOrder: [String] = []
     private var done = false
     private var turnQueue: [String] = []
@@ -418,7 +493,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         let sun = SCNNode()
         sun.light = SCNLight()
         sun.light?.type = .directional
-        sun.light?.intensity = 1050
+        sun.light?.intensity = 1250
         sun.light?.color = UIColor(red: 1.0, green: 0.93, blue: 0.82, alpha: 1)
         sun.light?.castsShadow = true
         sun.light?.shadowRadius = 9
@@ -430,13 +505,13 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         let fill = SCNNode()
         fill.light = SCNLight()
         fill.light?.type = .ambient
-        fill.light?.intensity = 260
+        fill.light?.intensity = 310
         fill.light?.color = UIColor(red: 0.55, green: 0.45, blue: 0.95, alpha: 1)
         scene.rootNode.addChildNode(fill)
 
         // ONE continuous flat fairway — a single floating slab, no gaps.
         // Fall off the open sides or the far end and you respawn at the tee.
-        let slab = SCNBox(width: 15, height: 2.6, length: 36, chamferRadius: 0.18)
+        let slab = SCNBox(width: 15, height: 2.6, length: 36, chamferRadius: 0.45)
         let top = pbr(Tex.fairway(), roughness: 0.9, tile: (2.2, 5))
         let side = pbr(Tex.cliff(), roughness: 0.95, tile: (4, 1))
         let bottom = pbr(UIColor(red: 0.20, green: 0.12, blue: 0.09, alpha: 1))
@@ -447,6 +522,64 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         ground.physicsBody?.friction = 0.55
         ground.physicsBody?.restitution = 0.25
         scene.rootNode.addChildNode(ground)
+
+        // Grass lip overhanging the cliff — the classic stylized-island read.
+        let grassLip = SCNBox(width: 15.7, height: 0.26, length: 36.7, chamferRadius: 0.13)
+        grassLip.materials = [pbr(UIColor(red: 0.22, green: 0.62, blue: 0.33, alpha: 1), roughness: 0.9)]
+        let grassLipNode = SCNNode(geometry: grassLip)
+        grassLipNode.position = SCNVector3(0, -0.17, -1)
+        scene.rootNode.addChildNode(grassLipNode)
+
+        // Baked-AO style vignette over the fairway: soft contact shadows at
+        // the edges make the whole course look lit, not flat.
+        let aoPlane = SCNPlane(width: 14.7, height: 35.7)
+        let aoMat = SCNMaterial()
+        aoMat.lightingModel = .constant
+        aoMat.diffuse.contents = Tex.aoVignette()
+        aoMat.writesToDepthBuffer = false
+        aoPlane.materials = [aoMat]
+        let ao = SCNNode(geometry: aoPlane)
+        ao.eulerAngles = SCNVector3(-Float.pi / 2, 0, 0)
+        ao.position = SCNVector3(0, 0.015, -1)
+        scene.rootNode.addChildNode(ao)
+
+        // Night ocean far below; the course floats over it.
+        let sea = SCNPlane(width: 150, height: 150)
+        let seaMat = SCNMaterial()
+        seaMat.lightingModel = .constant
+        seaMat.diffuse.contents = Tex.water()
+        seaMat.transparency = 0.96
+        sea.materials = [seaMat]
+        let seaNode = SCNNode(geometry: sea)
+        seaNode.eulerAngles = SCNVector3(-Float.pi / 2, 0, 0)
+        seaNode.position = SCNVector3(0, -6.8, -8)
+        seaNode.runAction(.repeatForever(.sequence([
+            .moveBy(x: 0, y: 0.3, z: 0, duration: 3.2),
+            .moveBy(x: 0, y: -0.3, z: 0, duration: 3.2),
+        ])))
+        scene.rootNode.addChildNode(seaNode)
+
+        // Raised tee pad so the start reads as a place, not a random corner.
+        let pad = SCNBox(width: 11, height: 0.06, length: 2.6, chamferRadius: 0.03)
+        pad.materials = [pbr(UIColor(red: 0.40, green: 0.88, blue: 0.52, alpha: 1), roughness: 0.85)]
+        let padNode = SCNNode(geometry: pad)
+        padNode.position = SCNVector3(0, 0.03, 15)
+        scene.rootNode.addChildNode(padNode)
+
+        // Glowing disc that follows whoever's turn it is.
+        let spotGeo = SCNCylinder(radius: 0.95, height: 0.02)
+        let spotMat = SCNMaterial()
+        spotMat.lightingModel = .constant
+        spotMat.diffuse.contents = UIColor.clear
+        spotMat.emission.contents = UIColor(Theme.yellow)
+        spotMat.transparency = 0.4
+        spotMat.blendMode = .add
+        spotMat.writesToDepthBuffer = false
+        spotGeo.materials = [spotMat]
+        let spot = SCNNode(geometry: spotGeo)
+        spot.isHidden = true
+        scene.rootNode.addChildNode(spot)
+        turnSpotlight = spot
 
         // Low lip behind the tee so weak shots don't dribble off the back.
         let lip = SCNNode(geometry: SCNBox(width: 15, height: 0.6, length: 0.5, chamferRadius: 0.1))
@@ -509,6 +642,13 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         cup.position = SCNVector3(holeCenter.x, 0.05, holeCenter.z)
         scene.rootNode.addChildNode(cup)
 
+        // Crisp white rim so the cup reads from across the room.
+        let rim = SCNNode(geometry: SCNTorus(ringRadius: 0.62, pipeRadius: 0.045))
+        rim.geometry?.materials = [pbr(UIColor.white, roughness: 0.4,
+                                       emissive: UIColor(white: 0.85, alpha: 1))]
+        rim.position = SCNVector3(holeCenter.x, 0.09, holeCenter.z)
+        scene.rootNode.addChildNode(rim)
+
         let ring = SCNNode(geometry: SCNTorus(ringRadius: 0.85, pipeRadius: 0.08))
         ring.geometry?.materials = [pbr(UIColor(Theme.yellow), roughness: 0.3,
                                         emissive: UIColor(Theme.yellow))]
@@ -549,6 +689,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
                                            emissive: UIColor(Theme.red).withAlphaComponent(0.7))]
         pennant.eulerAngles = SCNVector3(0, 0, -Float.pi / 2)
         pennant.position = SCNVector3(holeCenter.x + 0.5, 2.3, holeCenter.z)
+        // A lazy wave keeps the green feeling alive.
+        pennant.runAction(.repeatForever(.sequence([
+            .rotateBy(x: 0, y: 0.45, z: 0, duration: 0.9),
+            .rotateBy(x: 0, y: -0.45, z: 0, duration: 0.9),
+        ])))
         scene.rootNode.addChildNode(pennant)
     }
 
@@ -764,6 +909,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             SCNVector3(dir.x * horizontal, loft, dir.z * horizontal),
             asImpulse: true
         )
+        // Squash-and-stretch pop on launch.
+        ball.node.runAction(.sequence([
+            .scale(to: 1.25, duration: 0.08),
+            .scale(to: 1.0, duration: 0.2),
+        ]))
 
         let now = CACurrentMediaTime()
         shotPhase = .settling
@@ -788,6 +938,10 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         currentTurnId = turnQueue[idx]
         shotPhase = .waitingForShot
         turnDeadline = now + shotClock
+        if let shooter = players.first(where: { $0.id == turnQueue[idx] }) {
+            turnSpotlight?.geometry?.firstMaterial?.emission.contents =
+                UIColor(Color(hex: shooter.colorHex))
+        }
         reportProgress()
     }
 
@@ -867,6 +1021,17 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
                     },
                     .fadeOpacity(to: 1, duration: 0.2),
                 ]))
+            }
+        }
+
+        // The glow disc tracks the active shooter's ball.
+        if let spot = turnSpotlight {
+            if let turnId = currentTurnId, let b = balls[turnId], !b.sunk {
+                spot.isHidden = false
+                let p = b.node.presentation.position
+                spot.position = SCNVector3(p.x, 0.03, p.z)
+            } else {
+                spot.isHidden = true
             }
         }
 
