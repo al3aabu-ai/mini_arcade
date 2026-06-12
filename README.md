@@ -35,7 +35,7 @@ iOS supports *external display scenes*: when the host starts **Screen Mirroring*
 2. **The Dirty Auction** — 15 s of sealed bids on a sabotage item. Winner pays their bid and picks a victim on their phone:
    - 🪨 **The Heavy Anvil** (before golf): victim's shots launch **30 % weaker**.
    - 🧈 **Butter Fingers** (before the bomb): victim's PASS button **jams for 2 s** every time they catch the bomb.
-3. **⛳️ Guerilla Golf** — simultaneous slingshot race across a physics course (SpriteKit on the host's board). Drag back on your phone's touchpad, aim lines stream live to the TV (~30 msg/s), release to fire — and to bodycheck rivals into the pits. Bounties: **500 / 300 / 200**, then 100 per finisher.
+3. **⛳️ Guerilla Golf** — simultaneous slingshot race across a **3D low-poly island course** (SceneKit physics on the host's board, PS4-Frantics style: floating fairways over the void, bumpers, a spinning paddle, a flag on the green). Drag back on your phone's touchpad, 3D aim arrows stream live to the TV (~30 msg/s), release to fire — and to bodycheck rivals off the map. Bounties: **500 / 300 / 200**, then 100 per finisher.
 4. **💣 The Billionaire's Bomb** — hot-potato chicken. Holding the bomb mints cash with a rising greed multiplier; tilt your phone (or tap an arrow) + **PASS** to shove it at a neighbor. The fuse is hidden — explode and your unbanked cash burns. Rounds repeat until **exactly two survive**, who bank everything **+ $250**.
 5. **🏆 Podium** — confetti, crowns, and a **Replay?** button. If *everyone* votes replay, scores reset and the loop jumps straight back to the auction.
 
@@ -104,4 +104,4 @@ npm run smoke       # full game E2E in ~10 s (FAST_GAME shrinks every timer)
 
 - `ALLOW_SOLO=1` lets a lone host start a game while developing.
 - The app has screenshot/dev fixtures: launch with env `FRANTICS_DEMO=board-bomb` (or `board-lobby`, `board-golf`, `board-podium`, `phone-auction`, `phone-bomb`, …) to render any screen with canned data, no server needed.
-- Game feel lives in two files: timers/payouts in [protocol.ts](server/src/protocol.ts) (`CONST`), golf physics in [GolfBoard.swift](ios/Frantics/Board/GolfBoard.swift).
+- Game feel lives in two files: timers/payouts in [protocol.ts](server/src/protocol.ts) (`CONST`), 3D golf physics/course layout in [Golf3DBoard.swift](ios/Frantics/Board/Golf3DBoard.swift).

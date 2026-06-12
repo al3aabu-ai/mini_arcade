@@ -34,7 +34,10 @@ export function startServer(port: number) {
 
   const wss = new WebSocketServer({ server: httpServer });
 
-  wss.on("connection", (ws: WebSocket) => {
+  wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
+    const remote = req.socket.remoteAddress ?? "?";
+    console.log(`[conn] open from ${remote}`);
+    ws.on("close", (code) => console.log(`[conn] closed ${remote} (code ${code})`));
     const conn: ConnState = { room: null, playerId: null };
 
     const reply = (msg: ServerMessage) => ws.send(JSON.stringify(msg));
