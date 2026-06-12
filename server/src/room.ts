@@ -1,0 +1,608 @@
+import { randomUUID } from "node:crypto";
+import type { WebSocket } from "ws";
+import {
+  CONST,
+  SABOTAGE_ITEMS,
+  type AuctionStage,
+  type AuctionState,
+  type BombState,
+  type Debuff,
+  type GolfState,
+  type Phase,
+  type PlayerState,
+  type PodiumState,
+  type RoomState,
+  type SabotageItem,
+  type ServerMessage,
+} from "./protocol.js";
+
+interface Player {
+  id: string;
+  token: string;
+  name: string;
+  avatar: string;
+  color: string;
+  score: number;
+  isHost: boolean;
+  debuff: Debuff | null;
+  ws: WebSocket | null;
+  /** secret current-auction bid; null = not locked in yet */
+  bid: number | null;
+  bidLockedAt: number;
+}
+
+interface AuctionInternal {
+  round: number;
+  stage: AuctionStage;
+  item: SabotageItem;
+  endsAt: number;
+  winnerId: string | null;
+  winningBid: number | null;
+  targetId: string | null;
+}
+
+interface GolfInternal {
+  endsAt: number;
+  debuffs: Record<string, Debuff>;
+  results: { order: string[]; awarded: Record<string, number> } | null;
+}
+
+interface BombInternal {
+  stage: "ticking" | "exploded" | "done";
+  alive: string[];
+  eliminated: string[];
+  holderId: string | null;
+  multiplier: number;
+  earnings: Record<string, number>;
+  jamUntil: number | null;
+  lastExplodedId: string | null;
+  survivors: string[] | null;
+}
+
+export class Room {
+  readonly code: string;
+  private players: Player[] = [];
+  private phase: Phase = "lobby";
+  private auction: AuctionInternal | null = null;
+  private golf: GolfInternal | null = null;
+  private bomb: BombInternal | null = null;
+  private replayVotes = new Set<string>();
+  private rev = 0;
+  /** bumped on every phase/stage change so stale timer callbacks no-op */
+  private gen = 0;
+  private timers: NodeJS.Timeout[] = [];
+  lastActivity = Date.now();
+
+  constructor(code: string, private readonly onEmpty: (room: Room) => void) {
+    this.code = code;
+  }
+
+  // ------------------------------ lifecycle --------------------------------
+
+  addPlayer(opts: { name: string; avatar: string; color: string; isHost: boolean; ws: WebSocket }):
+    | { ok: true; player: Player }
+    | { ok: false; reason: string } {
+    if (this.phase !== "lobby") return { ok: false, reason: "Game already in progress" };
+    if (this.players.length >= CONST.MAX_PLAYERS) return { ok: false, reason: "Room is full" };
+    const name = opts.name.trim().slice(0, 14);
+    if (!name) return { ok: false, reason: "Name required" };
+    if (this.players.some((p) => p.name.toLowerCase() === name.toLowerCase()))
+      return { ok: false, reason: "That name is taken" };
+    const player: Player = {
+      id: randomUUID(),
+      token: randomUUID(),
+      name,
+      avatar: opts.avatar || "🙂",
+      color: opts.color || "#FF2E88",
+      score: CONST.START_POINTS,
+      isHost: opts.isHost,
+      debuff: null,
+      ws: opts.ws,
+      bid: null,
+      bidLockedAt: 0,
+    };
+    this.players.push(player);
+    this.touch();
+    this.broadcast();
+    return { ok: true, player };
+  }
+
+  rejoin(playerId: string, token: string, ws: WebSocket): Player | null {
+    const p = this.players.find((x) => x.id === playerId && x.token === token);
+    if (!p) return null;
+    if (p.ws && p.ws !== ws) {
+      try { p.ws.close(4000, "Replaced by reconnect"); } catch { /* already gone */ }
+    }
+    p.ws = ws;
+    this.touch();
+    this.broadcast();
+    return p;
+  }
+
+  handleDisconnect(playerId: string, ws: WebSocket) {
+    const p = this.players.find((x) => x.id === playerId);
+    if (!p || p.ws !== ws) return;
+    p.ws = null;
+    if (this.phase === "lobby" && !p.isHost) {
+      // In the lobby, dropping the connection means leaving the party.
+      this.players = this.players.filter((x) => x.id !== playerId);
+    }
+    this.touch();
+    this.broadcast();
+    if (this.players.every((x) => !x.ws)) this.scheduleEmptyCheck();
+  }
+
+  get isAbandoned(): boolean {
+    return (
+      this.players.every((p) => !p.ws) &&
+      Date.now() - this.lastActivity > CONST.ROOM_MAX_IDLE_MS
+    );
+  }
+
+  private scheduleEmptyCheck() {
+    setTimeout(() => {
+      if (this.isAbandoned) this.onEmpty(this);
+    }, CONST.ROOM_MAX_IDLE_MS + 1000).unref?.();
+  }
+
+  private touch() {
+    this.lastActivity = Date.now();
+  }
+
+  // ------------------------------ messaging --------------------------------
+
+  private send(p: Player, msg: ServerMessage) {
+    if (p.ws && p.ws.readyState === p.ws.OPEN) {
+      p.ws.send(JSON.stringify(msg));
+    }
+  }
+
+  private sendToHost(msg: ServerMessage) {
+    const host = this.players.find((p) => p.isHost);
+    if (host) this.send(host, msg);
+  }
+
+  broadcast() {
+    const msg: ServerMessage = { t: "room_state", state: this.snapshot() };
+    const raw = JSON.stringify(msg);
+    for (const p of this.players) {
+      if (p.ws && p.ws.readyState === p.ws.OPEN) p.ws.send(raw);
+    }
+  }
+
+  sendError(playerId: string, message: string) {
+    const p = this.players.find((x) => x.id === playerId);
+    if (p) this.send(p, { t: "error", message });
+  }
+
+  snapshot(): RoomState {
+    this.rev += 1;
+    const players: PlayerState[] = this.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      avatar: p.avatar,
+      color: p.color,
+      score: p.score,
+      connected: !!p.ws,
+      isHost: p.isHost,
+      debuff: p.debuff,
+    }));
+    let auction: AuctionState | null = null;
+    if (this.phase === "auction" && this.auction) {
+      auction = {
+        round: this.auction.round,
+        stage: this.auction.stage,
+        item: this.auction.item,
+        endsAt: this.auction.endsAt,
+        lockedIn: this.players.filter((p) => p.bid !== null).map((p) => p.id),
+        winnerId: this.auction.winnerId,
+        winningBid: this.auction.winningBid,
+        targetId: this.auction.targetId,
+      };
+    }
+    let golf: GolfState | null = null;
+    if (this.phase === "golf" && this.golf) {
+      golf = { endsAt: this.golf.endsAt, debuffs: this.golf.debuffs, results: this.golf.results };
+    }
+    let bomb: BombState | null = null;
+    if (this.phase === "bomb" && this.bomb) {
+      const pot = Object.values(this.bomb.earnings).reduce((a, b) => a + b, 0);
+      bomb = {
+        stage: this.bomb.stage,
+        alive: this.bomb.alive,
+        eliminated: this.bomb.eliminated,
+        holderId: this.bomb.holderId,
+        pot,
+        multiplier: this.bomb.multiplier,
+        earnings: this.bomb.earnings,
+        jamUntil: this.bomb.jamUntil,
+        lastExplodedId: this.bomb.lastExplodedId,
+        survivors: this.bomb.survivors,
+      };
+    }
+    let podium: PodiumState | null = null;
+    if (this.phase === "podium") {
+      podium = {
+        ranking: [...this.players].sort((a, b) => b.score - a.score).map((p) => p.id),
+        replayVotes: [...this.replayVotes],
+      };
+    }
+    return { code: this.code, phase: this.phase, players, auction, golf, bomb, podium, rev: this.rev };
+  }
+
+  // ------------------------------ timers -----------------------------------
+
+  /** Schedule a callback that silently dies if the room moved on (gen changed). */
+  private after(ms: number, fn: () => void) {
+    const gen = this.gen;
+    const handle = setTimeout(() => {
+      if (this.gen === gen) fn();
+    }, ms);
+    handle.unref?.();
+    this.timers.push(handle);
+  }
+
+  private every(ms: number, fn: () => void) {
+    const gen = this.gen;
+    const handle = setInterval(() => {
+      if (this.gen === gen) fn();
+      else clearInterval(handle);
+    }, ms);
+    handle.unref?.();
+    this.timers.push(handle);
+  }
+
+  private newGen() {
+    this.gen += 1;
+    for (const t of this.timers) clearTimeout(t);
+    this.timers = [];
+  }
+
+  // ------------------------------ lobby ------------------------------------
+
+  startGame(playerId: string) {
+    const p = this.players.find((x) => x.id === playerId);
+    if (!p?.isHost) return this.sendError(playerId, "Only the host can start the game");
+    if (this.phase !== "lobby") return;
+    const connected = this.players.filter((x) => x.ws).length;
+    const min = process.env.ALLOW_SOLO === "1" ? 1 : CONST.MIN_PLAYERS;
+    if (connected < min)
+      return this.sendError(playerId, `Need at least ${CONST.MIN_PLAYERS} players`);
+    this.touch();
+    this.startAuction(1);
+  }
+
+  // ------------------------------ auction ----------------------------------
+
+  private startAuction(round: number) {
+    this.newGen();
+    this.phase = "auction";
+    for (const p of this.players) {
+      p.bid = null;
+      p.bidLockedAt = 0;
+    }
+    const item = SABOTAGE_ITEMS[(round - 1) % SABOTAGE_ITEMS.length];
+    this.auction = {
+      round,
+      stage: "bidding",
+      item,
+      endsAt: Date.now() + CONST.AUCTION_BID_MS,
+      winnerId: null,
+      winningBid: null,
+      targetId: null,
+    };
+    this.after(CONST.AUCTION_BID_MS, () => this.resolveAuction());
+    this.broadcast();
+  }
+
+  submitBid(playerId: string, amount: number) {
+    if (this.phase !== "auction" || !this.auction || this.auction.stage !== "bidding") return;
+    const p = this.players.find((x) => x.id === playerId);
+    if (!p) return;
+    if (p.bid !== null) return this.sendError(playerId, "Bid already locked in");
+    const clamped = Math.max(0, Math.min(p.score, Math.floor(amount)));
+    p.bid = clamped;
+    p.bidLockedAt = Date.now();
+    this.touch();
+    if (this.players.every((x) => x.bid !== null || !x.ws)) {
+      this.resolveAuction();
+    } else {
+      this.broadcast();
+    }
+  }
+
+  private resolveAuction() {
+    if (!this.auction || this.auction.stage !== "bidding") return;
+    const bidders = this.players
+      .filter((p) => (p.bid ?? 0) > 0)
+      .sort((a, b) => (b.bid! - a.bid!) || (a.bidLockedAt - b.bidLockedAt));
+    const winner = bidders[0] ?? null;
+    if (!winner) {
+      // Nobody wanted it — short reveal of the unsold item, then move on.
+      this.auction.stage = "reveal";
+      this.auction.endsAt = Date.now() + CONST.AUCTION_REVEAL_MS;
+      this.after(CONST.AUCTION_REVEAL_MS, () => this.afterAuction());
+      this.broadcast();
+      return;
+    }
+    winner.score -= winner.bid!;
+    this.auction.winnerId = winner.id;
+    this.auction.winningBid = winner.bid!;
+    this.auction.stage = "targeting";
+    this.auction.endsAt = Date.now() + CONST.AUCTION_TARGET_MS;
+    this.after(CONST.AUCTION_TARGET_MS, () => {
+      if (this.auction?.stage !== "targeting") return; // already chosen
+      // Winner dawdled — pick a victim for them.
+      const others = this.players.filter((p) => p.id !== winner.id);
+      const target = others[Math.floor(Math.random() * others.length)];
+      if (target) this.applyTarget(winner.id, target.id);
+    });
+    this.broadcast();
+  }
+
+  chooseTarget(playerId: string, targetId: string) {
+    if (this.phase !== "auction" || !this.auction) return;
+    if (this.auction.stage !== "targeting" || this.auction.winnerId !== playerId)
+      return this.sendError(playerId, "You did not win the auction");
+    if (targetId === playerId) return this.sendError(playerId, "Pick someone else, not yourself");
+    if (!this.players.some((p) => p.id === targetId))
+      return this.sendError(playerId, "Unknown target");
+    this.applyTarget(playerId, targetId);
+  }
+
+  private applyTarget(_winnerId: string, targetId: string) {
+    if (!this.auction || this.auction.stage !== "targeting") return;
+    const target = this.players.find((p) => p.id === targetId);
+    if (target) target.debuff = this.auction.item.debuff;
+    this.auction.targetId = targetId;
+    this.auction.stage = "reveal";
+    this.auction.endsAt = Date.now() + CONST.AUCTION_REVEAL_MS;
+    this.after(CONST.AUCTION_REVEAL_MS, () => this.afterAuction());
+    this.touch();
+    this.broadcast();
+  }
+
+  private afterAuction() {
+    if (!this.auction) return;
+    if (this.auction.round === 1) this.startGolf();
+    else this.startBomb();
+  }
+
+  // ------------------------------ golf -------------------------------------
+
+  private startGolf() {
+    this.newGen();
+    this.phase = "golf";
+    const debuffs: Record<string, Debuff> = {};
+    for (const p of this.players) {
+      if (p.debuff === "anvil") debuffs[p.id] = "anvil";
+    }
+    this.golf = { endsAt: Date.now() + CONST.GOLF_TIME_LIMIT_MS, debuffs, results: null };
+    // Backstop: if the host board never reports (e.g. host died), finish with no finishers.
+    this.after(CONST.GOLF_TIME_LIMIT_MS + 5000, () => this.finishGolf([]));
+    this.broadcast();
+  }
+
+  relayAim(playerId: string, angle: number, power: number) {
+    if (this.phase !== "golf") return;
+    this.sendToHost({ t: "aim", playerId, angle, power });
+  }
+
+  relayAimClear(playerId: string) {
+    if (this.phase !== "golf") return;
+    this.sendToHost({ t: "aim_clear", playerId });
+  }
+
+  relayFire(playerId: string, angle: number, power: number) {
+    if (this.phase !== "golf") return;
+    this.touch();
+    this.sendToHost({
+      t: "fire",
+      playerId,
+      angle,
+      power: Math.max(0, Math.min(1, power)),
+    });
+  }
+
+  golfFinished(reporterId: string, order: string[]) {
+    const reporter = this.players.find((p) => p.id === reporterId);
+    if (!reporter?.isHost) return this.sendError(reporterId, "Only the host board reports results");
+    this.finishGolf(order);
+  }
+
+  private finishGolf(order: string[]) {
+    if (this.phase !== "golf" || !this.golf || this.golf.results) return;
+    const validOrder = order.filter((id) => this.players.some((p) => p.id === id));
+    const awarded: Record<string, number> = {};
+    for (const p of this.players) awarded[p.id] = 0;
+    validOrder.forEach((id, i) => {
+      const points = CONST.GOLF_BOUNTIES[i] ?? CONST.GOLF_FINISH_POINTS;
+      awarded[id] = points;
+      const p = this.players.find((x) => x.id === id);
+      if (p) p.score += points;
+    });
+    // The anvil is consumed by this game.
+    for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
+    this.golf.results = { order: validOrder, awarded };
+    this.newGen();
+    this.after(CONST.GOLF_RESULTS_MS, () => this.startAuction(2));
+    this.touch();
+    this.broadcast();
+  }
+
+  // ------------------------------ bomb -------------------------------------
+
+  private startBomb() {
+    this.newGen();
+    this.phase = "bomb";
+    const earnings: Record<string, number> = {};
+    for (const p of this.players) earnings[p.id] = 0;
+    this.bomb = {
+      stage: "ticking",
+      alive: this.players.map((p) => p.id),
+      eliminated: [],
+      holderId: null,
+      multiplier: 1,
+      earnings,
+      jamUntil: null,
+      lastExplodedId: null,
+      survivors: null,
+    };
+    this.startBombRound();
+  }
+
+  private startBombRound() {
+    const bomb = this.bomb;
+    if (!bomb) return;
+    this.newGen();
+    bomb.stage = "ticking";
+    bomb.multiplier = 1;
+    const holder = bomb.alive[Math.floor(Math.random() * bomb.alive.length)];
+    this.setBombHolder(holder);
+    const fuse =
+      CONST.BOMB_FUSE_MIN_MS +
+      Math.random() * (CONST.BOMB_FUSE_MAX_MS - CONST.BOMB_FUSE_MIN_MS);
+    this.after(fuse, () => this.explodeBomb());
+    this.every(CONST.BOMB_TICK_MS, () => {
+      if (!bomb.holderId) return;
+      bomb.earnings[bomb.holderId] =
+        (bomb.earnings[bomb.holderId] ?? 0) +
+        Math.round(CONST.BOMB_CASH_PER_TICK * bomb.multiplier);
+      bomb.multiplier = Math.round((bomb.multiplier + CONST.BOMB_MULT_STEP) * 100) / 100;
+      this.broadcast();
+    });
+    this.broadcast();
+  }
+
+  private setBombHolder(playerId: string) {
+    const bomb = this.bomb;
+    if (!bomb) return;
+    bomb.holderId = playerId;
+    bomb.multiplier = 1;
+    const holder = this.players.find((p) => p.id === playerId);
+    bomb.jamUntil = holder?.debuff === "jammed" ? Date.now() + CONST.BOMB_JAM_MS : null;
+  }
+
+  passBomb(playerId: string, direction: "left" | "right") {
+    const bomb = this.bomb;
+    if (this.phase !== "bomb" || !bomb || bomb.stage !== "ticking") return;
+    if (bomb.holderId !== playerId) return this.sendError(playerId, "You are not holding the bomb");
+    if (bomb.jamUntil && Date.now() < bomb.jamUntil)
+      return this.sendError(playerId, "Butter fingers! The button is jammed");
+    const idx = bomb.alive.indexOf(playerId);
+    if (idx === -1) return;
+    const step = direction === "left" ? -1 : 1;
+    const next = bomb.alive[(idx + step + bomb.alive.length) % bomb.alive.length];
+    if (next === playerId) return; // alone in the circle, nowhere to pass
+    this.setBombHolder(next);
+    this.touch();
+    this.broadcast();
+  }
+
+  private explodeBomb() {
+    const bomb = this.bomb;
+    if (!bomb || bomb.stage !== "ticking" || !bomb.holderId) return;
+    const victim = bomb.holderId;
+    this.newGen();
+    bomb.stage = "exploded";
+    bomb.lastExplodedId = victim;
+    bomb.earnings[victim] = 0; // greed punished: accrued cash burns with you
+    bomb.alive = bomb.alive.filter((id) => id !== victim);
+    bomb.eliminated.push(victim);
+    bomb.holderId = null;
+    bomb.jamUntil = null;
+    this.broadcast();
+    this.after(CONST.BOMB_ROUND_BREAK_MS, () => {
+      if (bomb.alive.length <= 2) this.finishBomb();
+      else this.startBombRound();
+    });
+  }
+
+  private finishBomb() {
+    const bomb = this.bomb;
+    if (!bomb) return;
+    this.newGen();
+    bomb.stage = "done";
+    bomb.holderId = null;
+    bomb.survivors = [...bomb.alive];
+    for (const p of this.players) {
+      p.score += bomb.earnings[p.id] ?? 0;
+      if (bomb.survivors.includes(p.id)) p.score += CONST.BOMB_SURVIVOR_BONUS;
+      if (p.debuff === "jammed") p.debuff = null;
+    }
+    this.broadcast();
+    this.after(CONST.BOMB_ROUND_BREAK_MS, () => this.startPodium());
+  }
+
+  // ------------------------------ podium -----------------------------------
+
+  private startPodium() {
+    this.newGen();
+    this.phase = "podium";
+    this.replayVotes.clear();
+    this.touch();
+    this.broadcast();
+  }
+
+  voteReplay(playerId: string) {
+    if (this.phase !== "podium") return;
+    if (!this.players.some((p) => p.id === playerId)) return;
+    this.replayVotes.add(playerId);
+    this.touch();
+    const connected = this.players.filter((p) => p.ws);
+    const everyoneIn =
+      connected.length > 0 && connected.every((p) => this.replayVotes.has(p.id));
+    if (everyoneIn) {
+      for (const p of this.players) {
+        p.score = CONST.START_POINTS;
+        p.debuff = null;
+      }
+      this.golf = null;
+      this.bomb = null;
+      this.replayVotes.clear();
+      this.startAuction(1); // straight back to the Dirty Auction, per the design doc
+    } else {
+      this.broadcast();
+    }
+  }
+}
+
+// ----------------------------- room manager ---------------------------------
+
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I/O — avoids 1/0 confusion
+
+export class RoomManager {
+  private rooms = new Map<string, Room>();
+
+  constructor() {
+    setInterval(() => {
+      for (const [code, room] of this.rooms) {
+        if (room.isAbandoned) {
+          this.rooms.delete(code);
+          console.log(`[room ${code}] swept (abandoned)`);
+        }
+      }
+    }, CONST.ROOM_IDLE_SWEEP_MS).unref?.();
+  }
+
+  create(): Room {
+    let code: string;
+    do {
+      code = Array.from(
+        { length: 4 },
+        () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)],
+      ).join("");
+    } while (this.rooms.has(code));
+    const room = new Room(code, (r) => this.rooms.delete(r.code));
+    this.rooms.set(code, room);
+    return room;
+  }
+
+  get(code: string): Room | undefined {
+    return this.rooms.get(code.trim().toUpperCase());
+  }
+
+  get stats() {
+    return { rooms: this.rooms.size };
+  }
+}

@@ -1,0 +1,12 @@
+# Node
+node_modules/
+server/dist/
+
+# Xcode / iOS
+ios/build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# OS
+.DS_Store
