@@ -855,6 +855,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             body.categoryBitMask = Self.ballCategory
             body.collisionBitMask = -1            // ~0 = all layers (incl. the floor)
             body.contactTestBitMask = Self.ballCategory
+            // Never let the body sleep. A sleeping body caches a stale transform
+            // and, on the wake-up impulse, re-solves its matrices a frame behind —
+            // the harsh launch snap/rubber-band. Staying active keeps its transform
+            // continuously synced so the shot launches clean. (Root-cause fix)
+            body.allowsResting = false
             node.name = info.id
             node.physicsBody = body
             scene.rootNode.addChildNode(node)
@@ -945,18 +950,19 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
               let ball = balls[playerId], !ball.sunk, !ball.respawning,
               let body = ball.node.physicsBody else { return }
 
-        // Unify the model node and the physics body at the exact resting lie
-        // BEFORE launching. A ball that has been sitting still is asleep, and its
-        // cached body transform can lag the model node by a frame — so the impulse
-        // and squash would fire from a stale spot, producing the launch glitch.
-        // Re-anchor the body to the current position (resetTransform) and clear
-        // any sleep/residual state, THEN apply the force and animation so the
-        // aim→launch transition is seamless. (Requirements 1 & 2)
-        ball.node.position = ball.node.presentation.position
+        // Clean launch sequence in strict order. No resetTransform() here — that
+        // hard re-anchor is what snapped/rubber-banded the ball; the body is kept
+        // awake (allowsResting = false) so its transform is already current and
+        // needs no forced sync. (Requirements 1 & 2)
+        //
+        // a) kill all motion so the shot launches from a true zero state
         body.clearAllForces()
         body.velocity = SCNVector3Zero
         body.angularVelocity = SCNVector4Zero
-        body.resetTransform()
+        // b) confirm the model node sits exactly at the live ball position. These
+        //    are already equal (locked at settle + never-sleeping body), so this
+        //    is a no-op in value — it cannot pull the ball toward the old tee.
+        ball.node.position = ball.node.presentation.position
 
         let p = min(1.0, max(0.0, power))
         let factor: Float = ball.info.anviled ? 0.7 : 1.0 // the Heavy Anvil at work
@@ -964,16 +970,14 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         let horizontal = Float(5.0 + 14.0 * p) * factor
         let loft = Float(2.2 + 4.8 * p) * factor
 
-        // Transforms are now unified — launch.
+        // c) apply the launch impulse. Deliberately NO squash/wind-up SCNAction on
+        //    the ball: animating the physics node's transform fought the solver and
+        //    yanked the ball mid-launch. The speed trail already sells the shot.
+        //    (Requirement 3)
         body.applyForce(
             SCNVector3(dir.x * horizontal, loft, dir.z * horizontal),
             asImpulse: true
         )
-        // Squash-and-stretch pop on launch.
-        ball.node.runAction(.sequence([
-            .scale(to: 1.25, duration: 0.08),
-            .scale(to: 1.0, duration: 0.2),
-        ]))
 
         let now = CACurrentMediaTime()
         shotPhase = .settling
