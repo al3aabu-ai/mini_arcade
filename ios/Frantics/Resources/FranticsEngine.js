@@ -260,7 +260,7 @@
       if (!(p == null ? void 0 : p.isHost)) return this.sendError(playerId, "Only the host can start the game");
       if (this.phase !== "lobby") return;
       const connected = this.players.filter((x) => x.ws).length;
-      const min = false ? 1 : CONST.MIN_PLAYERS;
+      const min = true ? 1 : CONST.MIN_PLAYERS;
       if (connected < min)
         return this.sendError(playerId, `Need at least ${CONST.MIN_PLAYERS} players`);
       this.touch();

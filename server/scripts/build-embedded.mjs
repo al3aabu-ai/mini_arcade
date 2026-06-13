@@ -21,7 +21,9 @@ await build({
   legalComments: "none",
   define: {
     "process.env.FAST_GAME": '"0"',
-    "process.env.ALLOW_SOLO": '"0"',
+    // TESTING ONLY — lets a lone host start a game on-device. Remove later
+    // (flip back to "0") so a real party still needs 2+ players.
+    "process.env.ALLOW_SOLO": '"1"',
   },
   outfile,
 });
