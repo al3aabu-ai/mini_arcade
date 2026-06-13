@@ -942,14 +942,30 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private func applyFire(playerId: String, angle: Double, power: Double) {
         removeAim(playerId: playerId)
         guard playerId == currentTurnId, shotPhase == .waitingForShot,
-              let ball = balls[playerId], !ball.sunk, !ball.respawning else { return }
+              let ball = balls[playerId], !ball.sunk, !ball.respawning,
+              let body = ball.node.physicsBody else { return }
+
+        // Unify the model node and the physics body at the exact resting lie
+        // BEFORE launching. A ball that has been sitting still is asleep, and its
+        // cached body transform can lag the model node by a frame — so the impulse
+        // and squash would fire from a stale spot, producing the launch glitch.
+        // Re-anchor the body to the current position (resetTransform) and clear
+        // any sleep/residual state, THEN apply the force and animation so the
+        // aim→launch transition is seamless. (Requirements 1 & 2)
+        ball.node.position = ball.node.presentation.position
+        body.clearAllForces()
+        body.velocity = SCNVector3Zero
+        body.angularVelocity = SCNVector4Zero
+        body.resetTransform()
 
         let p = min(1.0, max(0.0, power))
         let factor: Float = ball.info.anviled ? 0.7 : 1.0 // the Heavy Anvil at work
         let dir = groundDirection(angle)
         let horizontal = Float(5.0 + 14.0 * p) * factor
         let loft = Float(2.2 + 4.8 * p) * factor
-        ball.node.physicsBody?.applyForce(
+
+        // Transforms are now unified — launch.
+        body.applyForce(
             SCNVector3(dir.x * horizontal, loft, dir.z * horizontal),
             asImpulse: true
         )
