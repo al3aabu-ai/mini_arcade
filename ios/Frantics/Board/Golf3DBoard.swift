@@ -1019,11 +1019,23 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     /// "both balls save their new resting positions" half of Objective 2.
     private func saveRestingPositions() {
         for (id, var ball) in balls where !ball.sunk && !ball.respawning {
-            ball.restingPosition = ball.node.presentation.position
+            let resting = ball.node.presentation.position
+            ball.restingPosition = resting
+
+            // CRUCIAL FIX (turn-activation teleport): during the physics
+            // simulation SceneKit only moves the PRESENTATION node — the model
+            // node still holds the spawn/tee position it was created at. The ball
+            // *looks* settled, but the next SCNAction on it (the launch squash) or
+            // any transform refresh snaps it back to that stale tee the instant
+            // the player shoots again. Write the simulated rest position back onto
+            // the model node and re-anchor the body so the lie is the single
+            // source of truth and never reverts to spawn.
+            ball.node.position = resting
             // Lock the lie in: kill any residual motion so the ball can't creep
             // off its resting spot after the turn advances. (Requirements 1 & 3)
             ball.node.physicsBody?.velocity = SCNVector3Zero
             ball.node.physicsBody?.angularVelocity = SCNVector4Zero
+            ball.node.physicsBody?.resetTransform()
             balls[id] = ball
         }
     }
