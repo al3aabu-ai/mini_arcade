@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PhoneLobbyView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
 
     private var room: RoomState? { client.room }
 
@@ -10,7 +11,7 @@ struct PhoneLobbyView: View {
             Spacer()
 
             if let room {
-                Text("ROOM CODE")
+                Text(loc.tr("ROOM CODE"))
                     .font(Theme.body(14))
                     .foregroundStyle(.white.opacity(0.45))
                 Text(room.code)
@@ -28,7 +29,7 @@ struct PhoneLobbyView: View {
                 .padding(.horizontal, 24)
                 .animation(.spring(response: 0.4, dampingFraction: 0.6), value: room.players)
 
-                Text("\(room.players.count) player\(room.players.count == 1 ? "" : "s") in")
+                Text(loc.tr("%@ players in", "\(room.players.count)"))
                     .font(Theme.body(14))
                     .foregroundStyle(.white.opacity(0.5))
             }
@@ -37,18 +38,18 @@ struct PhoneLobbyView: View {
 
             if client.isHost {
                 if !client.boardDisplayConnected {
-                    Label("Mirror your screen to the TV — the board takes over the big screen", systemImage: "airplayvideo")
+                    Label(loc.tr("Mirror your screen to the TV — the board takes over the big screen"), systemImage: "airplayvideo")
                         .font(Theme.body(13))
                         .foregroundStyle(Theme.yellow.opacity(0.85))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 30)
                 }
-                Button("START THE CHAOS  🎬") { client.startGame() }
+                Button(loc.tr("START THE CHAOS  🎬")) { client.startGame() }
                     .buttonStyle(NeonButtonStyle(color: Theme.pink))
                     .padding(.horizontal, 28)
                     .padding(.bottom, 24)
             } else {
-                Text("Waiting for the host to start…")
+                Text(loc.tr("Waiting for the host to start…"))
                     .font(Theme.body(16))
                     .foregroundStyle(.white.opacity(0.55))
                     .padding(.bottom, 36)

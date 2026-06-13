@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PhonePodiumView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
 
     private var podium: PodiumState? { client.room?.podium }
     private var myPlace: Int? {
@@ -16,12 +17,12 @@ struct PhonePodiumView: View {
             if let place = myPlace {
                 Text(["🥇", "🥈", "🥉"].indices.contains(place - 1) ? ["🥇", "🥈", "🥉"][place - 1] : "🎖️")
                     .font(.system(size: 96))
-                Text(place == 1 ? "CHAMPION!" : "#\(place)")
+                Text(place == 1 ? loc.tr("CHAMPION!") : "#\(place)")
                     .font(Theme.title(44))
                     .foregroundStyle(place == 1 ? Theme.yellow : .white)
                     .neonGlow(place == 1 ? Theme.yellow : Theme.purple)
                 if let me = client.me {
-                    Text("\(me.score) points")
+                    Text(loc.tr("%@ points", "\(me.score)"))
                         .font(Theme.body(20))
                         .foregroundStyle(.white.opacity(0.7))
                 }
@@ -30,12 +31,12 @@ struct PhonePodiumView: View {
             Spacer()
 
             if let podium {
-                Text("Replay votes: \(podium.replayVotes.count)/\(client.room?.players.count ?? 0)")
+                Text(loc.tr("Replay votes: %@/%@", "\(podium.replayVotes.count)", "\(client.room?.players.count ?? 0)"))
                     .font(Theme.body(14))
                     .foregroundStyle(.white.opacity(0.5))
             }
 
-            Button(voted ? "WAITING FOR THE OTHERS…" : "REPLAY?  🔁") {
+            Button(loc.tr(voted ? "WAITING FOR THE OTHERS…" : "REPLAY?  🔁")) {
                 Haptics.success()
                 client.voteReplay()
             }

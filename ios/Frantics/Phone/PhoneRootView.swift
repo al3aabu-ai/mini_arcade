@@ -3,6 +3,7 @@ import SwiftUI
 /// Routes the phone (controller) experience by connection + game phase.
 struct PhoneRootView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
 
     var body: some View {
         #if DEBUG
@@ -49,7 +50,7 @@ struct PhoneRootView: View {
     private var errorToast: some View {
         VStack {
             if let error = client.lastError {
-                Text(error)
+                Text(loc.tr(error))
                     .font(Theme.body(15))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
@@ -68,6 +69,7 @@ struct PhoneRootView: View {
 /// plus the host's TV link status.
 struct PartyStatusBar: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
     let room: RoomState
     @State private var showLeaveConfirm = false
     @State private var showBoardPreview = false
@@ -120,8 +122,8 @@ struct PartyStatusBar: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .confirmationDialog("Leave the party?", isPresented: $showLeaveConfirm, titleVisibility: .visible) {
-            Button("Leave", role: .destructive) { client.leaveRoom() }
+        .confirmationDialog(loc.tr("Leave the party?"), isPresented: $showLeaveConfirm, titleVisibility: .visible) {
+            Button(loc.tr("Leave"), role: .destructive) { client.leaveRoom() }
         }
         .fullScreenCover(isPresented: $showBoardPreview) {
             ZStack(alignment: .topTrailing) {

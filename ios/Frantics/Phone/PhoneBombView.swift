@@ -4,6 +4,7 @@ import SwiftUI
 /// shove the bomb at a neighbor before it blows.
 struct PhoneBombView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
     @StateObject private var tilt = TiltManager()
     @State private var chosenDirection = "right"
     @State private var pulse = false
@@ -45,11 +46,11 @@ struct PhoneBombView: View {
     private func holdingView(_ bomb: BombState) -> some View {
         let jammedUntil = bomb.jamUntilDate
         VStack(spacing: 4) {
-            Text("YOU HAVE THE BOMB")
+            Text(loc.tr("YOU HAVE THE BOMB"))
                 .font(Theme.title(24))
                 .foregroundStyle(Theme.red)
                 .neonGlow(Theme.red)
-            Text("💵 +$\(myEarnings)  ·  greed ×\(String(format: "%.2f", bomb.multiplier))")
+            Text(loc.tr("💵 +$%@  ·  greed ×%@", "\(myEarnings)", String(format: "%.2f", bomb.multiplier)))
                 .font(Theme.body(16))
                 .foregroundStyle(Theme.yellow)
                 .contentTransition(.numericText())
@@ -72,23 +73,23 @@ struct PhoneBombView: View {
                 client.passBomb(direction: effectiveDirection)
             } label: {
                 if jamLeft > 0 {
-                    Text("🧈 JAMMED \(String(format: "%.1f", jamLeft))s")
+                    Text(loc.tr("🧈 JAMMED %@s", String(format: "%.1f", jamLeft)))
                 } else {
-                    Text("PASS \(effectiveDirection == "left" ? "◀️" : "▶️")")
+                    Text(loc.tr("PASS %@", effectiveDirection == "left" ? "◀️" : "▶️"))
                 }
             }
             .buttonStyle(NeonButtonStyle(color: jamLeft > 0 ? Theme.panelLight : Theme.red))
             .disabled(jamLeft > 0)
         }
 
-        Text("Hold it to milk the pot. Pass before it pops.")
+        Text(loc.tr("Hold it to milk the pot. Pass before it pops."))
             .font(Theme.body(13))
             .foregroundStyle(.white.opacity(0.45))
     }
 
     private var directionPicker: some View {
         HStack(spacing: 14) {
-            directionButton("left", label: "◀️ LEFT")
+            directionButton("left", label: loc.tr("◀️ LEFT"))
             // Live tilt needle
             ZStack {
                 Capsule().fill(Theme.panel).frame(height: 10)
@@ -103,7 +104,7 @@ struct PhoneBombView: View {
                 }
             }
             .frame(width: 90, height: 18)
-            directionButton("right", label: "RIGHT ▶️")
+            directionButton("right", label: loc.tr("RIGHT ▶️"))
         }
     }
 
@@ -131,20 +132,20 @@ struct PhoneBombView: View {
         if bomb.stage == "exploded" {
             let victim = client.room?.player(bomb.lastExplodedId)
             Text("💥").font(.system(size: 100))
-            Text("\(victim?.name ?? "Someone") EXPLODED")
+            Text(loc.tr("%@ EXPLODED", victim?.name ?? loc.tr("Someone")))
                 .font(Theme.title(26))
                 .foregroundStyle(Theme.orange)
         } else {
             Text("🧨").font(.system(size: 64))
-            Text("\(holder?.name ?? "…") \(holder?.avatar ?? "") is holding the bomb")
+            Text(loc.tr("%@ %@ is holding the bomb", holder?.name ?? "…", holder?.avatar ?? ""))
                 .font(Theme.title(20))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
-            Text("Your stash this game: $\(myEarnings)")
+            Text(loc.tr("Your stash this game: $%@", "\(myEarnings)"))
                 .font(Theme.body(16))
                 .foregroundStyle(Theme.yellow)
                 .contentTransition(.numericText())
-            Text("Stay calm. It might come your way.")
+            Text(loc.tr("Stay calm. It might come your way."))
                 .font(Theme.body(13))
                 .foregroundStyle(.white.opacity(0.45))
         }
@@ -153,10 +154,10 @@ struct PhoneBombView: View {
     private var spectator: some View {
         VStack(spacing: 12) {
             Text("💀").font(.system(size: 90)).grayscale(1)
-            Text("YOU BLEW UP")
+            Text(loc.tr("YOU BLEW UP"))
                 .font(Theme.title(28))
                 .foregroundStyle(.white.opacity(0.5))
-            Text("Your unbanked cash burned with you.\nEnjoy the show from the afterlife.")
+            Text(loc.tr("Your unbanked cash burned with you.\nEnjoy the show from the afterlife."))
                 .font(Theme.body(14))
                 .foregroundStyle(.white.opacity(0.35))
                 .multilineTextAlignment(.center)
@@ -169,11 +170,11 @@ struct PhoneBombView: View {
     private func survived(_ bomb: BombState) -> some View {
         let survived = bomb.survivors?.contains(client.playerId) ?? false
         Text(survived ? "🏆" : "💸").font(.system(size: 90))
-        Text(survived ? "YOU SURVIVED" : "ROUND OVER")
+        Text(loc.tr(survived ? "YOU SURVIVED" : "ROUND OVER"))
             .font(Theme.title(28))
             .foregroundStyle(survived ? Theme.cyan : .white.opacity(0.6))
         if survived {
-            Text("Banked $\(myEarnings) + $250 survivor bonus")
+            Text(loc.tr("Banked $%@ + $250 survivor bonus", "\(myEarnings)"))
                 .font(Theme.body(16))
                 .foregroundStyle(Theme.yellow)
         }

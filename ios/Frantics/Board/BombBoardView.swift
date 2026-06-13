@@ -3,6 +3,7 @@ import SwiftUI
 /// The Billionaire's Bomb on the TV: players in a circle, the bomb hopping
 /// between them, a pot that won't stop climbing, and the occasional 💥.
 struct BombBoardView: View {
+    @ObservedObject private var loc = Localization.shared
     let room: RoomState
     @State private var shake = false
 
@@ -23,12 +24,12 @@ struct BombBoardView: View {
                 }
 
                 VStack {
-                    Text("💣 THE BILLIONAIRE'S BOMB")
+                    Text(loc.tr("💣 THE BILLIONAIRE'S BOMB"))
                         .font(Theme.title(34))
                         .foregroundStyle(Theme.orange)
                         .neonGlow(Theme.orange)
                         .padding(.top, 20)
-                    Text("Hold it to earn. Pass it to survive. Last two standing bank everything.")
+                    Text(loc.tr("Hold it to earn. Pass it to survive. Last two standing bank everything."))
                         .font(Theme.body(17))
                         .foregroundStyle(.white.opacity(0.5))
                     Spacer()
@@ -122,7 +123,7 @@ struct BombBoardView: View {
     @ViewBuilder
     private func centerpiece(_ bomb: BombState) -> some View {
         VStack(spacing: 8) {
-            Text("PRIZE POOL")
+            Text(loc.tr("PRIZE POOL"))
                 .font(Theme.body(18))
                 .foregroundStyle(.white.opacity(0.5))
                 .kerning(3)
@@ -154,7 +155,7 @@ struct BombBoardView: View {
             Text("💥")
                 .font(.system(size: 160))
                 .transition(.scale(scale: 0.2).combined(with: .opacity))
-            Text("\(victim?.avatar ?? "") \(victim?.name ?? "Someone") IS OUT")
+            Text(loc.tr("%@ %@ IS OUT", victim?.avatar ?? "", victim?.name ?? loc.tr("Someone")))
                 .font(Theme.title(40))
                 .foregroundStyle(Theme.red)
                 .neonGlow(Theme.red)
@@ -170,14 +171,14 @@ struct BombBoardView: View {
             .map { "\($0.avatar) \($0.name)" }
             .joined(separator: "  &  ")
         VStack(spacing: 12) {
-            Text("🏆 SURVIVORS 🏆")
+            Text(loc.tr("🏆 SURVIVORS 🏆"))
                 .font(Theme.title(44))
                 .foregroundStyle(Theme.cyan)
                 .neonGlow(Theme.cyan)
             Text(names)
                 .font(Theme.title(34))
                 .foregroundStyle(.white)
-            Text("Earnings banked · +$250 each")
+            Text(loc.tr("Earnings banked · +$250 each"))
                 .font(Theme.body(20))
                 .foregroundStyle(Theme.yellow)
         }

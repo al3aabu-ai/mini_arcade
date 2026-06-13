@@ -5,6 +5,7 @@ import SwiftUI
 /// Off-turn you see who's shooting; once you sink you spectate.
 struct PhoneGolfView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
@@ -67,7 +68,7 @@ struct PhoneGolfView: View {
     private var header: some View {
         VStack(spacing: 6) {
             HStack {
-                Text("⛳️ GUERILLA GOLF")
+                Text(loc.tr("⛳️ GUERILLA GOLF"))
                     .font(Theme.title(20))
                     .foregroundStyle(.white)
                 Spacer()
@@ -76,7 +77,7 @@ struct PhoneGolfView: View {
                 }
             }
             if anviled {
-                Label("ANVILED — your shots are 30% weaker", systemImage: "exclamationmark.triangle.fill")
+                Label(loc.tr("ANVILED — your shots are 30% weaker"), systemImage: "exclamationmark.triangle.fill")
                     .font(Theme.body(13))
                     .foregroundStyle(Theme.bg)
                     .padding(.horizontal, 12)
@@ -84,7 +85,7 @@ struct PhoneGolfView: View {
                     .background(Capsule().fill(Theme.yellow))
             }
             if myTurn, let l = launch {
-                Text("POWER \(Int(l.power * 100))%")
+                Text(loc.tr("POWER %@%%", "\(Int(l.power * 100))"))
                     .font(Theme.body(15))
                     .foregroundStyle(l.power > 0.85 ? Theme.red : Theme.cyan)
                     .monospacedDigit()
@@ -98,7 +99,7 @@ struct PhoneGolfView: View {
 
     private var touchpad: some View {
         VStack(spacing: 10) {
-            Text("🎯 YOUR SHOT")
+            Text(loc.tr("🎯 YOUR SHOT"))
                 .font(Theme.title(24))
                 .foregroundStyle(Theme.yellow)
                 .neonGlow(Theme.yellow)
@@ -120,7 +121,7 @@ struct PhoneGolfView: View {
                             Image(systemName: "hand.draw.fill")
                                 .font(.system(size: 44))
                                 .foregroundStyle(Theme.cyan.opacity(0.5))
-                            Text("Drag back. Release to launch.\nOne shot — make it count.")
+                            Text(loc.tr("Drag back. Release to launch.\nOne shot — make it count."))
                                 .font(Theme.body(15))
                                 .foregroundStyle(.white.opacity(0.45))
                                 .multilineTextAlignment(.center)
@@ -154,16 +155,16 @@ struct PhoneGolfView: View {
             Text(shooter?.avatar ?? "⏳")
                 .font(.system(size: 80))
             if let shooter {
-                Text("\(shooter.name.uppercased()) IS SHOOTING")
+                Text(loc.tr("%@ IS SHOOTING", shooter.name.uppercased()))
                     .font(Theme.title(24))
                     .foregroundStyle(Color(hex: shooter.color))
                     .multilineTextAlignment(.center)
             } else {
-                Text("GET READY…")
+                Text(loc.tr("GET READY…"))
                     .font(Theme.title(24))
                     .foregroundStyle(.white.opacity(0.7))
             }
-            Text("👀 Watch the TV — your turn is coming.")
+            Text(loc.tr("👀 Watch the TV — your turn is coming."))
                 .font(Theme.body(15))
                 .foregroundStyle(.white.opacity(0.45))
             Spacer()
@@ -220,11 +221,11 @@ struct PhoneGolfView: View {
             VStack(spacing: 12) {
                 Text(place <= 3 ? medals[place - 1] : "⛳️")
                     .font(.system(size: 80))
-                Text("IN THE HOLE!")
+                Text(loc.tr("IN THE HOLE!"))
                     .font(Theme.title(32))
                     .foregroundStyle(Theme.cyan)
                     .neonGlow(Theme.cyan)
-                Text("You finished #\(place) — enjoy the show")
+                Text(loc.tr("You finished #%@ — enjoy the show", "\(place)"))
                     .font(Theme.body(18))
                     .foregroundStyle(.white.opacity(0.7))
             }

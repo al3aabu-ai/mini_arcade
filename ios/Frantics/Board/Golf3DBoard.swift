@@ -19,6 +19,7 @@ struct GolfPlayerInfo {
 /// own screen — AirPlay external displays get the standard pipeline.
 struct GolfBoardView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
     @State private var controller: GolfSceneController?
     @State private var finished: [PlayerState] = []
 
@@ -46,7 +47,7 @@ struct GolfBoardView: View {
     private var hud: some View {
         VStack {
             HStack(alignment: .top) {
-                Text("⛳️ GUERILLA GOLF")
+                Text(loc.tr("⛳️ GUERILLA GOLF"))
                     .font(Theme.title(30))
                     .foregroundStyle(.white)
                     .neonGlow(Theme.cyan, radius: 10)
@@ -55,7 +56,7 @@ struct GolfBoardView: View {
                     if let golf = client.room?.golf {
                         CountdownLabel(endsAt: golf.endsAtDate, font: Theme.title(42))
                     }
-                    Text("1st 500 · 2nd 300 · 3rd 200")
+                    Text(loc.tr("1st 500 · 2nd 300 · 3rd 200"))
                         .font(Theme.body(15))
                         .foregroundStyle(Theme.yellow.opacity(0.8))
                 }
@@ -91,7 +92,7 @@ struct GolfBoardView: View {
            let shooter = client.room?.player(golf.turnId) {
             HStack(spacing: 10) {
                 Text(shooter.avatar).font(.system(size: 30))
-                Text("\(shooter.name.uppercased())'S SHOT")
+                Text(loc.tr("%@'S SHOT", shooter.name.uppercased()))
                     .font(Theme.title(26))
                     .foregroundStyle(Color(hex: shooter.color))
                     .neonGlow(Color(hex: shooter.color), radius: 10)

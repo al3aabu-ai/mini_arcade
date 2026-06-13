@@ -3,6 +3,7 @@ import SwiftUI
 /// The Dirty Auction on the TV: item card, countdown, who's locked in,
 /// then the dramatic reveal — anvil crushing included.
 struct BoardAuctionView: View {
+    @ObservedObject private var loc = Localization.shared
     let room: RoomState
     @State private var crushDrop = false
 
@@ -11,7 +12,7 @@ struct BoardAuctionView: View {
     var body: some View {
         VStack(spacing: 24) {
             if let auction {
-                Text("💰 THE DIRTY AUCTION 💰")
+                Text(loc.tr("💰 THE DIRTY AUCTION 💰"))
                     .font(Theme.title(40))
                     .foregroundStyle(Theme.pink)
                     .neonGlow(Theme.pink)
@@ -46,10 +47,10 @@ struct BoardAuctionView: View {
                 .font(.system(size: 84))
                 .neonGlow(Theme.yellow, radius: 16)
             VStack(alignment: .leading, spacing: 6) {
-                Text(auction.item.name)
+                Text(loc.tr(auction.item.name))
                     .font(Theme.title(38))
                     .foregroundStyle(.white)
-                Text(auction.item.blurb)
+                Text(loc.tr(auction.item.blurb))
                     .font(Theme.body(20))
                     .foregroundStyle(.white.opacity(0.6))
             }
@@ -69,14 +70,14 @@ struct BoardAuctionView: View {
     @ViewBuilder
     private func bidding(_ auction: AuctionState) -> some View {
         CountdownLabel(endsAt: auction.endsAtDate, font: Theme.title(72))
-        Text("Bid in secret on your phones…")
+        Text(loc.tr("Bid in secret on your phones…"))
             .font(Theme.body(22))
             .foregroundStyle(.white.opacity(0.55))
         HStack(spacing: 26) {
             ForEach(room.players) { player in
                 VStack(spacing: 8) {
                     AvatarChip(player: player, size: 84)
-                    Text(auction.lockedIn.contains(player.id) ? "🔒 LOCKED" : "thinking…")
+                    Text(loc.tr(auction.lockedIn.contains(player.id) ? "🔒 LOCKED" : "thinking…"))
                         .font(Theme.body(15))
                         .foregroundStyle(
                             auction.lockedIn.contains(player.id) ? Theme.cyan : .white.opacity(0.35)
@@ -90,11 +91,11 @@ struct BoardAuctionView: View {
     private func targeting(_ auction: AuctionState) -> some View {
         let winner = room.player(auction.winnerId)
         VStack(spacing: 14) {
-            Text("SOLD to \(winner?.name ?? "?") \(winner?.avatar ?? "") for \(auction.winningBid ?? 0)!")
+            Text(loc.tr("SOLD to %@ %@ for %@!", winner?.name ?? "?", winner?.avatar ?? "", "\(auction.winningBid ?? 0)"))
                 .font(Theme.title(34))
                 .foregroundStyle(Theme.yellow)
                 .neonGlow(Theme.yellow)
-            Text("They're choosing a victim right now…")
+            Text(loc.tr("They're choosing a victim right now…"))
                 .font(Theme.body(22))
                 .foregroundStyle(.white.opacity(0.6))
             Text("😈")
@@ -115,7 +116,7 @@ struct BoardAuctionView: View {
                 AvatarChip(player: target, size: 120)
                     .scaleEffect(y: crushDrop ? 0.55 : 1, anchor: .bottom)
                     .animation(.interpolatingSpring(stiffness: 300, damping: 10).delay(0.3), value: crushDrop)
-                Text("\(winner?.name ?? "?") sabotaged \(target.name)!")
+                Text(loc.tr("%@ sabotaged %@!", winner?.name ?? "?", target.name))
                     .font(Theme.title(34))
                     .foregroundStyle(Theme.red)
                     .neonGlow(Theme.red)
@@ -124,7 +125,7 @@ struct BoardAuctionView: View {
         } else {
             VStack(spacing: 12) {
                 Text("🦗").font(.system(size: 80))
-                Text("NO SALE — everyone kept their points")
+                Text(loc.tr("NO SALE — everyone kept their points"))
                     .font(Theme.title(30))
                     .foregroundStyle(.white.opacity(0.6))
             }

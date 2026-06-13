@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BoardPodiumView: View {
+    @ObservedObject private var loc = Localization.shared
     let room: RoomState
     @State private var risen = false
 
@@ -13,14 +14,14 @@ struct BoardPodiumView: View {
             ConfettiRain()
 
             VStack(spacing: 18) {
-                Text("🏆 FINAL PODIUM 🏆")
+                Text(loc.tr("🏆 FINAL PODIUM 🏆"))
                     .font(Theme.title(46))
                     .foregroundStyle(Theme.yellow)
                     .neonGlow(Theme.yellow)
                     .padding(.top, 28)
 
                 if let winner = ranked.first {
-                    Text("\(winner.avatar) \(winner.name) WINS!")
+                    Text(loc.tr("%@ %@ WINS!", winner.avatar, winner.name))
                         .font(Theme.title(34))
                         .foregroundStyle(.white)
                 }
@@ -40,7 +41,7 @@ struct BoardPodiumView: View {
                     .padding(.bottom, 4)
                 }
 
-                Text("Replay votes: \(room.podium?.replayVotes.count ?? 0)/\(room.players.count) — vote on your phones 🔁")
+                Text(loc.tr("Replay votes: %@/%@ — vote on your phones 🔁", "\(room.podium?.replayVotes.count ?? 0)", "\(room.players.count)"))
                     .font(Theme.body(20))
                     .foregroundStyle(Theme.cyan.opacity(0.85))
                     .padding(.bottom, 26)

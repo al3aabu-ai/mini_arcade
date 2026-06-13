@@ -4,6 +4,7 @@ import SwiftUI
 /// win, pick your victim.
 struct PhoneAuctionView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
     @State private var bid: Double = 0
     @State private var locked = false
 
@@ -42,17 +43,17 @@ struct PhoneAuctionView: View {
         let maxBid = Double(max(0, client.me?.score ?? 0))
 
         VStack(spacing: 6) {
-            Text("THE DIRTY AUCTION")
+            Text(loc.tr("THE DIRTY AUCTION"))
                 .font(Theme.body(13))
                 .foregroundStyle(Theme.pink)
                 .kerning(2)
             HStack(spacing: 12) {
                 Text(auction.item.emoji).font(.system(size: 44))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(auction.item.name)
+                    Text(loc.tr(auction.item.name))
                         .font(Theme.title(20))
                         .foregroundStyle(.white)
-                    Text(auction.item.blurb)
+                    Text(loc.tr(auction.item.blurb))
                         .font(Theme.body(13))
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -65,10 +66,10 @@ struct PhoneAuctionView: View {
         if locked {
             VStack(spacing: 10) {
                 Text("🤐").font(.system(size: 54))
-                Text("Bid locked in. Tell no one.")
+                Text(loc.tr("Bid locked in. Tell no one."))
                     .font(Theme.body(17))
                     .foregroundStyle(.white.opacity(0.7))
-                Text("\(auction.lockedIn.count)/\(client.room?.players.count ?? 0) bids in")
+                Text(loc.tr("%@/%@ bids in", "\(auction.lockedIn.count)", "\(client.room?.players.count ?? 0)"))
                     .font(Theme.body(14))
                     .foregroundStyle(Theme.cyan)
             }
@@ -85,14 +86,14 @@ struct PhoneAuctionView: View {
                 HStack {
                     Text("0").font(Theme.body(13)).foregroundStyle(.white.opacity(0.4))
                     Spacer()
-                    Text("all in: \(Int(maxBid))")
+                    Text(loc.tr("all in: %@", "\(Int(maxBid))"))
                         .font(Theme.body(13))
                         .foregroundStyle(.white.opacity(0.4))
                 }
             }
             .card()
 
-            Button(bid > 0 ? "LOCK IN SECRET BID  🤫" : "BID NOTHING  🙅") {
+            Button(loc.tr(bid > 0 ? "LOCK IN SECRET BID  🤫" : "BID NOTHING  🙅")) {
                 locked = true
                 Haptics.thump()
                 client.submitBid(Int(bid))
@@ -106,11 +107,11 @@ struct PhoneAuctionView: View {
 
     @ViewBuilder
     private func targetPicker(_ auction: AuctionState) -> some View {
-        Text("YOU WON \(auction.item.emoji)")
+        Text(loc.tr("YOU WON %@", auction.item.emoji))
             .font(Theme.title(28))
             .foregroundStyle(Theme.yellow)
             .neonGlow(Theme.yellow)
-        Text("for \(auction.winningBid ?? 0) points. Now… who suffers?")
+        Text(loc.tr("for %@ points. Now… who suffers?", "\(auction.winningBid ?? 0)"))
             .font(Theme.body(16))
             .foregroundStyle(.white.opacity(0.7))
         CountdownLabel(endsAt: auction.endsAtDate, font: Theme.title(30))
@@ -149,11 +150,11 @@ struct PhoneAuctionView: View {
     private func waitingForWinner(_ auction: AuctionState) -> some View {
         let winner = client.room?.player(auction.winnerId)
         Text(winner?.avatar ?? "😈").font(.system(size: 64))
-        Text("\(winner?.name ?? "Someone") won the \(auction.item.name)")
+        Text(loc.tr("%@ won the %@", winner?.name ?? loc.tr("Someone"), loc.tr(auction.item.name)))
             .font(Theme.title(22))
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
-        Text("…and is choosing a victim. Look innocent.")
+        Text(loc.tr("…and is choosing a victim. Look innocent."))
             .font(Theme.body(15))
             .foregroundStyle(.white.opacity(0.55))
     }
@@ -167,25 +168,25 @@ struct PhoneAuctionView: View {
             let winner = client.room?.player(auction.winnerId)
             Text(auction.item.emoji).font(.system(size: 80))
             if targetId == client.playerId {
-                Text("IT'S YOU.")
+                Text(loc.tr("IT'S YOU."))
                     .font(Theme.title(36))
                     .foregroundStyle(Theme.red)
                     .neonGlow(Theme.red)
-                Text("\(winner?.name ?? "A rival") hit you with \(auction.item.name)")
+                Text(loc.tr("%@ hit you with %@", winner?.name ?? loc.tr("A rival"), loc.tr(auction.item.name)))
                     .font(Theme.body(16))
                     .foregroundStyle(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
             } else {
-                Text("\(target?.name ?? "Someone") got crushed")
+                Text(loc.tr("%@ got crushed", target?.name ?? loc.tr("Someone")))
                     .font(Theme.title(26))
                     .foregroundStyle(.white)
-                Text("courtesy of \(winner?.name ?? "a rival")")
+                Text(loc.tr("courtesy of %@", winner?.name ?? loc.tr("a rival")))
                     .font(Theme.body(15))
                     .foregroundStyle(.white.opacity(0.55))
             }
         } else {
             Text("🦗").font(.system(size: 70))
-            Text("No bids. The item rusts away.")
+            Text(loc.tr("No bids. The item rusts away."))
                 .font(Theme.title(20))
                 .foregroundStyle(.white.opacity(0.7))
         }

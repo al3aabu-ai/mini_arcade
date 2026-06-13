@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BoardLobbyView: View {
+    @ObservedObject private var loc = Localization.shared
     let room: RoomState
 
     var body: some View {
@@ -16,7 +17,7 @@ struct BoardLobbyView: View {
                 .neonGlow(Theme.purple, radius: 20)
 
             HStack(spacing: 18) {
-                Text("ROOM CODE")
+                Text(loc.tr("ROOM CODE"))
                     .font(Theme.body(22))
                     .foregroundStyle(.white.opacity(0.5))
                 Text(room.code)
@@ -29,7 +30,7 @@ struct BoardLobbyView: View {
             .padding(.vertical, 18)
             .background(RoundedRectangle(cornerRadius: 30).fill(Theme.panel))
 
-            Text("Grab your phone → open Frantics → JOIN PARTY")
+            Text(loc.tr("Grab your phone → open Frantics → JOIN PARTY"))
                 .font(Theme.body(24))
                 .foregroundStyle(.white.opacity(0.6))
 
@@ -49,8 +50,8 @@ struct BoardLobbyView: View {
             .frame(minHeight: 160)
 
             Text(room.players.count < 2
-                 ? "Need at least 2 players…"
-                 : "\(room.players.count)/8 in — host hits START when ready")
+                 ? loc.tr("Need at least 2 players…")
+                 : loc.tr("%@/8 in — host hits START when ready", "\(room.players.count)"))
                 .font(Theme.body(20))
                 .foregroundStyle(Theme.yellow.opacity(0.8))
 

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
     @State private var path: Destination?
     @State private var showSettings = false
 
@@ -13,6 +14,18 @@ struct MenuView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
+                // Language toggle: flips the whole app between English and Arabic.
+                Button {
+                    loc.toggle()
+                    Haptics.tick()
+                } label: {
+                    Text(loc.isArabic ? "EN" : "ع")
+                        .font(Theme.title(18))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Theme.panel))
+                        .padding(.leading, 12)
+                }
                 Spacer()
                 Button {
                     showSettings = true
@@ -38,7 +51,7 @@ struct MenuView: View {
                     )
                 )
                 .neonGlow(Theme.purple, radius: 18)
-            Text("Phones in hand. Chaos on the TV.")
+            Text(loc.tr("Phones in hand. Chaos on the TV."))
                 .font(Theme.body(16))
                 .foregroundStyle(.white.opacity(0.55))
                 .padding(.top, 4)
@@ -46,12 +59,12 @@ struct MenuView: View {
             Spacer()
 
             VStack(spacing: 14) {
-                Button("📺  HOST PARTY") {
+                Button(loc.tr("📺  HOST PARTY")) {
                     if client.connectionMode == .lan { client.startHosting() }
                     path = .host
                 }
                 .buttonStyle(NeonButtonStyle(color: Theme.pink))
-                Button("🎮  JOIN PARTY") {
+                Button(loc.tr("🎮  JOIN PARTY")) {
                     if client.connectionMode == .lan { client.startLANDiscovery() }
                     path = .join
                 }
@@ -79,19 +92,20 @@ struct MenuView: View {
 /// on the local network (no address to type); Other mode reveals a ws:// field.
 struct ConnectionModePicker: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
     @State private var urlText = ""
 
     var body: some View {
         VStack(spacing: 12) {
-            Picker("Connection", selection: modeBinding) {
-                Text("📶  Same WiFi").tag(ConnectionMode.lan)
-                Text("🌐  Other").tag(ConnectionMode.other)
+            Picker(loc.tr("Connection"), selection: modeBinding) {
+                Text(loc.tr("📶  Same WiFi")).tag(ConnectionMode.lan)
+                Text(loc.tr("🌐  Other")).tag(ConnectionMode.other)
             }
             .pickerStyle(.segmented)
 
             switch client.connectionMode {
             case .lan:
-                Text("One phone hosts on this WiFi — tap HOST PARTY. Everyone else on the same WiFi taps JOIN and is found automatically.")
+                Text(loc.tr("One phone hosts on this WiFi — tap HOST PARTY. Everyone else on the same WiFi taps JOIN and is found automatically."))
                     .font(Theme.body(13))
                     .foregroundStyle(.white.opacity(0.45))
                     .multilineTextAlignment(.center)
@@ -127,7 +141,7 @@ struct ConnectionModePicker: View {
                 .onChange(of: urlText) { _, value in
                     client.serverURLString = value
                 }
-            Text("Use a deployed wss:// address to play over the internet.")
+            Text(loc.tr("Use a deployed wss:// address to play over the internet."))
                 .font(Theme.body(12))
                 .foregroundStyle(.white.opacity(0.4))
         }
@@ -136,6 +150,7 @@ struct ConnectionModePicker: View {
 
 struct ServerSettingsView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
     @Environment(\.dismiss) private var dismiss
     @State private var urlText = ""
 
@@ -144,7 +159,7 @@ struct ServerSettingsView: View {
             ZStack {
                 Theme.bg.ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Game server address")
+                    Text(loc.tr("Game server address"))
                         .font(Theme.body(16))
                         .foregroundStyle(.white.opacity(0.7))
                     TextField("ws://192.168.1.50:8080", text: $urlText)
@@ -155,18 +170,18 @@ struct ServerSettingsView: View {
                         .padding(14)
                         .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panel))
                         .foregroundStyle(Theme.cyan)
-                    Text("Same WiFi: run `npm run dev` in server/ and use the LAN address it prints.\nOver the internet: use your deployed wss:// address.")
+                    Text(loc.tr("Same WiFi: run `npm run dev` in server/ and use the LAN address it prints.\nOver the internet: use your deployed wss:// address."))
                         .font(Theme.body(13))
                         .foregroundStyle(.white.opacity(0.4))
                     Spacer()
                 }
                 .padding(24)
             }
-            .navigationTitle("Settings")
+            .navigationTitle(loc.tr("Settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(loc.tr("Save")) {
                         client.serverURLString = urlText
                         dismiss()
                     }

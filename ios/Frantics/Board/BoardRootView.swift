@@ -4,6 +4,7 @@ import SwiftUI
 /// renders whatever room state the server last sent.
 struct BoardRootView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
 
     var body: some View {
         ZStack {
@@ -45,7 +46,7 @@ struct BoardRootView: View {
                                    startPoint: .leading, endPoint: .trailing)
                 )
                 .neonGlow(Theme.purple, radius: 26)
-            Text("Host a party on your iPhone to fill this screen with chaos")
+            Text(loc.tr("Host a party on your iPhone to fill this screen with chaos"))
                 .font(Theme.body(24))
                 .foregroundStyle(.white.opacity(0.5))
         }

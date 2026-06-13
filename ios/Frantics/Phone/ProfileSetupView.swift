@@ -3,6 +3,7 @@ import SwiftUI
 /// Name + avatar + color picker, used for both hosting and joining.
 struct ProfileSetupView: View {
     @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
     @Environment(\.dismiss) private var dismiss
     let isHost: Bool
 
@@ -36,7 +37,7 @@ struct ProfileSetupView: View {
                         .frame(width: 44, height: 5)
                         .padding(.top, 10)
 
-                    Text(isHost ? "HOST A PARTY" : "JOIN A PARTY")
+                    Text(loc.tr(isHost ? "HOST A PARTY" : "JOIN A PARTY"))
                         .font(Theme.title(28))
                         .foregroundStyle(.white)
 
@@ -46,7 +47,7 @@ struct ProfileSetupView: View {
                     }
 
                     if !isHost {
-                        TextField("ROOM CODE", text: $code)
+                        TextField(loc.tr("ROOM CODE"), text: $code)
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .font(Theme.title(32))
@@ -60,7 +61,7 @@ struct ProfileSetupView: View {
                             .padding(.horizontal, 24)
                     }
 
-                    TextField("Your name", text: $name)
+                    TextField(loc.tr("Your name"), text: $name)
                         .font(Theme.body(20))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white)
@@ -72,7 +73,7 @@ struct ProfileSetupView: View {
                         }
 
                     VStack(spacing: 10) {
-                        Text("PICK YOUR FIGHTER")
+                        Text(loc.tr("PICK YOUR FIGHTER"))
                             .font(Theme.body(13))
                             .foregroundStyle(.white.opacity(0.45))
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 10) {
@@ -103,7 +104,7 @@ struct ProfileSetupView: View {
                     }
 
                     VStack(spacing: 10) {
-                        Text("PICK YOUR COLOR")
+                        Text(loc.tr("PICK YOUR COLOR"))
                             .font(Theme.body(13))
                             .foregroundStyle(.white.opacity(0.45))
                         HStack(spacing: 12) {
@@ -130,7 +131,7 @@ struct ProfileSetupView: View {
                         if client.connection == .connecting {
                             ProgressView().tint(.white)
                         } else {
-                            Text(isHost ? "CREATE PARTY  🚀" : "JUMP IN  🎉")
+                            Text(loc.tr(isHost ? "CREATE PARTY  🚀" : "JUMP IN  🎉"))
                         }
                     }
                     .buttonStyle(NeonButtonStyle(color: isHost ? Theme.pink : Theme.cyan,
@@ -140,7 +141,7 @@ struct ProfileSetupView: View {
                     .padding(.horizontal, 24)
 
                     if case .failed(let why) = client.connection {
-                        Text(why)
+                        Text(loc.tr(why))
                             .font(Theme.body(14))
                             .foregroundStyle(Theme.red)
                     }
@@ -170,30 +171,30 @@ struct ProfileSetupView: View {
                 switch client.hostingState {
                 case .starting, .off:
                     ProgressView().tint(Theme.pink).scaleEffect(0.8)
-                    Text("Starting your game on this WiFi…")
+                    Text(loc.tr("Starting your game on this WiFi…"))
                         .foregroundStyle(.white.opacity(0.6))
                 case .ready:
                     Image(systemName: "wifi.circle.fill").foregroundStyle(Theme.cyan)
-                    Text("Hosting on this WiFi — friends can join now.")
+                    Text(loc.tr("Hosting on this WiFi — friends can join now."))
                         .foregroundStyle(.white.opacity(0.75))
                 case .failed(let why):
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.red)
-                    Text("Couldn't start hosting: \(why)")
+                    Text(loc.tr("Couldn't start hosting: %@", loc.tr(why)))
                         .foregroundStyle(Theme.red)
                 }
             } else {
                 switch client.lanState {
                 case .idle, .searching:
                     ProgressView().tint(Theme.cyan).scaleEffect(0.8)
-                    Text("Looking for a host on this WiFi…")
+                    Text(loc.tr("Looking for a host on this WiFi…"))
                         .foregroundStyle(.white.opacity(0.6))
                 case .found:
                     Image(systemName: "wifi.circle.fill").foregroundStyle(Theme.cyan)
-                    Text("Found a host on your WiFi — enter the room code.")
+                    Text(loc.tr("Found a host on your WiFi — enter the room code."))
                         .foregroundStyle(.white.opacity(0.75))
                 case .failed:
                     Image(systemName: "wifi.exclamationmark").foregroundStyle(Theme.yellow)
-                    Text("No host found yet. Make sure someone tapped HOST PARTY on this WiFi.")
+                    Text(loc.tr("No host found yet. Make sure someone tapped HOST PARTY on this WiFi."))
                         .foregroundStyle(.white.opacity(0.6))
                 }
             }
