@@ -43,7 +43,17 @@ final class GameClient: NSObject, ObservableObject {
     /// Mirrors `LANDiscovery`'s progress for the UI (searching / found / failed).
     @Published var lanState: LANDiscovery.State = .idle
 
+    /// Whether this phone is currently hosting the game for the WiFi.
+    enum HostingState: Equatable {
+        case off
+        case starting
+        case ready
+        case failed(String)
+    }
+    @Published var hostingState: HostingState = .off
+
     private let lanDiscovery = LANDiscovery()
+    private var lanServer: LANServer?
     /// The ws:// URL most recently resolved on the WiFi, if any.
     private(set) var discoveredURL: String?
 
@@ -93,6 +103,36 @@ final class GameClient: NSObject, ObservableObject {
         lanDiscovery.stop()
     }
 
+    // MARK: - Hosting (this phone runs the game for the WiFi)
+
+    /// Boot the on-device game server and advertise it on the WiFi. Once ready,
+    /// the host's own controller connects to it over loopback.
+    func startHosting() {
+        guard !isDemo, lanServer == nil else { return }
+        hostingState = .starting
+        let server = LANServer()
+        lanServer = server
+        server.onReady = { [weak self] port in
+            Task { @MainActor in
+                guard let self else { return }
+                self.serverURLString = "ws://127.0.0.1:\(port)"
+                self.hostingState = .ready
+            }
+        }
+        server.onError = { [weak self] message in
+            Task { @MainActor in self?.hostingState = .failed(message) }
+        }
+        server.start(serviceName: "Frantics")
+    }
+
+    func stopHosting() {
+        lanServer?.stop()
+        lanServer = nil
+        hostingState = .off
+    }
+
+    var isHostingReady: Bool { hostingState == .ready }
+
     /// DEBUG screenshots / previews: a frozen client with a canned snapshot.
     init(demoState: RoomState, playerId: String) {
         self.isDemo = true
@@ -133,8 +173,9 @@ final class GameClient: NSObject, ObservableObject {
 
     private func connect(intro: [String: Any]) {
         guard !isDemo else { return }
-        // In LAN mode we can only connect once a server has been discovered.
-        if connectionMode == .lan, discoveredURL == nil {
+        // In LAN mode, a host connects to its own on-device server (over
+        // loopback, once it's ready); a joiner needs a discovered server.
+        if connectionMode == .lan, !isHostingReady, discoveredURL == nil {
             startLANDiscovery()
             connection = .failed("Still looking for a game on this WiFi…")
             return
@@ -165,6 +206,8 @@ final class GameClient: NSObject, ObservableObject {
         introMessage = nil
         reconnectAttempts = 0
         connection = .idle
+        // If we were hosting the party on this phone, shut the server down.
+        stopHosting()
     }
 
     private func handleDrop(_ reason: String) {

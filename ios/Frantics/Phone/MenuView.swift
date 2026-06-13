@@ -46,10 +46,16 @@ struct MenuView: View {
             Spacer()
 
             VStack(spacing: 14) {
-                Button("📺  HOST PARTY") { path = .host }
-                    .buttonStyle(NeonButtonStyle(color: Theme.pink))
-                Button("🎮  JOIN PARTY") { path = .join }
-                    .buttonStyle(NeonButtonStyle(color: Theme.cyan, textColor: Theme.bg))
+                Button("📺  HOST PARTY") {
+                    if client.connectionMode == .lan { client.startHosting() }
+                    path = .host
+                }
+                .buttonStyle(NeonButtonStyle(color: Theme.pink))
+                Button("🎮  JOIN PARTY") {
+                    if client.connectionMode == .lan { client.startLANDiscovery() }
+                    path = .join
+                }
+                .buttonStyle(NeonButtonStyle(color: Theme.cyan, textColor: Theme.bg))
             }
             .padding(.horizontal, 28)
 
@@ -58,9 +64,6 @@ struct MenuView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 22)
                 .padding(.bottom, 30)
-        }
-        .onAppear {
-            if client.connectionMode == .lan { client.startLANDiscovery() }
         }
         .sheet(item: $path) { dest in
             ProfileSetupView(isHost: dest == .host)
@@ -88,7 +91,11 @@ struct ConnectionModePicker: View {
 
             switch client.connectionMode {
             case .lan:
-                lanStatus
+                Text("One phone hosts on this WiFi — tap HOST PARTY. Everyone else on the same WiFi taps JOIN and is found automatically.")
+                    .font(Theme.body(13))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
             case .other:
                 otherFields
             }
@@ -104,33 +111,6 @@ struct ConnectionModePicker: View {
             get: { client.connectionMode },
             set: { client.connectionMode = $0 }
         )
-    }
-
-    @ViewBuilder
-    private var lanStatus: some View {
-        HStack(spacing: 8) {
-            switch client.lanState {
-            case .idle, .searching:
-                ProgressView().tint(Theme.cyan).scaleEffect(0.8)
-                Text("Looking for a game on this WiFi…")
-                    .foregroundStyle(.white.opacity(0.55))
-            case .found:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Theme.cyan)
-                Text("Found a game on your WiFi — you're ready!")
-                    .foregroundStyle(.white.opacity(0.7))
-            case .failed:
-                Image(systemName: "wifi.exclamationmark")
-                    .foregroundStyle(Theme.yellow)
-                Text("No game found yet. Make sure the server is running on this WiFi.")
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-            Spacer(minLength: 0)
-        }
-        .font(Theme.body(13))
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.easeInOut(duration: 0.2), value: client.lanState)
     }
 
     @ViewBuilder

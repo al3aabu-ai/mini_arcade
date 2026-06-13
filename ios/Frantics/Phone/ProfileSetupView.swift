@@ -14,7 +14,16 @@ struct ProfileSetupView: View {
     private var canSubmit: Bool {
         let nameOK = !name.trimmingCharacters(in: .whitespaces).isEmpty
         let codeOK = isHost || code.trimmingCharacters(in: .whitespaces).count == 4
-        return nameOK && codeOK && client.connection != .connecting
+        return nameOK && codeOK && lanReady && client.connection != .connecting
+    }
+
+    /// In LAN mode, hosting must be up (host) or a server discovered (joiner)
+    /// before we can connect. Other mode connects to a typed-in address directly.
+    private var lanReady: Bool {
+        guard client.connectionMode == .lan else { return true }
+        if isHost { return client.isHostingReady }
+        if case .found = client.lanState { return true }
+        return false
     }
 
     var body: some View {
@@ -30,6 +39,11 @@ struct ProfileSetupView: View {
                     Text(isHost ? "HOST A PARTY" : "JOIN A PARTY")
                         .font(Theme.title(28))
                         .foregroundStyle(.white)
+
+                    if client.connectionMode == .lan {
+                        lanStatusBanner
+                            .padding(.horizontal, 24)
+                    }
 
                     if !isHost {
                         TextField("ROOM CODE", text: $code)
@@ -138,6 +152,58 @@ struct ProfileSetupView: View {
         .onChange(of: client.room != nil) { _, joined in
             if joined { dismiss() }
         }
+        .onDisappear {
+            // Backed out without joining a room — release the WiFi resources.
+            if client.room == nil {
+                client.stopHosting()
+                client.stopLANDiscovery()
+            }
+        }
+    }
+
+    /// Shows whether the on-device host is up (host) or a host has been found on
+    /// the WiFi (joiner), so the player knows when JUMP IN / CREATE will work.
+    @ViewBuilder
+    private var lanStatusBanner: some View {
+        HStack(spacing: 8) {
+            if isHost {
+                switch client.hostingState {
+                case .starting, .off:
+                    ProgressView().tint(Theme.pink).scaleEffect(0.8)
+                    Text("Starting your game on this WiFi…")
+                        .foregroundStyle(.white.opacity(0.6))
+                case .ready:
+                    Image(systemName: "wifi.circle.fill").foregroundStyle(Theme.cyan)
+                    Text("Hosting on this WiFi — friends can join now.")
+                        .foregroundStyle(.white.opacity(0.75))
+                case .failed(let why):
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.red)
+                    Text("Couldn't start hosting: \(why)")
+                        .foregroundStyle(Theme.red)
+                }
+            } else {
+                switch client.lanState {
+                case .idle, .searching:
+                    ProgressView().tint(Theme.cyan).scaleEffect(0.8)
+                    Text("Looking for a host on this WiFi…")
+                        .foregroundStyle(.white.opacity(0.6))
+                case .found:
+                    Image(systemName: "wifi.circle.fill").foregroundStyle(Theme.cyan)
+                    Text("Found a host on your WiFi — enter the room code.")
+                        .foregroundStyle(.white.opacity(0.75))
+                case .failed:
+                    Image(systemName: "wifi.exclamationmark").foregroundStyle(Theme.yellow)
+                    Text("No host found yet. Make sure someone tapped HOST PARTY on this WiFi.")
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .font(Theme.body(13))
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeInOut(duration: 0.2), value: client.hostingState)
+        .animation(.easeInOut(duration: 0.2), value: client.lanState)
     }
 
     private func submit() {

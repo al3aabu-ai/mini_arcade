@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import type { WebSocket } from "ws";
+import { randomUUID } from "./ids.js";
 import {
   CONST,
   SABOTAGE_ITEMS,
@@ -14,6 +13,7 @@ import {
   type RoomState,
   type SabotageItem,
   type ServerMessage,
+  type Socket,
 } from "./protocol.js";
 
 interface Player {
@@ -25,7 +25,7 @@ interface Player {
   score: number;
   isHost: boolean;
   debuff: Debuff | null;
-  ws: WebSocket | null;
+  ws: Socket | null;
   /** secret current-auction bid; null = not locked in yet */
   bid: number | null;
   bidLockedAt: number;
@@ -81,7 +81,7 @@ export class Room {
 
   // ------------------------------ lifecycle --------------------------------
 
-  addPlayer(opts: { name: string; avatar: string; color: string; isHost: boolean; ws: WebSocket }):
+  addPlayer(opts: { name: string; avatar: string; color: string; isHost: boolean; ws: Socket }):
     | { ok: true; player: Player }
     | { ok: false; reason: string } {
     if (this.phase !== "lobby") return { ok: false, reason: "Game already in progress" };
@@ -109,7 +109,7 @@ export class Room {
     return { ok: true, player };
   }
 
-  rejoin(playerId: string, token: string, ws: WebSocket): Player | null {
+  rejoin(playerId: string, token: string, ws: Socket): Player | null {
     const p = this.players.find((x) => x.id === playerId && x.token === token);
     if (!p) return null;
     if (p.ws && p.ws !== ws) {
@@ -121,7 +121,7 @@ export class Room {
     return p;
   }
 
-  handleDisconnect(playerId: string, ws: WebSocket) {
+  handleDisconnect(playerId: string, ws: Socket) {
     const p = this.players.find((x) => x.id === playerId);
     if (!p || p.ws !== ws) return;
     p.ws = null;

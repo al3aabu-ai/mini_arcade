@@ -184,6 +184,18 @@ export type ServerMessage =
   | { t: "fire"; playerId: string; angle: number; power: number }
   | { t: "error"; message: string };
 
+/**
+ * Minimal socket shape the room state machine writes to. The Node server passes
+ * a real `ws` WebSocket (structurally compatible); the iOS host passes a tiny
+ * JavaScriptCore shim that forwards frames to the native WebSocket server.
+ */
+export interface Socket {
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+  readonly readyState: number;
+  readonly OPEN: number;
+}
+
 export function parseClientMessage(raw: unknown): ClientMessage | null {
   if (typeof raw !== "object" || raw === null) return null;
   const m = raw as Record<string, unknown>;
