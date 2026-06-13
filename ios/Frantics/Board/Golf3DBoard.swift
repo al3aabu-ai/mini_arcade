@@ -391,7 +391,13 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     // NEW: ball-on-ball collision support.
     /// Physics category bit unique to balls, so we can ask SceneKit to report
     /// ball↔ball contacts (for feedback) without losing the solver's collision.
-    private static let ballCategory = 1 << 1
+    /// FIX: must NOT reuse SceneKit's reserved bits — 1<<0 is
+    /// `SCNPhysicsCollisionCategoryDefault` and 1<<1 is
+    /// `SCNPhysicsCollisionCategoryStatic` (what the ground/walls/bumpers use).
+    /// Tagging dynamic balls with 1<<1 made the solver treat ball↔ground as a
+    /// static/static pair and skip it, so balls fell through the floor. Use a
+    /// private high bit instead.
+    private static let ballCategory = 1 << 5
     /// Immutable set of ball ids, safe to read from the physics thread inside the
     /// contact delegate (the `balls` dictionary is render-thread-only).
     private let ballIds: Set<String>
@@ -830,11 +836,14 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             body.damping = 0.16
             body.angularDamping = 0.4
             // NEW: make ball↔ball collisions explicit and observable.
-            // collisionBitMask stays "all" so the solver still bounces balls off
-            // each other (and the course); contactTestBitMask fires the delegate
-            // so we can add a spark and re-save lies. node.name identifies balls.
+            // collisionBitMask = all bits, so the ball physically collides with
+            // EVERY layer — the static floor/walls/bumpers (category 1<<1), the
+            // kinematic paddle (1<<0), and other balls (ballCategory). This is
+            // what keeps the ball ON the floor.
+            // contactTestBitMask = ballCategory only, so the contact delegate
+            // fires for ball↔ball alone (the floor no longer spams it).
             body.categoryBitMask = Self.ballCategory
-            body.collisionBitMask = -1
+            body.collisionBitMask = -1            // ~0 = all layers (incl. the floor)
             body.contactTestBitMask = Self.ballCategory
             node.name = info.id
             node.physicsBody = body
@@ -1054,7 +1063,13 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
                         // CHANGED: respawn at the saved resting lie, not the tee,
                         // so falling off only costs the stroke — the player keeps
                         // their progress up the fairway.
-                        node.position = b.restingPosition
+                        // FIX: clamp the respawn ABOVE the fairway surface (top at
+                        // y≈0) and add an epsilon, so the ball drops onto the
+                        // collider instead of starting inside/under it — which
+                        // would clip through and re-trigger the off-map respawn
+                        // forever. Ball radius is 0.42.
+                        let safeY = max(b.restingPosition.y, 0.42 + 0.08)
+                        node.position = SCNVector3(b.restingPosition.x, safeY, b.restingPosition.z)
                         node.physicsBody?.resetTransform()
                         b.respawning = false
                         self.balls[id] = b
