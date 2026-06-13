@@ -339,7 +339,7 @@ private enum Tex {
 
 // MARK: - SceneKit world
 
-final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
+final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsContactDelegate {
     private struct Ball {
         let info: GolfPlayerInfo
         let node: SCNNode
@@ -349,6 +349,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         let tagHeight: Float
         var sunk = false
         var respawning = false
+        /// CHANGED: the ball's last *resting lie*. Initialized to the tee, then
+        /// re-saved every time the whole table comes to rest. The next stroke is
+        /// played from here, and an off-island ball respawns here — never back at
+        /// the tee. This is the persistent per-ball state Objective 1 needs.
+        var restingPosition: SCNVector3
     }
 
     private enum ShotPhase {
@@ -383,6 +388,16 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
     private let shotClock: TimeInterval = 14
     private let holeCenter = SCNVector3(2.6, 0, -13)
 
+    // NEW: ball-on-ball collision support.
+    /// Physics category bit unique to balls, so we can ask SceneKit to report
+    /// ball↔ball contacts (for feedback) without losing the solver's collision.
+    private static let ballCategory = 1 << 1
+    /// Immutable set of ball ids, safe to read from the physics thread inside the
+    /// contact delegate (the `balls` dictionary is render-thread-only).
+    private let ballIds: Set<String>
+    /// Throttles collision feedback — a single hit fires many micro-contacts.
+    private var lastBallContactTime: TimeInterval = 0
+
     // Inputs arrive on the main/network thread; they are applied here, on the
     // render thread, at a safe point in the frame. (Mutating physics from
     // another thread mid-step is the classic SceneKit crash.)
@@ -404,6 +419,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         self.onProgress = onProgress
         self.onFinished = onFinished
         self.turnQueue = players.map(\.id)
+        self.ballIds = Set(players.map(\.id)) // NEW: physics-thread-safe id lookup
         super.init()
         buildWorld()
         spawnBalls()
@@ -462,6 +478,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         scene.fogStartDistance = 52
         scene.fogEndDistance = 110
         scene.physicsWorld.gravity = SCNVector3(0, -9.8, 0)
+        scene.physicsWorld.contactDelegate = self // NEW: ball-on-ball contact feedback
 
         let camera = SCNCamera()
         camera.fieldOfView = 52
@@ -806,12 +823,20 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             node.position = tee
 
             let body = SCNPhysicsBody(type: .dynamic, shape: SCNPhysicsShape(geometry: sphere))
-            body.mass = 1
-            body.restitution = 0.55
+            body.mass = 1                 // equal masses → clean momentum exchange on a hit
+            body.restitution = 0.7        // CHANGED 0.55→0.7: livelier, near-elastic ball-on-ball transfer
             body.friction = 0.5
             body.rollingFriction = 0.18
             body.damping = 0.16
             body.angularDamping = 0.4
+            // NEW: make ball↔ball collisions explicit and observable.
+            // collisionBitMask stays "all" so the solver still bounces balls off
+            // each other (and the course); contactTestBitMask fires the delegate
+            // so we can add a spark and re-save lies. node.name identifies balls.
+            body.categoryBitMask = Self.ballCategory
+            body.collisionBitMask = -1
+            body.contactTestBitMask = Self.ballCategory
+            node.name = info.id
             node.physicsBody = body
             scene.rootNode.addChildNode(node)
 
@@ -853,7 +878,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
             }
 
             balls[info.id] = Ball(info: info, node: node, tag: tag, trail: trail,
-                                  tee: tee, tagHeight: tagHeight)
+                                  tee: tee, tagHeight: tagHeight, restingPosition: tee)
         }
     }
 
@@ -961,6 +986,18 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         return true
     }
 
+    /// NEW: persist every live ball's current spot as its resting lie. Called
+    /// once the whole table has stopped, so each player's *next* stroke — and any
+    /// off-island respawn — starts from where their ball actually ended up. This
+    /// captures balls that were shoved by someone else's shot too, satisfying the
+    /// "both balls save their new resting positions" half of Objective 2.
+    private func saveRestingPositions() {
+        for (id, var ball) in balls where !ball.sunk && !ball.respawning {
+            ball.restingPosition = ball.node.presentation.position
+            balls[id] = ball
+        }
+    }
+
     // MARK: frame loop (render thread)
 
     func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
@@ -1014,7 +1051,10 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
                         node.physicsBody?.clearAllForces()
                         node.physicsBody?.velocity = SCNVector3Zero
                         node.physicsBody?.angularVelocity = SCNVector4Zero
-                        node.position = b.tee
+                        // CHANGED: respawn at the saved resting lie, not the tee,
+                        // so falling off only costs the stroke — the player keeps
+                        // their progress up the fairway.
+                        node.position = b.restingPosition
                         node.physicsBody?.resetTransform()
                         b.respawning = false
                         self.balls[id] = b
@@ -1045,6 +1085,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
                 }
             case .settling:
                 if now > settleMaxTime || (now > settleMinTime && allBallsSettled()) {
+                    saveRestingPositions() // NEW: lock in where every ball ended up
                     advanceTurn(now: now)
                 }
             }
@@ -1083,5 +1124,55 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate {
         DispatchQueue.main.async { [onFinished] in
             onFinished(order)
         }
+    }
+
+    // MARK: ball-on-ball collisions (physics thread)
+
+    /// NEW. SceneKit's rigid-body solver already RESOLVES the collision: when two
+    /// balls touch it applies an impulse along the contact normal n of
+    ///     J = -(1 + e) · (v_rel · n) / (1/mₐ + 1/m_b)
+    /// With equal masses (mₐ = m_b = 1) and restitution e ≈ 0.7, the balls
+    /// exchange ~85% of the normal component of their relative velocity — i.e.
+    /// the moving ball hands its momentum to the resting one, which takes off
+    /// while the striker slows. We deliberately DON'T add our own impulse here:
+    /// stacking a second impulse on top of the solver's makes hits explode. Our
+    /// job in the delegate is only to (a) react with a spark and (b) let the
+    /// table re-settle, after which `saveRestingPositions()` stores BOTH balls'
+    /// new lies — so a knocked ball's next stroke also starts from where it stopped.
+    ///
+    /// Runs on SceneKit's physics thread, so it touches only immutable state
+    /// (`ballIds`) and the value-typed contact, then hops to the render thread via
+    /// `enqueue` for anything that mutates the scene.
+    func physicsWorld(_ world: SCNPhysicsWorld, didBegin contact: SCNPhysicsContact) {
+        // Ball-ball only — reject ball↔course/bumper contacts.
+        guard let a = contact.nodeA.name, ballIds.contains(a),
+              let b = contact.nodeB.name, ballIds.contains(b) else { return }
+        let now = CACurrentMediaTime()
+        guard now - lastBallContactTime > 0.08 else { return } // collapse the contact burst
+        lastBallContactTime = now
+
+        let point = contact.contactPoint
+        let strength = Float(min(1.0, max(0.0, contact.collisionImpulse / 6.0)))
+        enqueue { s in s.spawnCollisionSpark(at: point, strength: strength) }
+    }
+
+    /// NEW: a quick spark where two balls clash — sells the impact on the TV.
+    private func spawnCollisionSpark(at point: SCNVector3, strength: Float) {
+        let sparks = SCNParticleSystem()
+        sparks.birthRate = CGFloat(120 + 320 * strength)
+        sparks.emissionDuration = 0.05
+        sparks.particleLifeSpan = 0.4
+        sparks.particleVelocity = CGFloat(3 + 6 * strength)
+        sparks.particleVelocityVariation = 2.5
+        sparks.spreadingAngle = 180
+        sparks.particleSize = 0.1
+        sparks.particleColor = UIColor(Theme.yellow)
+        sparks.blendMode = .additive
+        sparks.emitterShape = SCNSphere(radius: 0.1)
+        let emitter = SCNNode()
+        emitter.position = point
+        emitter.addParticleSystem(sparks)
+        scene.rootNode.addChildNode(emitter)
+        emitter.runAction(.sequence([.wait(duration: 1.0), .removeFromParentNode()]))
     }
 }
