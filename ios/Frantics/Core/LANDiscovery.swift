@@ -32,8 +32,11 @@ final class LANDiscovery {
         if browser != nil { return }
         state = .searching
 
+        // Browse over the real WiFi only. Peer-to-peer (AWDL) would resolve the
+        // host to a link-local IPv6 address whose scope a ws:// URL can't carry,
+        // which surfaces to URLSession as "offline" (-1009).
         let params = NWParameters()
-        params.includePeerToPeer = true
+        params.includePeerToPeer = false
         let browser = NWBrowser(
             for: .bonjour(type: "_frantics._tcp", domain: nil),
             using: params
@@ -82,7 +85,14 @@ final class LANDiscovery {
     /// connection's current path. Read it, build the ws URL, then tear down.
     private func resolve(_ endpoint: NWEndpoint) {
         resolver?.cancel()
-        let connection = NWConnection(to: endpoint, using: .tcp)
+        // Force IPv4 so we resolve to the routable WiFi address (e.g.
+        // 192.168.x.x) that a ws:// URL + URLSession can actually reach, rather
+        // than a scoped link-local IPv6.
+        let params = NWParameters.tcp
+        if let ip = params.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options {
+            ip.version = .v4
+        }
+        let connection = NWConnection(to: endpoint, using: params)
         resolver = connection
 
         connection.stateUpdateHandler = { [weak self] newState in
