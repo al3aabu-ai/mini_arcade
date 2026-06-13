@@ -1,8 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { networkInterfaces } from "node:os";
+import { hostname, networkInterfaces } from "node:os";
+import { Bonjour, type Service } from "bonjour-service";
 import { WebSocketServer, type WebSocket } from "ws";
 import { parseClientMessage, type ServerMessage } from "./protocol.js";
 import { Room, RoomManager } from "./room.js";
+
+/// Bonjour/mDNS service type the iPhone app browses for (`_frantics._tcp`).
+/// Advertising this lets phones on the same WiFi find the server with zero
+/// configuration — no LAN address to type in.
+const BONJOUR_TYPE = "frantics";
 
 interface ConnState {
   room: Room | null;
@@ -172,12 +178,38 @@ export function startServer(port: number) {
     });
   });
 
+  // Advertise over Bonjour so the iPhone app's "Same WiFi" mode finds us
+  // automatically. Best-effort: if mDNS can't start (locked-down network,
+  // permissions), the manual address path still works.
+  let bonjour: Bonjour | null = null;
+  let service: Service | null = null;
+  try {
+    // The error callback catches low-level mDNS socket errors (e.g. a transient
+    // EHOSTUNREACH when WiFi drops). Without it, bonjour-service rethrows and
+    // would crash the whole game server — discovery is best-effort, the game is not.
+    bonjour = new Bonjour(undefined, (err: unknown) =>
+      console.warn("[bonjour] mDNS error (discovery disabled, game unaffected):", err),
+    );
+    service = bonjour.publish({
+      name: `Frantics on ${hostname()}`,
+      type: BONJOUR_TYPE,
+      port,
+      txt: { path: "/" },
+    });
+    service.on("error", (err: unknown) => console.warn("[bonjour] advertise error:", err));
+  } catch (err) {
+    console.warn("[bonjour] could not start mDNS advertising:", err);
+  }
+
   httpServer.listen(port, () => {
     console.log("");
     console.log("  🎉 Frantics server is up");
     console.log(`     local:   ws://localhost:${port}`);
     for (const addr of lanAddresses()) {
-      console.log(`     LAN:     ws://${addr}:${port}   ← put this in the iPhone app on the same WiFi`);
+      console.log(`     LAN:     ws://${addr}:${port}`);
+    }
+    if (service) {
+      console.log("     WiFi:    auto-discovered — pick \"Same WiFi\" in the app, no address needed");
     }
     console.log("");
   });
@@ -187,6 +219,12 @@ export function startServer(port: number) {
     wss,
     manager,
     close() {
+      try {
+        service?.stop?.(() => {});
+        bonjour?.destroy();
+      } catch {
+        /* ignore teardown errors */
+      }
       wss.close();
       httpServer.close();
     },

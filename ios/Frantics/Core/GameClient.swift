@@ -8,6 +8,14 @@ enum ConnectionPhase: Equatable {
     case failed(String)
 }
 
+/// How the app reaches the game server.
+/// - `lan`: auto-discover a server on the same WiFi via Bonjour (no address typed).
+/// - `other`: connect to a manually entered address (deployed server / internet).
+enum ConnectionMode: String {
+    case lan
+    case other
+}
+
 /// Single source of client truth, shared by the phone scene and the
 /// external-display (TV board) scene. The server remains authoritative;
 /// this object just mirrors the latest `room_state` snapshot and relays input.
@@ -23,6 +31,21 @@ final class GameClient: NSObject, ObservableObject {
     @Published var serverURLString: String {
         didSet { UserDefaults.standard.set(serverURLString, forKey: "serverURL") }
     }
+
+    /// LAN auto-discovery vs. a manually typed address.
+    @Published var connectionMode: ConnectionMode {
+        didSet {
+            UserDefaults.standard.set(connectionMode.rawValue, forKey: "connectionMode")
+            if connectionMode == .lan { startLANDiscovery() } else { stopLANDiscovery() }
+        }
+    }
+
+    /// Mirrors `LANDiscovery`'s progress for the UI (searching / found / failed).
+    @Published var lanState: LANDiscovery.State = .idle
+
+    private let lanDiscovery = LANDiscovery()
+    /// The ws:// URL most recently resolved on the WiFi, if any.
+    private(set) var discoveredURL: String?
 
     // Realtime relays for the host board's physics scene (golf).
     var onAim: ((String, Double, Double) -> Void)?
@@ -42,13 +65,39 @@ final class GameClient: NSObject, ObservableObject {
         self.isDemo = false
         self.serverURLString =
             UserDefaults.standard.string(forKey: "serverURL") ?? "ws://localhost:8080"
+        // Default new installs to LAN auto-discovery — the zero-setup path.
+        let savedMode = UserDefaults.standard.string(forKey: "connectionMode")
+        self.connectionMode = savedMode.flatMap(ConnectionMode.init) ?? .lan
         super.init()
+
+        lanDiscovery.onState = { [weak self] state in
+            self?.lanState = state
+        }
+        lanDiscovery.onResolved = { [weak self] url in
+            guard let self else { return }
+            self.discoveredURL = url
+            // In LAN mode the discovered server is the one we connect to.
+            if self.connectionMode == .lan { self.serverURLString = url }
+        }
+    }
+
+    // MARK: - LAN discovery
+
+    /// Begin (or resume) browsing the WiFi for a Frantics server.
+    func startLANDiscovery() {
+        guard !isDemo else { return }
+        lanDiscovery.start()
+    }
+
+    func stopLANDiscovery() {
+        lanDiscovery.stop()
     }
 
     /// DEBUG screenshots / previews: a frozen client with a canned snapshot.
     init(demoState: RoomState, playerId: String) {
         self.isDemo = true
         self.serverURLString = "demo"
+        self.connectionMode = .other
         super.init()
         self.room = demoState
         self.playerId = playerId
@@ -84,6 +133,12 @@ final class GameClient: NSObject, ObservableObject {
 
     private func connect(intro: [String: Any]) {
         guard !isDemo else { return }
+        // In LAN mode we can only connect once a server has been discovered.
+        if connectionMode == .lan, discoveredURL == nil {
+            startLANDiscovery()
+            connection = .failed("Still looking for a game on this WiFi…")
+            return
+        }
         guard let url = resolvedURL() else {
             connection = .failed("Invalid server address")
             return

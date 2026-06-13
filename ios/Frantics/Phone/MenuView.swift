@@ -53,12 +53,14 @@ struct MenuView: View {
             }
             .padding(.horizontal, 28)
 
-            Text("Host: AirPlay-mirror your iPhone to the TV.\nThe game board appears on the big screen.")
-                .font(Theme.body(13))
-                .foregroundStyle(.white.opacity(0.4))
-                .multilineTextAlignment(.center)
+            ConnectionModePicker()
+                .environmentObject(client)
+                .padding(.horizontal, 24)
                 .padding(.top, 22)
                 .padding(.bottom, 30)
+        }
+        .onAppear {
+            if client.connectionMode == .lan { client.startLANDiscovery() }
         }
         .sheet(item: $path) { dest in
             ProfileSetupView(isHost: dest == .host)
@@ -66,6 +68,88 @@ struct MenuView: View {
         }
         .sheet(isPresented: $showSettings) {
             ServerSettingsView().environmentObject(client)
+        }
+    }
+}
+
+/// Home-screen "Same WiFi vs. Other" chooser. LAN mode auto-discovers the server
+/// on the local network (no address to type); Other mode reveals a ws:// field.
+struct ConnectionModePicker: View {
+    @EnvironmentObject var client: GameClient
+    @State private var urlText = ""
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Picker("Connection", selection: modeBinding) {
+                Text("📶  Same WiFi").tag(ConnectionMode.lan)
+                Text("🌐  Other").tag(ConnectionMode.other)
+            }
+            .pickerStyle(.segmented)
+
+            switch client.connectionMode {
+            case .lan:
+                lanStatus
+            case .other:
+                otherFields
+            }
+        }
+        .onAppear { urlText = client.serverURLString }
+        .onChange(of: client.connectionMode) { _, mode in
+            if mode == .other { urlText = client.serverURLString }
+        }
+    }
+
+    private var modeBinding: Binding<ConnectionMode> {
+        Binding(
+            get: { client.connectionMode },
+            set: { client.connectionMode = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private var lanStatus: some View {
+        HStack(spacing: 8) {
+            switch client.lanState {
+            case .idle, .searching:
+                ProgressView().tint(Theme.cyan).scaleEffect(0.8)
+                Text("Looking for a game on this WiFi…")
+                    .foregroundStyle(.white.opacity(0.55))
+            case .found:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Theme.cyan)
+                Text("Found a game on your WiFi — you're ready!")
+                    .foregroundStyle(.white.opacity(0.7))
+            case .failed:
+                Image(systemName: "wifi.exclamationmark")
+                    .foregroundStyle(Theme.yellow)
+                Text("No game found yet. Make sure the server is running on this WiFi.")
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Spacer(minLength: 0)
+        }
+        .font(Theme.body(13))
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeInOut(duration: 0.2), value: client.lanState)
+    }
+
+    @ViewBuilder
+    private var otherFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("wss://your-server.com", text: $urlText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+                .font(.system(size: 15, design: .monospaced))
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
+                .foregroundStyle(Theme.cyan)
+                .onChange(of: urlText) { _, value in
+                    client.serverURLString = value
+                }
+            Text("Use a deployed wss:// address to play over the internet.")
+                .font(Theme.body(12))
+                .foregroundStyle(.white.opacity(0.4))
         }
     }
 }

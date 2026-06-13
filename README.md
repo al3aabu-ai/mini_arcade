@@ -48,10 +48,12 @@ cd server
 npm install
 npm run dev
 #   🎉 Frantics server is up
-#      LAN:  ws://192.168.1.70:8080   ← put this in the iPhone app
+#      WiFi: auto-discovered — pick "Same WiFi" in the app, no address needed
 ```
 
-**2. Run the app:** open `ios/Frantics.xcodeproj` in Xcode 16+, select your iPhone (or a simulator), Run. On first launch tap ⚙️ and enter the server's LAN address. Sign with your own team in *Signing & Capabilities* for a real device.
+The server advertises itself over Bonjour (`_frantics._tcp`), so phones on the same WiFi find it automatically.
+
+**2. Run the app:** open `ios/Frantics.xcodeproj` in Xcode 16+, select your iPhone (or a simulator), Run. On the home screen leave the connection toggle on **📶 Same WiFi** — the app discovers the server by itself, no address to type. (Switch to **🌐 Other** to enter a deployed `wss://` address for internet play.) Sign with your own team in *Signing & Capabilities* for a real device.
 
 **3. Party:** host taps **HOST PARTY**, starts **Screen Mirroring** to the TV (Control Center → Screen Mirroring), friends tap **JOIN PARTY** with the room code. The host phone's `tv` icon lights up when the external display is attached; there's also an on-phone board preview behind that icon for development.
 

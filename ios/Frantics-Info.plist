@@ -45,6 +45,10 @@
 	<key>NSMotionUsageDescription</key>
 	<string>Tilt your phone left or right to choose which neighbor receives the bomb.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Frantics connects to your game server on the local network.</string>
+	<string>Frantics finds and connects to the game server on your WiFi.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_frantics._tcp</string>
+	</array>
 </dict>
 </plist>
