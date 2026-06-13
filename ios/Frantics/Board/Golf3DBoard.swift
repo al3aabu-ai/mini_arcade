@@ -1057,20 +1057,22 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
                     .wait(duration: 0.8),
                     .run { [weak self] node in
                         guard let self, var b = self.balls[id] else { return }
+                        // CHANGED (Objective 1 update): an out-of-world ball
+                        // resets ALL the way back to its original tee — not its
+                        // last resting lie — no matter how far it had progressed.
+                        // 1) Fully reset physics so it doesn't keep falling on
+                        //    respawn (clear forces + zero linear & angular vel).
                         node.physicsBody?.clearAllForces()
                         node.physicsBody?.velocity = SCNVector3Zero
                         node.physicsBody?.angularVelocity = SCNVector4Zero
-                        // CHANGED: respawn at the saved resting lie, not the tee,
-                        // so falling off only costs the stroke — the player keeps
-                        // their progress up the fairway.
-                        // FIX: clamp the respawn ABOVE the fairway surface (top at
-                        // y≈0) and add an epsilon, so the ball drops onto the
-                        // collider instead of starting inside/under it — which
-                        // would clip through and re-trigger the off-map respawn
-                        // forever. Ball radius is 0.42.
-                        let safeY = max(b.restingPosition.y, 0.42 + 0.08)
-                        node.position = SCNVector3(b.restingPosition.x, safeY, b.restingPosition.z)
+                        // 2) Teleport to the original spawn. The tee (y≈0.8) sits
+                        //    safely above the fairway surface, so it drops onto
+                        //    the collider rather than clipping through it.
+                        node.position = b.tee
                         node.physicsBody?.resetTransform()
+                        // 3) Re-sync the saved lie to the tee so the player's next
+                        //    stroke registers from the start, not the old position.
+                        b.restingPosition = b.tee
                         b.respawning = false
                         self.balls[id] = b
                     },
