@@ -160,9 +160,12 @@ struct PhoneGolfView: View {
                     .foregroundStyle(Color(hex: shooter.color))
                     .multilineTextAlignment(.center)
             } else {
-                Text(loc.tr("GET READY…"))
+                // No active shooter = the board is still settling the last shot.
+                // Controls stay locked until every ball stops. (Requirement 2)
+                Text(loc.tr("⏳ BALLS STILL ROLLING…"))
                     .font(Theme.title(24))
                     .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
             }
             Text(loc.tr("👀 Watch the TV — your turn is coming."))
                 .font(Theme.body(15))

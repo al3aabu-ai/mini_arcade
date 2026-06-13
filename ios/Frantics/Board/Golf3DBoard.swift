@@ -389,6 +389,15 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private let shotClock: TimeInterval = 14
     private let holeCenter = SCNVector3(2.6, 0, -13)
 
+    /// Below this Y a ball has fallen off the platform — the ONLY condition that
+    /// resets a ball to the tee. A ball resting safely on the fairway (y≈0.4) is
+    /// never reset. (Requirement 1)
+    private let outOfBoundsY: Float = -9
+    /// Speed (m/s) below which a ball counts as fully stopped. Near zero so the
+    /// turn only advances once the physics world is genuinely at rest, not merely
+    /// rolling slowly. (Requirements 2 & 3)
+    private let restSpeed: Float = 0.08
+
     // NEW: ball-on-ball collision support.
     /// Physics category bit unique to balls, so we can ask SceneKit to report
     /// ball↔ball contacts (for feedback) without losing the solver's collision.
@@ -953,7 +962,9 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         let now = CACurrentMediaTime()
         shotPhase = .settling
         settleMinTime = now + 1.3
-        settleMaxTime = now + 5.0
+        settleMaxTime = now + 6.5 // safety cap; stricter rest check needs a touch longer
+        // Immediately lock every phone's controls for the duration of the shot.
+        reportProgress()
     }
 
     // MARK: turn machine (render thread only)
@@ -981,17 +992,22 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     }
 
     private func reportProgress() {
-        let turn = currentTurnId
+        // While the table is settling we report NO active turn, so every phone
+        // locks its shooting controls until the world is fully at rest. The next
+        // shooter is only announced once advanceTurn flips back to .waitingForShot.
+        // (Requirements 2 & 3)
+        let turn = (shotPhase == .settling) ? nil : currentTurnId
         let sunk = sunkOrder
         DispatchQueue.main.async { [onProgress] in
             onProgress(turn, sunk)
         }
     }
 
+    /// True only when EVERY active ball has come to a complete stop (velocity ≈ 0).
     private func allBallsSettled() -> Bool {
         for ball in balls.values where !ball.sunk && !ball.respawning {
             let v = ball.node.physicsBody?.velocity ?? SCNVector3Zero
-            if sqrt(v.x * v.x + v.y * v.y + v.z * v.z) > 0.9 { return false }
+            if sqrt(v.x * v.x + v.y * v.y + v.z * v.z) > restSpeed { return false }
         }
         return true
     }
@@ -1004,6 +1020,10 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private func saveRestingPositions() {
         for (id, var ball) in balls where !ball.sunk && !ball.respawning {
             ball.restingPosition = ball.node.presentation.position
+            // Lock the lie in: kill any residual motion so the ball can't creep
+            // off its resting spot after the turn advances. (Requirements 1 & 3)
+            ball.node.physicsBody?.velocity = SCNVector3Zero
+            ball.node.physicsBody?.angularVelocity = SCNVector4Zero
             balls[id] = ball
         }
     }
@@ -1050,7 +1070,9 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
                 continue
             }
 
-            if p.y < -9, !ball.respawning {
+            // The ONLY reset-to-tee path: the ball has dropped off the platform.
+            // A ball resting safely on the fairway never enters this branch. (Req 1)
+            if p.y < outOfBoundsY, !ball.respawning {
                 ball.respawning = true
                 balls[id] = ball
                 ball.node.runAction(.sequence([

@@ -114,6 +114,7 @@ final class Localization: ObservableObject {
             "اسحب للخلف. أفلت للإطلاق.\nضربة واحدة — اجعلها تُحسب.",
         "%@ IS SHOOTING": "%@ يصوّب الآن",
         "GET READY…": "استعد…",
+        "⏳ BALLS STILL ROLLING…": "⏳ لا تزال الكرات تتدحرج…",
         "👀 Watch the TV — your turn is coming.": "👀 راقب التلفاز — دورك قادم.",
         "IN THE HOLE!": "في الحفرة!",
         "You finished #%@ — enjoy the show": "أنهيت بالمركز #%@ — استمتع بالعرض",
