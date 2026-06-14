@@ -30,29 +30,24 @@ fail() { printf "\033[31m✗ %s\033[0m\n" "$1" >&2; exit 1; }
 
 resolve_device() {
   [ -n "${DEVICE_ID:-}" ] && { echo "$DEVICE_ID"; return; }
-  local json=/tmp/frantics-devices.json
-  xcrun devicectl list devices --json-output "$json" >/dev/null 2>&1 || return 0
-  python3 - "$json" <<'PY' 2>/dev/null || true
-import json, sys
-try:
-    devs = json.load(open(sys.argv[1]))["result"]["devices"]
-except Exception:
-    sys.exit(0)
-for d in devs:
-    cp = d.get("connectionProperties", {})
-    hw = d.get("hardwareProperties", {})
-    if cp.get("tunnelState") not in ("unavailable", None) and hw.get("deviceType", "").lower() in ("iphone", "ipad"):
-        print(d["identifier"]); break
-PY
+  # `xctrace list devices` groups output: real hardware appears under
+  # "== Devices ==" (before "== Simulators =="). We read ONLY that block — never a
+  # simulator. A physical iOS device has an OS version like "(17.5.1)" and a
+  # trailing UDID; the Mac host has no version. Match on the VERSION pattern, not
+  # the device name (yours is "iPhn", not "iPhone"), and grab the trailing UDID.
+  xcrun xctrace list devices 2>/dev/null | awk '
+      /^== / { indev = ($0 ~ /== Devices ==/) ? 1 : 0; next }
+      indev && /\([0-9]+\.[0-9]/ { print; }
+    ' | head -1 | sed -E 's/.*\(([0-9A-Fa-f][0-9A-Fa-f-]+)\)[[:space:]]*$/\1/'
 }
 
 bold "==> Looking for a connected iPhone…"
 DEVICE_ID="$(resolve_device)"
-if [ -n "$DEVICE_ID" ]; then
-  echo "    device: $DEVICE_ID"
-else
-  echo "    (couldn't auto-detect via devicectl — will rely on ios-deploy auto-detect)"
+if [ -z "$DEVICE_ID" ]; then
+  fail "No iPhone detected. Plug it in with a cable, unlock it, tap \"Trust\" if asked, then re-run. (Override: DEVICE_ID=<udid> ./local-install.sh)"
 fi
+DEVICE_NAME="$(xcrun xctrace list devices 2>/dev/null | grep "$DEVICE_ID" | head -1 | sed -E 's/ *\(.*//')"
+echo "    iPhone: ${DEVICE_NAME:-?}  ($DEVICE_ID)"
 
 # --- 2. Clean the build cache ----------------------------------------------------
 
@@ -94,9 +89,9 @@ if xcrun devicectl --version >/dev/null 2>&1 && [ -n "$DEVICE_ID" ]; then
 elif command -v ios-deploy >/dev/null 2>&1; then
   bold "==> Installing via ios-deploy…"
   if [ -n "${NO_LAUNCH:-}" ]; then
-    ios-deploy --no-wifi --bundle "$APP"
+    ios-deploy --no-wifi --id "$DEVICE_ID" --bundle "$APP"
   else
-    ios-deploy --no-wifi --justlaunch --bundle "$APP"
+    ios-deploy --no-wifi --justlaunch --id "$DEVICE_ID" --bundle "$APP"
   fi
 else
   echo ""
@@ -106,7 +101,7 @@ else
     command -v brew >/dev/null 2>&1 || fail "Homebrew not found — install it from https://brew.sh first."
     brew install ios-deploy
     bold "==> Installing via ios-deploy…"
-    ios-deploy --no-wifi --justlaunch --bundle "$APP"
+    ios-deploy --no-wifi --justlaunch --id "$DEVICE_ID" --bundle "$APP"
   else
     fail "Skipped install. Re-run after installing ios-deploy (brew install ios-deploy) or Xcode 15+."
   fi
