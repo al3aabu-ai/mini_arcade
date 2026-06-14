@@ -44,9 +44,12 @@ final class TikiJungleCourse {
     let sceneryGroupNode = SCNNode()
 
     // Key world positions (xz plane; +z is the near/tee end, -z is the far green).
-    // The whole course sits on ONE slab whose top surface is the y = 0 plane, so
-    // spawn just above it (radius 0.42) and the hole xz drives sink detection.
-    let teePosition = SCNVector3(0, 0.7, 15.5)
+    // The whole course sits on ONE slab whose top surface is the y = 0 plane.
+    // Spawn a full unit ABOVE the surface (ball radius is 0.42) so the ball is born
+    // cleanly in mid-air and drops onto the slab — never initialized inside the
+    // floor body. The ball spawns with zero velocity (allowsResting = false only
+    // keeps it awake; it doesn't inject motion), so the drop is clean.
+    let teePosition = SCNVector3(0, 1.0, 15.5)
     let holeCenter = SCNVector3(2.5, 0.2, -16)
 
     // Hazard regions for the game loop (xz centre + radius; y = surface height).
@@ -120,7 +123,11 @@ final class TikiJungleCourse {
         body.friction = friction
         body.restitution = restitution
         body.categoryBitMask = category
-        body.collisionBitMask = Category.ball   // clean mask: only the ball collides
+        // CRITICAL: collide with ALL categories (~0). The live golf ball uses the
+        // controller's own ball category, not this module's Category.ball, so a
+        // restrictive mask here filtered the floor↔ball pair and the ball fell
+        // straight through. Static bodies never move, so colliding with all is safe.
+        body.collisionBitMask = -1
         return body
     }
 
@@ -370,7 +377,7 @@ final class TikiJungleCourse {
         // Kinematic so the swing animation physically shoves any ball it meets.
         let mBody = SCNPhysicsBody(type: .kinematic, shape: SCNPhysicsShape(geometry: headGeo))
         mBody.categoryBitMask = Category.mallet
-        mBody.collisionBitMask = Category.ball
+        mBody.collisionBitMask = -1 // deflect the live ball regardless of its category
         mBody.restitution = 1.1 // a satisfying whack
         malletHead.physicsBody = mBody
         mallet.addChildNode(malletHead)
