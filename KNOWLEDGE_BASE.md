@@ -45,9 +45,10 @@ Golf is a **three-round segment**, each round a different course, played turn-ba
 ### Shot mechanics — STRICTLY HORIZONTAL
 - In `applyFire` (`Golf3DBoard.swift`) the launch impulse's **Y-component is locked to 0** and any residual vertical velocity is zeroed, so the ball never lifts/jumps — it stays flush and glued to the slab. Power scales only the horizontal magnitude (anvil debuff ×0.7). No squash `SCNAction` (it fought the solver).
 
-### Camera follow — LOW, DRAMATIC, looking up the fairway
+### Camera follow — ELEVATED third-person, pitched DOWN the fairway
 - `GolfSceneController.updateFollowCamera()` (every frame) **smoothly lerps** the camera toward `activeBall + cameraFollowOffset` and the look-target toward `activeBall + cameraLookOffset` (factors 0.06 / 0.10) — a damped chase cam, no hard cuts.
-- **Spec:** the follow offset is **low and pulled well back** (`y ≈ 3`, `z ≈ +18…22`); `cameraLookOffset ≈ (0, 6, −16)` aims **up and far ahead down the fairway** (toward the −Z hole), giving a dramatic low-profile angle with real depth that frames the ball with the lane receding above it (not a flat straight-down-the-axis view). Each course sets its own `cameraFollowOffset` in `build*World()`; `cameraLookOffset` is shared.
+- **Spec:** the follow offset is **elevated and behind** (`y ≈ 14`, `z ≈ +18…22`); `cameraLookOffset ≈ (0, 0, −11)` drops the target to **fairway level AHEAD of the ball** (toward the −Z hole). Because the look-target sits well *below* the camera and ahead, the cam **pitches down the path** (~24°) — a clean angled top-down third-person frame where the runway width, side water hazards, and upcoming obstacles all read clearly.
+- **Gotcha:** the pitch is `(cameraFollowOffset.y − cameraLookOffset.y)` over the forward distance. If `cameraLookOffset.y` is set *above* the ball while the camera is low, the cam tilts UP and you lose the path — keep the camera high and the look-target low. Each course sets its own `cameraFollowOffset` in `build*World()`; `cameraLookOffset` is shared.
 
 ### No particle splash effects
 - The launch/roll **trail** and the **sink celebration** particles are removed (trail `birthRate` forced to 0; `celebrate()` deleted). Only the ball↔ball contact spark remains.
