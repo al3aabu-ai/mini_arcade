@@ -107,7 +107,7 @@ export interface GolfResults {
 }
 
 /** Which course is being played this golf round. */
-export type GolfMap = "guerilla" | "tiki";
+export type GolfMap = "guerilla" | "tiki" | "runway";
 
 export interface GolfState {
   /** epoch ms deadline; the board shows the countdown from this */

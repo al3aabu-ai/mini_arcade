@@ -9,7 +9,9 @@ struct PhoneRootView: View {
         #if DEBUG
         if let demo = ProcessInfo.processInfo.environment["FRANTICS_DEMO"] {
             if demo == "tiki" {
-                TikiJungleCoursePreview()   // FRANTICS_DEMO=tiki → inspect the new level
+                TikiJungleCoursePreview()   // FRANTICS_DEMO=tiki → inspect Round 2
+            } else if demo == "runway" {
+                TikiRunwayCoursePreview()   // FRANTICS_DEMO=runway → inspect Round 3
             } else {
                 DemoContainerView(mode: demo)
             }

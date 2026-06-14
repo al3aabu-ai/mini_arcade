@@ -13,7 +13,7 @@ import SceneKit
 /// Hazard regions are exposed (`isOverWater` / `isOverSand`) for the game loop:
 /// water triggers the out-of-bounds reset, sand asks the loop to spike the ball's
 /// linear damping while it's inside.
-final class TikiJungleCourse {
+final class TikiJungleCourse: GolfHazardCourse {
 
     /// Physics categories. Deliberately start at 1<<2 — never reuse SceneKit's
     /// reserved 1<<0 (default) / 1<<1 (static), which would make dynamic/static

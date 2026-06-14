@@ -27,6 +27,15 @@ struct GolfBoardView: View {
 
     private var golf: GolfState? { client.room?.golf }
 
+    /// HUD title per round's map.
+    private var mapTitleKey: String {
+        switch golf?.map {
+        case "tiki": return "🌴 TIKI JUNGLE"
+        case "runway": return "🛫 TIKI RUNWAY"
+        default: return "⛳️ GUERILLA GOLF"
+        }
+    }
+
     var body: some View {
         ZStack {
             if let controller {
@@ -53,11 +62,11 @@ struct GolfBoardView: View {
         VStack {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(loc.tr(golf?.map == "tiki" ? "🌴 TIKI JUNGLE" : "⛳️ GUERILLA GOLF"))
+                    Text(loc.tr(mapTitleKey))
                         .font(Theme.title(30))
                         .foregroundStyle(.white)
                         .neonGlow(Theme.cyan, radius: 10)
-                    Text(loc.tr("ROUND %@/2", "\(golf?.round ?? 1)"))
+                    Text(loc.tr("ROUND %@/3", "\(golf?.round ?? 1)"))
                         .font(Theme.body(15))
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -376,6 +385,17 @@ private enum Tex {
 
 // MARK: - SceneKit world
 
+/// A self-contained golf course module the controller can drop into the scene
+/// and query for spawn/hole positions and hazard regions. Both Tiki maps
+/// (Jungle = R2, Runway = R3) conform, so the controller stays course-agnostic.
+protocol GolfHazardCourse {
+    var root: SCNNode { get }
+    var teePosition: SCNVector3 { get }
+    var holeCenter: SCNVector3 { get }
+    func isOverWater(_ p: SCNVector3) -> Bool
+    func isOverSand(_ p: SCNVector3) -> Bool
+}
+
 final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsContactDelegate {
     private struct Ball {
         let info: GolfPlayerInfo
@@ -404,10 +424,10 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private let players: [GolfPlayerInfo]
     private let endsAt: Date
     private let useHDR: Bool
-    /// "guerilla" (Round 1) or "tiki" (Round 2) — which course to build.
+    /// "guerilla" (R1), "tiki" (R2), or "runway" (R3) — which course to build.
     private let courseMap: String
-    /// Backing course for the Tiki map; provides tee, hole, and hazard regions.
-    private var tikiCourse: TikiJungleCourse?
+    /// Backing module for the Tiki maps; provides tee, hole, and hazard regions.
+    private var hazardCourse: GolfHazardCourse?
     private let onSank: (String) -> Void
     private let onProgress: (String?, [String]) -> Void
     private let onFinished: ([String]) -> Void
@@ -530,7 +550,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     // MARK: world building
 
     private func buildWorld() {
-        if courseMap == "tiki" { buildTikiWorld(); return } // Round 2 course
+        if courseMap == "tiki" { buildTikiWorld(); return }     // Round 2 course
+        if courseMap == "runway" { buildRunwayWorld(); return } // Round 3 course
         let skyImage = Tex.sky()
         scene.background.contents = skyImage
         scene.lightingEnvironment.contents = skyImage
@@ -718,19 +739,37 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     /// The course module owns its own geometry, lights, hole, and hazards.
     private func buildTikiWorld() {
         let course = TikiJungleCourse()
-        tikiCourse = course
+        hazardCourse = course
         holeCenter = course.holeCenter
+        installCourseEnvironment(background: UIColor(red: 0.55, green: 0.83, blue: 0.6, alpha: 1),
+                                 cameraPos: SCNVector3(0, 30, 30), lookAt: SCNVector3(0, 0, -2))
+        scene.rootNode.addChildNode(course.root)
+    }
 
-        scene.background.contents = UIColor(red: 0.55, green: 0.83, blue: 0.6, alpha: 1)
+    /// Round 3: assemble the long, straight Tiki Runway gauntlet.
+    private func buildRunwayWorld() {
+        let course = TikiRunwayCourse()
+        hazardCourse = course
+        holeCenter = course.holeCenter
+        // The runway is long and narrow — pull the camera back and higher to frame
+        // the whole lane from the tee to the finish.
+        installCourseEnvironment(background: UIColor(red: 0.20, green: 0.42, blue: 0.62, alpha: 1),
+                                 cameraPos: SCNVector3(0, 40, 34), lookAt: SCNVector3(0, 0, -4))
+        scene.rootNode.addChildNode(course.root)
+    }
+
+    /// Shared sky/gravity/contacts/camera setup for the Tiki course modules.
+    private func installCourseEnvironment(background: UIColor, cameraPos: SCNVector3, lookAt: SCNVector3) {
+        scene.background.contents = background
         scene.physicsWorld.gravity = SCNVector3(0, -9.8, 0)
         scene.physicsWorld.contactDelegate = self
-        scene.fogColor = UIColor(red: 0.5, green: 0.72, blue: 0.55, alpha: 1)
-        scene.fogStartDistance = 70
-        scene.fogEndDistance = 150
+        scene.fogColor = UIColor(red: 0.5, green: 0.72, blue: 0.62, alpha: 1)
+        scene.fogStartDistance = 80
+        scene.fogEndDistance = 180
 
         let camera = SCNCamera()
-        camera.fieldOfView = 50
-        camera.zFar = 320
+        camera.fieldOfView = 52
+        camera.zFar = 360
         #if !targetEnvironment(simulator)
         if useHDR {
             camera.wantsHDR = true
@@ -739,16 +778,14 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         }
         #endif
         cameraNode.camera = camera
-        cameraNode.position = SCNVector3(0, 30, 30)
+        cameraNode.position = cameraPos
         let lookTarget = SCNNode()
-        lookTarget.position = SCNVector3(0, 0, -2)
+        lookTarget.position = lookAt
         scene.rootNode.addChildNode(lookTarget)
         let look = SCNLookAtConstraint(target: lookTarget)
         look.isGimbalLockEnabled = true
         cameraNode.constraints = [look]
         scene.rootNode.addChildNode(cameraNode)
-
-        scene.rootNode.addChildNode(course.root)
     }
 
     private func buildHole() {
@@ -909,7 +946,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         for (index, info) in players.enumerated() {
             // Spread the field across the active map's tee, so Round 2 spawns
             // cleanly at the Tiki tee instead of the Guerilla pad.
-            let teeBase = tikiCourse?.teePosition ?? SCNVector3(0, 0.8, 15)
+            let teeBase = hazardCourse?.teePosition ?? SCNVector3(0, 0.8, 15)
             let tee = SCNVector3(teeBase.x + Float(index) * 1.1 - Float(count - 1) * 0.55,
                                  teeBase.y, teeBase.z)
             let color = UIColor(Color(hex: info.colorHex))
@@ -1169,8 +1206,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
 
             // Tiki hazards. Sand drastically increases linear damping while the
             // ball is inside the bunker; restore the default once it rolls out.
-            if let tiki = tikiCourse {
-                ball.node.physicsBody?.damping = tiki.isOverSand(p) ? 0.85 : 0.16
+            if let hz = hazardCourse {
+                ball.node.physicsBody?.damping = hz.isOverSand(p) ? 0.85 : 0.16
             }
 
             let horizontalDist = sqrt(pow(p.x - holeCenter.x, 2) + pow(p.z - holeCenter.z, 2))
@@ -1197,7 +1234,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             // Reset-to-tee paths: the ball dropped off the platform, OR (Tiki) it
             // landed in the hippo water pool. A ball resting safely on the fairway
             // never enters this branch.
-            let inWater = tikiCourse?.isOverWater(p) ?? false
+            let inWater = hazardCourse?.isOverWater(p) ?? false
             if (p.y < outOfBoundsY || inWater), !ball.respawning {
                 ball.respawning = true
                 balls[id] = ball
