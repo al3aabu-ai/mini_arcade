@@ -234,8 +234,8 @@ async function main() {
   ok(round3.golf!.strokes[alice.playerId] === 2, "total strokes carry into Round 3");
   ok(round3.golf!.results === null && round3.golf!.sunk.length === 0, "Round 3 starts on a clean board");
 
-  console.log("\n— golf round 3 (Tiki Runway, FINAL standings) —");
-  // Alice 1, Bob 1, Host 2 → final totals: Alice 3, Bob 3, Host 4.
+  console.log("\n— golf round 3 (Tiki Runway) → round 4 —");
+  // Each takes one stroke → totals after R3: Alice 3, Host 3, Bob 3.
   host.send({ t: "golf_progress", turnId: alice.playerId, sunk: [] });
   await alice.waitForState((s) => s.golf?.turnId === alice.playerId, "round 3 Alice turn");
   alice.send({ t: "fire", angle: 1, power: 1 });
@@ -244,21 +244,44 @@ async function main() {
   host.send({ t: "golf_progress", turnId: host.playerId, sunk: [alice.playerId] });
   await host.waitForState((s) => s.golf?.turnId === host.playerId, "round 3 host turn");
   host.send({ t: "fire", angle: 0.5, power: 0.7 });
-  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 3, "host stroke 1 of round 3");
-  host.send({ t: "fire", angle: 0.5, power: 0.7 });
-  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 4, "host stroke 2 of round 3");
+  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 3, "host total strokes = 3");
 
   host.send({ t: "golf_progress", turnId: bob.playerId, sunk: [alice.playerId, host.playerId] });
   await bob.waitForState((s) => s.golf?.turnId === bob.playerId, "round 3 bob turn");
   bob.send({ t: "fire", angle: 0.5, power: 0.7 });
   await host.waitForState((s) => s.golf!.strokes[bob.playerId] === 3, "bob total strokes = 3");
 
-  // Final match standings — strictly by fewest TOTAL strokes across all 3 rounds.
+  host.send({ t: "golf_finished", order: [alice.playerId, host.playerId, bob.playerId] });
+  const round4 = await cara.waitForState((s) => s.phase === "golf" && s.golf?.round === 4, "Round 3 → Round 4");
+  ok(round4.golf!.map === "snake", "Round 4 loads the Tiki Snake map");
+  ok(round4.golf!.strokes[alice.playerId] === 3, "total strokes carry into Round 4");
+  ok(round4.golf!.results === null && round4.golf!.sunk.length === 0, "Round 4 starts on a clean board");
+
+  console.log("\n— golf round 4 (Tiki Snake, FINAL standings) —");
+  // Alice 1, Bob 1, Host 2 → final totals: Alice 4, Bob 4, Host 5.
+  host.send({ t: "golf_progress", turnId: alice.playerId, sunk: [] });
+  await alice.waitForState((s) => s.golf?.turnId === alice.playerId, "round 4 Alice turn");
+  alice.send({ t: "fire", angle: 1, power: 1 });
+  await alice.waitForState((s) => s.golf!.strokes[alice.playerId] === 4, "Alice total strokes = 4");
+
+  host.send({ t: "golf_progress", turnId: host.playerId, sunk: [alice.playerId] });
+  await host.waitForState((s) => s.golf?.turnId === host.playerId, "round 4 host turn");
+  host.send({ t: "fire", angle: 0.5, power: 0.7 });
+  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 4, "host stroke 1 of round 4");
+  host.send({ t: "fire", angle: 0.5, power: 0.7 });
+  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 5, "host stroke 2 of round 4");
+
+  host.send({ t: "golf_progress", turnId: bob.playerId, sunk: [alice.playerId, host.playerId] });
+  await bob.waitForState((s) => s.golf?.turnId === bob.playerId, "round 4 bob turn");
+  bob.send({ t: "fire", angle: 0.5, power: 0.7 });
+  await host.waitForState((s) => s.golf!.strokes[bob.playerId] === 4, "bob total strokes = 4");
+
+  // Final match standings — strictly by fewest TOTAL strokes across all 4 rounds.
   host.send({ t: "golf_finished", order: [alice.playerId, bob.playerId, host.playerId] });
   const golfDone = await cara.waitForState((s) => !!s.golf?.results, "final golf results");
-  ok(golfDone.golf!.results!.order[0] === alice.playerId, "fewest total strokes (Alice, 3) wins the match");
-  ok(golfDone.golf!.results!.order[1] === bob.playerId, "Bob (3, sank later) is second on the tie-break");
-  ok(golfDone.golf!.results!.order[2] === host.playerId, "Host (4) is third");
+  ok(golfDone.golf!.results!.order[0] === alice.playerId, "fewest total strokes (Alice, 4) wins the match");
+  ok(golfDone.golf!.results!.order[1] === bob.playerId, "Bob (4, sank later) is second on the tie-break");
+  ok(golfDone.golf!.results!.order[2] === host.playerId, "Host (5) is third");
   ok(golfDone.golf!.results!.awarded[alice.playerId] === 500, "match winner takes 500");
   ok(golfDone.golf!.results!.awarded[bob.playerId] === 300, "2nd takes 300");
   ok(golfDone.golf!.results!.awarded[host.playerId] === 200, "3rd takes 200");

@@ -415,7 +415,7 @@ export class Room {
       sunk: [],
       results: null,
       round,
-      map: round >= 3 ? "runway" : round === 2 ? "tiki" : "guerilla",
+      map: round >= 4 ? "snake" : round === 3 ? "runway" : round === 2 ? "tiki" : "guerilla",
       priorStrokes: prior,
       roundStrokes: round0,
     };
@@ -499,14 +499,14 @@ export class Room {
     const awarded: Record<string, number> = {};
     for (const p of this.players) awarded[p.id] = 0;
 
-    if (golf.round < 3) {
-      // Rounds 1 & 2 — record standings, carry total strokes into the next round
-      // (Round 1 Guerilla → Round 2 Tiki Jungle → Round 3 Tiki Runway).
+    if (golf.round < 4) {
+      // Rounds 1–3 — record standings, carry total strokes into the next round
+      // (Guerilla → Tiki Jungle → Tiki Runway → Tiki Snake).
       golf.results = { order: ranking, awarded };
       this.newGen();
       this.after(CONST.GOLF_RESULTS_MS, () => this.startGolf(golf.round + 1, totals));
     } else {
-      // Final golf round (Round 3) — award points strictly by lowest total strokes.
+      // Final golf round (Round 4) — award points strictly by lowest total strokes.
       ranking.forEach((id, i) => {
         const points = CONST.GOLF_BOUNTIES[i] ?? CONST.GOLF_FINISH_POINTS;
         awarded[id] = points;

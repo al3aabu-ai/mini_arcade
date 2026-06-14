@@ -389,7 +389,7 @@
         sunk: [],
         results: null,
         round,
-        map: round >= 3 ? "runway" : round === 2 ? "tiki" : "guerilla",
+        map: round >= 4 ? "snake" : round === 3 ? "runway" : round === 2 ? "tiki" : "guerilla",
         priorStrokes: prior,
         roundStrokes: round0
       };
@@ -458,7 +458,7 @@
       });
       const awarded = {};
       for (const p of this.players) awarded[p.id] = 0;
-      if (golf.round < 3) {
+      if (golf.round < 4) {
         golf.results = { order: ranking, awarded };
         this.newGen();
         this.after(CONST.GOLF_RESULTS_MS, () => this.startGolf(golf.round + 1, totals));

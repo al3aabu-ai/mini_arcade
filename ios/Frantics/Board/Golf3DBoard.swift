@@ -32,6 +32,7 @@ struct GolfBoardView: View {
         switch golf?.map {
         case "tiki": return "🌴 TIKI JUNGLE"
         case "runway": return "🛫 TIKI RUNWAY"
+        case "snake": return "🐍 TIKI SNAKE"
         default: return "⛳️ GUERILLA GOLF"
         }
     }
@@ -66,7 +67,7 @@ struct GolfBoardView: View {
                         .font(Theme.title(30))
                         .foregroundStyle(.white)
                         .neonGlow(Theme.cyan, radius: 10)
-                    Text(loc.tr("ROUND %@/3", "\(golf?.round ?? 1)"))
+                    Text(loc.tr("ROUND %@/4", "\(golf?.round ?? 1)"))
                         .font(Theme.body(15))
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -436,6 +437,9 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private var balls: [String: Ball] = [:]
     private var aimNodes: [String: SCNNode] = [:]
     private var turnSpotlight: SCNNode?
+    /// Camera follow: the look-at target node + the trailing offset from the ball.
+    private var lookTargetNode: SCNNode?
+    private var cameraFollowOffset = SCNVector3(0, 18, 16)
     private var sunkOrder: [String] = []
     private var done = false
     private var turnQueue: [String] = []
@@ -552,6 +556,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private func buildWorld() {
         if courseMap == "tiki" { buildTikiWorld(); return }     // Round 2 course
         if courseMap == "runway" { buildRunwayWorld(); return } // Round 3 course
+        if courseMap == "snake" { buildSnakeWorld(); return }   // Round 4 course
         let skyImage = Tex.sky()
         scene.background.contents = skyImage
         scene.lightingEnvironment.contents = skyImage
@@ -587,6 +592,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         look.isGimbalLockEnabled = true
         cameraNode.constraints = [look]
         scene.rootNode.addChildNode(cameraNode)
+        lookTargetNode = lookTarget
+        cameraFollowOffset = SCNVector3(0, 16, 16)
 
         // Warm key light + cool purple fill.
         let sun = SCNNode()
@@ -742,7 +749,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         hazardCourse = course
         holeCenter = course.holeCenter
         installCourseEnvironment(background: UIColor(red: 0.55, green: 0.83, blue: 0.6, alpha: 1),
-                                 cameraPos: SCNVector3(0, 30, 30), lookAt: SCNVector3(0, 0, -2))
+                                 cameraPos: SCNVector3(0, 30, 30), lookAt: SCNVector3(0, 0, -2),
+                                 followOffset: SCNVector3(0, 20, 18))
         scene.rootNode.addChildNode(course.root)
     }
 
@@ -754,12 +762,25 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         // The runway is long and narrow — pull the camera back and higher to frame
         // the whole lane from the tee to the finish.
         installCourseEnvironment(background: UIColor(red: 0.20, green: 0.42, blue: 0.62, alpha: 1),
-                                 cameraPos: SCNVector3(0, 40, 34), lookAt: SCNVector3(0, 0, -4))
+                                 cameraPos: SCNVector3(0, 40, 34), lookAt: SCNVector3(0, 0, -4),
+                                 followOffset: SCNVector3(0, 24, 22))
+        scene.rootNode.addChildNode(course.root)
+    }
+
+    /// Round 4: assemble the winding Tiki Snake serpentine.
+    private func buildSnakeWorld() {
+        let course = TikiSnakeCourse()
+        hazardCourse = course
+        holeCenter = course.holeCenter
+        installCourseEnvironment(background: UIColor(red: 0.16, green: 0.38, blue: 0.58, alpha: 1),
+                                 cameraPos: SCNVector3(0, 42, 34), lookAt: SCNVector3(0, 0, -2),
+                                 followOffset: SCNVector3(0, 26, 22))
         scene.rootNode.addChildNode(course.root)
     }
 
     /// Shared sky/gravity/contacts/camera setup for the Tiki course modules.
-    private func installCourseEnvironment(background: UIColor, cameraPos: SCNVector3, lookAt: SCNVector3) {
+    private func installCourseEnvironment(background: UIColor, cameraPos: SCNVector3, lookAt: SCNVector3,
+                                          followOffset: SCNVector3 = SCNVector3(0, 22, 20)) {
         scene.background.contents = background
         scene.physicsWorld.gravity = SCNVector3(0, -9.8, 0)
         scene.physicsWorld.contactDelegate = self
@@ -786,6 +807,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         look.isGimbalLockEnabled = true
         cameraNode.constraints = [look]
         scene.rootNode.addChildNode(cameraNode)
+        lookTargetNode = lookTarget
+        cameraFollowOffset = followOffset
     }
 
     private func buildHole() {
@@ -1089,16 +1112,17 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
 
         let p = min(1.0, max(0.0, power))
         let factor: Float = ball.info.anviled ? 0.7 : 1.0 // the Heavy Anvil at work
-        let dir = groundDirection(angle)
+        let dir = groundDirection(angle) // already flat (y = 0)
         let horizontal = Float(5.0 + 14.0 * p) * factor
-        let loft = Float(2.2 + 4.8 * p) * factor
 
-        // c) apply the launch impulse. Deliberately NO squash/wind-up SCNAction on
-        //    the ball: animating the physics node's transform fought the solver and
-        //    yanked the ball mid-launch. The speed trail already sells the shot.
-        //    (Requirement 3)
+        // c) apply the launch impulse — STRICTLY HORIZONTAL. The Y-component is
+        //    locked to 0 so the ball never lifts/jumps off the slab; it stays flush
+        //    and glued to the fairway. (Also zero any residual vertical velocity so
+        //    the shot starts perfectly on-plane.) No squash SCNAction: animating the
+        //    physics node fought the solver and yanked the ball mid-launch.
+        body.velocity = SCNVector3(body.velocity.x, 0, body.velocity.z)
         body.applyForce(
-            SCNVector3(dir.x * horizontal, loft, dir.z * horizontal),
+            SCNVector3(dir.x * horizontal, 0, dir.z * horizontal),
             asImpulse: true
         )
 
@@ -1267,6 +1291,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             }
         }
 
+        updateFollowCamera()
+
         // The glow disc tracks the active shooter's ball.
         if let spot = turnSpotlight {
             if let turnId = currentTurnId, let b = balls[turnId], !b.sunk {
@@ -1297,6 +1323,24 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         if sunkOrder.count == balls.count || Date() >= endsAt {
             finishGame()
         }
+    }
+
+    /// Smoothly trail the active shooter's ball: lerp the camera toward
+    /// ball + offset and the look-target toward the ball, every frame, so the
+    /// player always sees where the shot is going without any hard cuts.
+    private func updateFollowCamera() {
+        guard let look = lookTargetNode,
+              let id = currentTurnId, let ball = balls[id], !ball.sunk else { return }
+        let bp = ball.node.presentation.position
+        let desiredCam = SCNVector3(bp.x + cameraFollowOffset.x,
+                                    bp.y + cameraFollowOffset.y,
+                                    bp.z + cameraFollowOffset.z)
+        cameraNode.position = mix(cameraNode.position, desiredCam, 0.06)
+        look.position = mix(look.position, bp, 0.1)
+    }
+
+    private func mix(_ a: SCNVector3, _ b: SCNVector3, _ t: Float) -> SCNVector3 {
+        SCNVector3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
     }
 
     private func celebrate(color: UIColor) {
