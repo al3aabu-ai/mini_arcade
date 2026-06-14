@@ -184,9 +184,7 @@ final class Localization: ObservableObject {
         "🌴 TIKI JUNGLE": "🌴 أدغال التيكي",
         "🛫 TIKI RUNWAY": "🛫 مدرج التيكي",
         "Tiki Runway": "مدرج التيكي",
-        "🐍 TIKI SNAKE": "🐍 ثعبان التيكي",
-        "Tiki Snake": "ثعبان التيكي",
-        "ROUND %@/4": "الجولة %@/4",
+        "ROUND %@/3": "الجولة %@/3",
         "FEWEST STROKES WINS": "الأقل ضربات يكسب",
 
         // Tiki Jungle Adventure — Hole 5 (course identity)

@@ -20,30 +20,37 @@ Golf is a **three-round segment**, each round a different course, played turn-ba
 |------|---------------------|--------|
 | 1 | `guerilla` | Guerilla Golf (the original floating island) |
 | 2 | `tiki` | Tiki Jungle Adventure |
-| 3 | `runway` | Tiki Runway |
-| 4 | `snake` | Tiki Snake |
+| 3 | `runway` | Tiki Runway (**final round**) |
+
+> Golf is **3 rounds**. A 4th map ("Tiki Snake") was prototyped and then removed
+> (path geometry was unsalvageable). The flow terminates and the leaderboard is
+> finalized after Round 3.
 
 ### Where it lives
 - **Server (authoritative):** `server/src/room.ts` + `server/src/protocol.ts`.
-  - `startGolf(round, priorStrokes)` sets `map = round >= 4 ? "snake" : round === 3 ? "runway" : round === 2 ? "tiki" : "guerilla"` and resets per-round stroke counts while carrying `priorStrokes` forward.
-  - `finishGolf(order)`: if `golf.round < 4` it records standings and schedules `startGolf(round + 1, totals)`; on **round 4** it awards points and proceeds to the next phase.
-  - `GolfState` carries `round`, `map`, and cumulative `strokes` per player. `GolfMap = "guerilla" | "tiki" | "runway" | "snake"`.
+  - `startGolf(round, priorStrokes)` sets `map = round >= 3 ? "runway" : round === 2 ? "tiki" : "guerilla"` and resets per-round stroke counts while carrying `priorStrokes` forward.
+  - `finishGolf(order)`: if `golf.round < 3` it records standings and schedules `startGolf(round + 1, totals)`; on **round 3** it awards points and proceeds to the next phase.
+  - `GolfState` carries `round`, `map`, and cumulative `strokes` per player. `GolfMap = "guerilla" | "tiki" | "runway"`.
 - **iOS board:** `ios/Frantics/Board/Golf3DBoard.swift`.
-  - `GolfSceneController` builds the course by `courseMap` (`buildWorld()` branches to Guerilla / `buildTikiWorld()` / `buildRunwayWorld()` / `buildSnakeWorld()`).
-  - `GolfBoardView` **rebuilds the controller whenever `golf.map` changes** (so Round N+1 spawns on a fresh course), and the HUD shows `ROUND n/4` + the map name.
+  - `GolfSceneController` builds the course by `courseMap` (`buildWorld()` branches to Guerilla / `buildTikiWorld()` / `buildRunwayWorld()`).
+  - `GolfBoardView` **rebuilds the controller whenever `golf.map` changes** (so Round N+1 spawns on a fresh course), and the HUD shows `ROUND n/3` + the map name.
 - **On-device engine:** `ios/Frantics/Resources/FranticsEngine.js` is bundled from `room.ts`/`protocol.ts`/`dispatch.ts`. **After ANY server logic change, rebuild it:** `cd server && npm run build:embedded`.
 
 ### Winner rule — LOWEST TOTAL STROKES (not finish order)
-- A **stroke** is counted **server-side** in `relayFire()` each time the on-turn shooter fires (strict `golf.turnId === playerId`, so the settling window where `turnId === null` is never counted). Strokes are **cumulative across all four rounds** (`priorStrokes + roundStrokes`).
+- A **stroke** is counted **server-side** in `relayFire()` each time the on-turn shooter fires (strict `golf.turnId === playerId`, so the settling window where `turnId === null` is never counted). Strokes are **cumulative across all rounds** (`priorStrokes + roundStrokes`).
 - Final standings in `finishGolf` rank **sinkers by fewest total strokes ascending**; ties broken by who sank first. Players who never sank do not place.
 - Points awarded by that ranking (`GOLF_BOUNTIES` 500 / 300 / 200, then 100). **The lowest-stroke player is the match winner — finishing first does NOT win.**
-- This is regression-tested in `server/scripts/smoke.ts` (R1→R2→R3→R4 transitions, stroke carry-over, tie-break, final awards). Run `cd server && npm run smoke`.
+- This is regression-tested in `server/scripts/smoke.ts` (R1→R2→R3 transitions, stroke carry-over, tie-break, final awards). Run `cd server && npm run smoke`.
 
 ### Shot mechanics — STRICTLY HORIZONTAL
 - In `applyFire` (`Golf3DBoard.swift`) the launch impulse's **Y-component is locked to 0** and any residual vertical velocity is zeroed, so the ball never lifts/jumps — it stays flush and glued to the slab. Power scales only the horizontal magnitude (anvil debuff ×0.7). No squash `SCNAction` (it fought the solver).
 
-### Camera follow
-- `GolfSceneController.updateFollowCamera()` (called every frame in the render loop) **smoothly lerps** the camera toward `activeBall + cameraFollowOffset` and the look-target toward the ball (factors 0.06 / 0.10) — a damped chase cam with no hard cuts. Each course sets its own `cameraFollowOffset` (and an initial framing) in its `build*World()`.
+### Camera follow — LOW, DRAMATIC, looking up the fairway
+- `GolfSceneController.updateFollowCamera()` (every frame) **smoothly lerps** the camera toward `activeBall + cameraFollowOffset` and the look-target toward `activeBall + cameraLookOffset` (factors 0.06 / 0.10) — a damped chase cam, no hard cuts.
+- **Spec:** the follow offset is **low to the ground and behind** (`y ≈ 5`, `z ≈ +14…16`); `cameraLookOffset ≈ (0, 6, −10)` aims **up and ahead down the fairway** (toward the −Z hole), giving a dramatic low-profile angle that frames the ball with the lane receding above it. Each course sets its own `cameraFollowOffset` in `build*World()`; `cameraLookOffset` is shared.
+
+### No particle splash effects
+- The launch/roll **trail** and the **sink celebration** particles are removed (trail `birthRate` forced to 0; `celebrate()` deleted). Only the ball↔ball contact spark remains.
 
 ---
 
@@ -118,31 +125,16 @@ physically deflect the ball.
 Standalone inspection: run with env `FRANTICS_DEMO=runway` (or the `#Preview` in the file).
 Round 1 (`FRANTICS_DEMO` not needed — live) and Round 2 (`FRANTICS_DEMO=tiki`).
 
----
-
-## 3b. Tiki Snake blueprint (Round 4) — ref: minigolf_hole11_tiki_snake.jpg
-
-`ios/Frantics/Board/TikiSnakeCourse.swift` (conforms to `GolfHazardCourse`). An
-extreme winding **serpentine** bridge enclosed by bamboo rails, surrounded by water.
-
-- **Seamless-slab realization of a non-rectangular path.** The whole play area is ONE
-  thick slab (20 × 3 × 44, top `y = 0`) whose surface reads as the lagoon. The snake
-  **path is a green decal corridor** defined by an array of axis-aligned rectangles
-  (`segments`, the S/serpentine), marked by bamboo rails on each segment's long edges
-  (short ends open so the corridor connects). `isOverWater(p)` returns **true when the
-  ball is outside every corridor segment** — i.e. it cleared a rail into the water →
-  reset to the circular START tee at `(0, 1.0, 16)`. Hole at `(0, 0.2, -17)`.
-- All static/kinematic bodies use `collisionBitMask = -1`.
-
-### Obstacles (modular node groups + looping `SCNAction`s; kinematic = deflects ball)
-| Obstacle | Node group | Motion |
-|----------|-----------|--------|
-| **A & B — Sliding Totems** | `totemsNode` | Two totems on the curves, each a kinematic body running `moveBy(x:)` left↔right across the narrow track on a loop. |
-| **C — 4-Blade Cross Propeller** | `propellerNode` | A flat wooden cross at the centre of the middle straight; hub `.repeatForever(.rotateBy(y: 2π))`, four kinematic blades. Thread the rotating gaps. |
-| **D — Vertical Bamboo Spikes** | `spikesNode` | A row of bamboo logs that rise/sink (`moveBy(y:)`) in an **alternating** rhythm (odd logs offset by half a period). Cross when your lane's log is down. |
-| **Final Curve Mallet** | `malletNode` | A large kinematic mallet on the final bend (`rotateTo` slam/lift loop), guarding the green. |
-
-Standalone inspection: `FRANTICS_DEMO=snake` (or the `#Preview` in the file).
+### Hole construction — STEEP CONCAVE FUNNEL
+- The cup must **funnel**, not be a flat dark disc. Build a ring of angled facet
+  panels around the cup (`TikiRunwayCourse.buildFunnelHole`), oriented with
+  `node.look(at: outerRimPoint, ...)` so each panel slopes from a raised outer rim
+  down to the cup — balls near the edge dip and roll in, and the rim backstops
+  overshoots. (We can't recess below the seamless slab, so it's a raised "pot"
+  rim; rim height / radius are tunable constants.) Static bodies, `collisionBitMask = -1`.
+- **Secure boundaries:** every course must close ALL edges. Tiki Runway has bamboo
+  **end fences** (`addEndFence`) behind the tee (+Z) and behind the green (−Z) in
+  addition to the side rails, so nothing rolls off an open end into the water.
 
 ---
 

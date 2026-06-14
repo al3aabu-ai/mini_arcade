@@ -153,6 +153,29 @@ final class TikiRunwayCourse: GolfHazardCourse {
                 railsNode.addChildNode(post)
             }
         }
+
+        // End fences sealing the previously-open zones: behind the tee (+Z) and
+        // behind the green (−Z), so the boundary is fully closed (no rolling off
+        // the ends into the water).
+        addEndFence(z: 20)    // behind the start tee
+        addEndFence(z: -20.5) // behind the finish green
+    }
+
+    /// A bamboo cross-fence running the lane's full width at one end.
+    private func addEndFence(z: Float) {
+        let fence = SCNBox(width: CGFloat(laneHalfWidth * 2 + 0.4), height: 1.2, length: 0.32, chamferRadius: 0.12)
+        fence.materials = [pbr(RunwayTex.bamboo(), roughness: 0.6, tile: (8, 1))]
+        let f = SCNNode(geometry: fence)
+        f.position = SCNVector3(0, 0.6, z)
+        f.physicsBody = staticBody(Category.wall, friction: 0.5, restitution: 0.5)
+        railsNode.addChildNode(f)
+        for sx in [Float(-1), 1] {
+            let post = SCNNode(geometry: SCNCylinder(radius: 0.26, height: 1.7))
+            post.geometry?.materials = [pbr(RunwayTex.bamboo(), roughness: 0.6, tile: (1, 2))]
+            post.position = SCNVector3(sx * laneHalfWidth, 0.85, z)
+            post.physicsBody = staticBody(Category.wall, friction: 0.5, restitution: 0.5)
+            railsNode.addChildNode(post)
+        }
     }
 
     // MARK: - 2. Gauntlet obstacles
@@ -280,10 +303,7 @@ final class TikiRunwayCourse: GolfHazardCourse {
         g.position = SCNVector3(holeCenter.x, 0.05, holeCenter.z)
         sceneryNode.addChildNode(g)
 
-        let cup = SCNNode(geometry: SCNCylinder(radius: 0.62, height: 0.04))
-        cup.geometry?.materials = [pbr(UIColor(white: 0.04, alpha: 1), roughness: 1)]
-        cup.position = SCNVector3(holeCenter.x, 0.07, holeCenter.z)
-        sceneryNode.addChildNode(cup)
+        buildFunnelHole(at: SCNVector3(holeCenter.x, 0, holeCenter.z))
 
         let pole = SCNNode(geometry: SCNCylinder(radius: 0.05, height: 2.6))
         pole.geometry?.materials = [pbr(UIColor.white, roughness: 0.4, emissive: UIColor(white: 0.7, alpha: 1))]
@@ -299,6 +319,38 @@ final class TikiRunwayCourse: GolfHazardCourse {
             .rotateBy(x: 0, y: -0.4, z: 0, duration: 0.9),
         ])))
         sceneryNode.addChildNode(pennant)
+    }
+
+    /// A steep concave funnel of angled facets ringing the cup, so balls near the
+    /// edge dip and roll down into the hole instead of skimming over a flat disc.
+    /// (We can't recess below the seamless slab, so it's a raised "pot" rim that
+    /// funnels inward — the outer rim also backstops overshooting balls.)
+    private func buildFunnelHole(at center: SCNVector3) {
+        let cupR: Float = 0.62, rimR: Float = 2.0
+        let cupY: Float = 0.05, rimY: Float = 0.42 // steep inner wall, tunable
+        let facets = 18
+        let feltMat = pbr(UIColor(red: 0.38, green: 0.78, blue: 0.42, alpha: 1), roughness: 0.85)
+        let slopeLen = CGFloat(sqrt(pow(rimR - cupR, 2) + pow(rimY - cupY, 2)))
+        let chord = CGFloat(2 * Float.pi * (cupR + rimR) / 2 / Float(facets) * 1.6)
+        for i in 0..<facets {
+            let a = Float(i) * 2 * .pi / Float(facets)
+            let radial = SCNVector3(cos(a), 0, sin(a))
+            let inner = SCNVector3(center.x + radial.x * cupR, cupY, center.z + radial.z * cupR)
+            let outer = SCNVector3(center.x + radial.x * rimR, rimY, center.z + radial.z * rimR)
+            let panel = SCNBox(width: chord, height: 0.08, length: slopeLen, chamferRadius: 0.03)
+            panel.materials = [feltMat]
+            let node = SCNNode(geometry: panel)
+            node.position = SCNVector3((inner.x + outer.x) / 2, (inner.y + outer.y) / 2, (inner.z + outer.z) / 2)
+            // Orient +z up the slope toward the outer rim; the top face is the funnel.
+            node.look(at: outer, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, 1))
+            node.physicsBody = staticBody(Category.fairway, friction: 0.9, restitution: 0.08)
+            fairwayNode.addChildNode(node)
+        }
+        // Recessed dark cup at the centre.
+        let cup = SCNNode(geometry: SCNCylinder(radius: CGFloat(cupR), height: 0.35))
+        cup.geometry?.materials = [pbr(UIColor(white: 0.03, alpha: 1), roughness: 1)]
+        cup.position = SCNVector3(center.x, cupY - 0.12, center.z)
+        fairwayNode.addChildNode(cup)
     }
 
     // MARK: - scenery + lighting

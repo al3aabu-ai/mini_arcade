@@ -12,8 +12,6 @@ struct PhoneRootView: View {
                 TikiJungleCoursePreview()   // FRANTICS_DEMO=tiki → inspect Round 2
             } else if demo == "runway" {
                 TikiRunwayCoursePreview()   // FRANTICS_DEMO=runway → inspect Round 3
-            } else if demo == "snake" {
-                TikiSnakeCoursePreview()    // FRANTICS_DEMO=snake → inspect Round 4
             } else {
                 DemoContainerView(mode: demo)
             }

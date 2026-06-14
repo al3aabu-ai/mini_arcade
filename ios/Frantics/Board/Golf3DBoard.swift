@@ -32,7 +32,6 @@ struct GolfBoardView: View {
         switch golf?.map {
         case "tiki": return "🌴 TIKI JUNGLE"
         case "runway": return "🛫 TIKI RUNWAY"
-        case "snake": return "🐍 TIKI SNAKE"
         default: return "⛳️ GUERILLA GOLF"
         }
     }
@@ -67,7 +66,7 @@ struct GolfBoardView: View {
                         .font(Theme.title(30))
                         .foregroundStyle(.white)
                         .neonGlow(Theme.cyan, radius: 10)
-                    Text(loc.tr("ROUND %@/4", "\(golf?.round ?? 1)"))
+                    Text(loc.tr("ROUND %@/3", "\(golf?.round ?? 1)"))
                         .font(Theme.body(15))
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -438,8 +437,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private var aimNodes: [String: SCNNode] = [:]
     private var turnSpotlight: SCNNode?
     /// Camera follow: the look-at target node + the trailing offset from the ball.
+    /// Low Y + behind for a dramatic low-profile angle; the look offset aims up and
+    /// down the fairway (ahead toward the −Z hole, a touch above the ball).
     private var lookTargetNode: SCNNode?
-    private var cameraFollowOffset = SCNVector3(0, 18, 16)
+    private var cameraFollowOffset = SCNVector3(0, 5, 15)
+    private var cameraLookOffset = SCNVector3(0, 6, -10)
     private var sunkOrder: [String] = []
     private var done = false
     private var turnQueue: [String] = []
@@ -555,8 +557,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
 
     private func buildWorld() {
         if courseMap == "tiki" { buildTikiWorld(); return }     // Round 2 course
-        if courseMap == "runway" { buildRunwayWorld(); return } // Round 3 course
-        if courseMap == "snake" { buildSnakeWorld(); return }   // Round 4 course
+        if courseMap == "runway" { buildRunwayWorld(); return } // Round 3 course (final)
         let skyImage = Tex.sky()
         scene.background.contents = skyImage
         scene.lightingEnvironment.contents = skyImage
@@ -593,7 +594,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         cameraNode.constraints = [look]
         scene.rootNode.addChildNode(cameraNode)
         lookTargetNode = lookTarget
-        cameraFollowOffset = SCNVector3(0, 16, 16)
+        cameraFollowOffset = SCNVector3(0, 5, 14)
 
         // Warm key light + cool purple fill.
         let sun = SCNNode()
@@ -750,7 +751,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         holeCenter = course.holeCenter
         installCourseEnvironment(background: UIColor(red: 0.55, green: 0.83, blue: 0.6, alpha: 1),
                                  cameraPos: SCNVector3(0, 30, 30), lookAt: SCNVector3(0, 0, -2),
-                                 followOffset: SCNVector3(0, 20, 18))
+                                 followOffset: SCNVector3(0, 5, 15))
         scene.rootNode.addChildNode(course.root)
     }
 
@@ -763,24 +764,13 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         // the whole lane from the tee to the finish.
         installCourseEnvironment(background: UIColor(red: 0.20, green: 0.42, blue: 0.62, alpha: 1),
                                  cameraPos: SCNVector3(0, 40, 34), lookAt: SCNVector3(0, 0, -4),
-                                 followOffset: SCNVector3(0, 24, 22))
-        scene.rootNode.addChildNode(course.root)
-    }
-
-    /// Round 4: assemble the winding Tiki Snake serpentine.
-    private func buildSnakeWorld() {
-        let course = TikiSnakeCourse()
-        hazardCourse = course
-        holeCenter = course.holeCenter
-        installCourseEnvironment(background: UIColor(red: 0.16, green: 0.38, blue: 0.58, alpha: 1),
-                                 cameraPos: SCNVector3(0, 42, 34), lookAt: SCNVector3(0, 0, -2),
-                                 followOffset: SCNVector3(0, 26, 22))
+                                 followOffset: SCNVector3(0, 5, 16))
         scene.rootNode.addChildNode(course.root)
     }
 
     /// Shared sky/gravity/contacts/camera setup for the Tiki course modules.
     private func installCourseEnvironment(background: UIColor, cameraPos: SCNVector3, lookAt: SCNVector3,
-                                          followOffset: SCNVector3 = SCNVector3(0, 22, 20)) {
+                                          followOffset: SCNVector3 = SCNVector3(0, 5, 15)) {
         scene.background.contents = background
         scene.physicsWorld.gravity = SCNVector3(0, -9.8, 0)
         scene.physicsWorld.contactDelegate = self
@@ -1226,7 +1216,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             let speed = sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
 
             ball.tag.position = SCNVector3(p.x, p.y + ball.tagHeight, p.z)
-            ball.trail.birthRate = speed > 2.5 ? 110 : 0
+            ball.trail.birthRate = 0 // launch/roll particle splash disabled (per design)
 
             // Tiki hazards. Sand drastically increases linear damping while the
             // ball is inside the bunker; restore the default once it rolls out.
@@ -1239,7 +1229,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
                 ball.sunk = true
                 balls[id] = ball
                 sunkOrder.append(id)
-                celebrate(color: UIColor(Color(hex: ball.info.colorHex)))
+                // Sink celebration particle splash removed (per design).
                 ball.node.physicsBody = nil
                 ball.tag.removeFromParentNode()
                 ball.node.runAction(.sequence([
@@ -1335,33 +1325,13 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         let desiredCam = SCNVector3(bp.x + cameraFollowOffset.x,
                                     bp.y + cameraFollowOffset.y,
                                     bp.z + cameraFollowOffset.z)
+        let lookAt = SCNVector3(bp.x + cameraLookOffset.x, bp.y + cameraLookOffset.y, bp.z + cameraLookOffset.z)
         cameraNode.position = mix(cameraNode.position, desiredCam, 0.06)
-        look.position = mix(look.position, bp, 0.1)
+        look.position = mix(look.position, lookAt, 0.1)
     }
 
     private func mix(_ a: SCNVector3, _ b: SCNVector3, _ t: Float) -> SCNVector3 {
         SCNVector3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
-    }
-
-    private func celebrate(color: UIColor) {
-        for c in [UIColor(Theme.yellow), color] {
-            let sparks = SCNParticleSystem()
-            sparks.birthRate = 420
-            sparks.emissionDuration = 0.4
-            sparks.particleLifeSpan = 1.1
-            sparks.particleVelocity = 7
-            sparks.particleVelocityVariation = 3.5
-            sparks.spreadingAngle = 80
-            sparks.particleSize = 0.13
-            sparks.particleColor = c
-            sparks.blendMode = .additive
-            sparks.emitterShape = SCNSphere(radius: 0.3)
-            let emitter = SCNNode()
-            emitter.position = SCNVector3(holeCenter.x, 0.6, holeCenter.z)
-            emitter.addParticleSystem(sparks)
-            scene.rootNode.addChildNode(emitter)
-            emitter.runAction(.sequence([.wait(duration: 2.0), .removeFromParentNode()]))
-        }
     }
 
     private func finishGame() {
