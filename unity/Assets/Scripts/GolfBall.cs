@@ -15,10 +15,19 @@ namespace Frantics.Golf
         [Tooltip("Baseline linear drag, restored when the ball leaves the sand.")]
         public float normalDrag = 0.16f;
 
+        [Tooltip("Shots taken this hole — drives the lowest-stroke scoring.")]
+        public int strokeCount;
+
         Rigidbody rb;
         int sandContacts; // supports overlapping bunkers without flicker
 
         void Awake() => rb = GetComponent<Rigidbody>();
+
+        /// <summary>Count one successful launch (called by BallShooter on release).</summary>
+        public void RegisterShot()
+        {
+            strokeCount++;
+        }
 
         /// <summary>Teleport home and kill all motion (water hazard / out of bounds).</summary>
         public void ResetToSpawn()

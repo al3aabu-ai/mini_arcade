@@ -14,8 +14,9 @@ setup below. The SceneKit version is untouched and preserved on the
 | `SandBunker.cs` | Trigger that spikes `Rigidbody.drag` while the ball is inside. |
 | `WaterHazard.cs` | Trigger that resets the ball to the spawn point on entry. |
 | `MalletSwing.cs` | Kinematic mallet swing loop (deflects the ball). |
-| `BallShooter.cs` | Pull-back slingshot: drag to aim (LineRenderer), release to launch an impulse. |
+| `BallShooter.cs` | Pull-back slingshot: drag to aim (LineRenderer), release to launch an impulse. Hard-locked while the ball is moving; +1 stroke per shot. |
 | `GolfCameraController.cs` | Damped follow camera that trails the ball without cuts. |
+| `GolfHole.cs` | Cup trigger: stops the ball, logs the stroke count, "Hole In!", drops the ball into the cup. |
 
 ## Quick start
 
@@ -46,6 +47,18 @@ prefer to wire them by hand:
 - **`GolfCameraController`** → on the **Main Camera**. Set `target` to the ball
   (the builder does this automatically); tune `offset`, `followSmoothTime`,
   `lookSmoothTime`. It damps both position and look-target for cut-free framing.
+
+### Single-player game loop
+
+- **Shot lockout**: `BallShooter` only lets you aim/shoot when
+  `rb.velocity.magnitude <= restSpeed` (0.05) — the ball must come to a *complete*
+  stop. An in-progress aim is aborted if the ball is still rolling.
+- **Stroke counter**: `GolfBall.strokeCount` increments once per launched shot
+  (`RegisterShot()` from `BallShooter.Fire`). This is the value the lowest-stroke
+  scoring will read.
+- **Hole-in**: the cup has a trigger `SphereCollider` running `GolfHole`. On entry
+  it stops the ball, logs `Final strokes: N`, prints "Hole In!", drops the ball
+  into the cup (scale → 0), and raises `OnHoled(strokeCount)` for scoring/UI hooks.
 
 ## 4. Layers & the collision matrix (instead of bitmasks)
 

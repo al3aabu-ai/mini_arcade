@@ -157,6 +157,25 @@ namespace Frantics.Golf
             flag.transform.localPosition = new Vector3(0f, 0.7f, 0.35f);
             Destroy(flag.GetComponent<Collider>());
             Tint(flag, new Color(0.9f, 0.2f, 0.2f));
+
+            // Dark cup decal so the hole reads on the green.
+            var cupVisual = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            cupVisual.name = "Cup";
+            cupVisual.transform.SetParent(fairwayRoot, false);
+            cupVisual.transform.localScale = new Vector3(1.0f, 0.02f, 1.0f);
+            cupVisual.transform.position = new Vector3(holeCenter.x, 0.06f, holeCenter.z);
+            Destroy(cupVisual.GetComponent<Collider>());
+            Tint(cupVisual, new Color(0.05f, 0.05f, 0.05f));
+
+            // Hole-in trigger: a small sphere just above the cup. Sinking the ball
+            // here ends the hole (see GolfHole.cs).
+            var hole = new GameObject("HoleTrigger");
+            hole.transform.SetParent(fairwayRoot, false);
+            hole.transform.position = new Vector3(holeCenter.x, 0.3f, holeCenter.z);
+            var trigger = hole.AddComponent<SphereCollider>();
+            trigger.isTrigger = true;
+            trigger.radius = 0.55f;
+            hole.AddComponent<GolfHole>();
         }
 
         // ----------------------------------------------------- 1c. Bamboo fence

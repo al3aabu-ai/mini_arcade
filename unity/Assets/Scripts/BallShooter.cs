@@ -25,15 +25,17 @@ namespace Frantics.Golf
         [Tooltip("Drag length as a fraction of screen height for full power (resolution-independent).")]
         public float fullPowerDragFraction = 0.3f;
         public float maxArrowLength = 6f;
-        [Tooltip("Only allow a shot when the ball is essentially stopped.")]
-        public float restSpeed = 0.25f;
+        [Tooltip("The ball must be slower than this to shoot — must come to a complete stop.")]
+        public float restSpeed = 0.05f;
 
         /// Fired on release with power 0..1 — hook SFX / haptics / networking here.
         public System.Action<float> OnShoot;
 
+        /// Hard state lockout: no input at all while the ball is still moving.
         public bool CanShoot => rb.velocity.magnitude <= restSpeed;
 
         Rigidbody rb;
+        GolfBall ball;
         Camera cam;
         LineRenderer aim;
         bool aiming;
@@ -42,6 +44,7 @@ namespace Frantics.Golf
         void Awake()
         {
             rb = GetComponent<Rigidbody>();
+            ball = GetComponent<GolfBall>();
             cam = Camera.main;
             SetupAimLine();
         }
@@ -55,6 +58,12 @@ namespace Frantics.Golf
             {
                 aiming = true;
                 dragStart = Input.mousePosition;
+            }
+            // Hard lockout: if the ball is still rolling, no aiming or shooting at all.
+            if (aiming && !CanShoot)
+            {
+                aiming = false;
+                aim.enabled = false;
             }
             if (!aiming) return;
 
@@ -89,6 +98,7 @@ namespace Frantics.Golf
             float horizontal = Mathf.Lerp(minHorizontal, maxHorizontal, shot.power);
             float loft = Mathf.Lerp(minLoft, maxLoft, shot.power);
             rb.AddForce(shot.dir * horizontal + Vector3.up * loft, ForceMode.Impulse);
+            if (ball != null) ball.RegisterShot(); // +1 stroke per launched shot
             OnShoot?.Invoke(shot.power);
         }
 
