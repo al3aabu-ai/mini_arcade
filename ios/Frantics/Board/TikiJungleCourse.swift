@@ -44,8 +44,10 @@ final class TikiJungleCourse {
     let sceneryGroupNode = SCNNode()
 
     // Key world positions (xz plane; +z is the near/tee end, -z is the far green).
-    let teePosition = SCNVector3(0, 0.9, 16)
-    let holeCenter = SCNVector3(2.5, 0.9, -16)
+    // The whole course sits on ONE slab whose top surface is the y = 0 plane, so
+    // spawn just above it (radius 0.42) and the hole xz drives sink detection.
+    let teePosition = SCNVector3(0, 0.7, 15.5)
+    let holeCenter = SCNVector3(2.5, 0.2, -16)
 
     // Hazard regions for the game loop (xz centre + radius; y = surface height).
     private(set) var waterHazards: [(center: SCNVector3, radius: Float)] = []
@@ -122,52 +124,45 @@ final class TikiJungleCourse {
         return body
     }
 
-    // MARK: - 1. Fairway & path (S-curve)
+    // MARK: - 1. Fairway (one seamless landmass)
 
     private func buildFairway() {
-        let grass = TikiTex.grass()
-        // (x, z, width, length, yaw°) — overlapping slabs trace the S from the
-        // tee (z≈16) up to the green entrance (z≈-12).
-        let segments: [(Float, Float, CGFloat, CGFloat, Float)] = [
-            (0, 14.5, 8, 7, 0),      // tee apron
-            (0, 8.5, 7, 8, 0),       // straight climb
-            (3.4, 3.5, 9, 7, 18),    // lower loop bends right (bunker lives here)
-            (-1.5, -1, 12, 7, -16),  // the S crosses back to the left
-            (-4, -6.5, 7, 9, 8),     // up-left toward the water bend
-            (1.5, -11.5, 10, 7, 16), // sweep right to the green entrance
-        ]
-        for seg in segments {
-            let box = SCNBox(width: seg.2, height: 1.0, length: seg.3, chamferRadius: 0.25)
-            box.materials = [pbr(grass, roughness: 0.95, tile: (Float(seg.2) / 4, Float(seg.3) / 4))]
-            let node = SCNNode(geometry: box)
-            node.position = SCNVector3(seg.0, -0.5, seg.1) // top surface at y = 0
-            node.eulerAngles = SCNVector3(0, seg.4 * .pi / 180, 0)
-            node.physicsBody = staticBody(category: Category.fairway, friction: 0.95, restitution: 0.2)
-            fairwayNode.addChildNode(node)
-        }
+        // CRITICAL FIX: a SINGLE thick slab instead of overlapping rotated tiles.
+        // Tiles left visual seams and overlapping collision edges the ball caught
+        // on or fell between. One body means: visual top == collision top (the
+        // y = 0 plane), zero internal seams, and 3 units of floor thickness so the
+        // ball cannot tunnel through even at full shot speed. The S-curve now reads
+        // from the fence, the hazards, and the obstacle placement.
+        let span = SCNBox(width: 17, height: 3.0, length: 39, chamferRadius: 0.3)
+        let top = pbr(TikiTex.grass(), roughness: 0.95, tile: (4, 9))
+        let side = pbr(UIColor(red: 0.46, green: 0.33, blue: 0.20, alpha: 1), roughness: 0.95)
+        let bottom = pbr(UIColor(red: 0.22, green: 0.15, blue: 0.10, alpha: 1))
+        span.materials = [side, side, side, side, top, bottom] // +z +x -z -x +y -y
+        let node = SCNNode(geometry: span)
+        node.position = SCNVector3(0, -1.5, -1) // top surface flush at y = 0
+        node.physicsBody = staticBody(category: Category.fairway, friction: 0.95, restitution: 0.2)
+        fairwayNode.addChildNode(node)
+
+        // Decorative grass lip overhanging the island edge (no physics body).
+        let lip = SCNBox(width: 17.7, height: 0.26, length: 39.7, chamferRadius: 0.15)
+        lip.materials = [pbr(UIColor(red: 0.26, green: 0.6, blue: 0.34, alpha: 1), roughness: 0.9)]
+        let lipNode = SCNNode(geometry: lip)
+        lipNode.position = SCNVector3(0, -0.12, -1)
+        sceneryGroupNode.addChildNode(lipNode)
     }
 
-    // MARK: - 1b. Elevated green + hole
+    // MARK: - 1b. Green + hole (flush with the slab — no physics step)
 
     private func buildGreen() {
-        // Ramp up from the fairway to the raised green.
-        let ramp = SCNBox(width: 5.5, height: 0.6, length: 4.5, chamferRadius: 0.1)
-        ramp.materials = [pbr(TikiTex.grass(), roughness: 0.95)]
-        let rampNode = SCNNode(geometry: ramp)
-        rampNode.position = SCNVector3(holeCenter.x, 0.35, holeCenter.z + 4.6)
-        rampNode.eulerAngles = SCNVector3(-0.2, 0, 0)
-        rampNode.physicsBody = staticBody(category: Category.fairway, friction: 0.95, restitution: 0.2)
-        fairwayNode.addChildNode(rampNode)
-
-        // Raised oval green slab (top surface ≈ y 0.8).
-        let green = SCNCylinder(radius: 4.0, height: 1.6)
+        // Felt disc that sits ON the single slab as a decal. No separate physics
+        // body, so there's no lip/seam for the ball to clip on near the cup.
+        let green = SCNCylinder(radius: 4.0, height: 0.08)
         green.materials = [pbr(TikiTex.greenFelt(), roughness: 0.85)]
         let greenNode = SCNNode(geometry: green)
-        greenNode.position = SCNVector3(holeCenter.x, 0.0, holeCenter.z)
-        greenNode.physicsBody = staticBody(category: Category.fairway, friction: 0.92, restitution: 0.15)
-        fairwayNode.addChildNode(greenNode)
+        greenNode.position = SCNVector3(holeCenter.x, 0.05, holeCenter.z)
+        sceneryGroupNode.addChildNode(greenNode)
 
-        buildHole(at: SCNVector3(holeCenter.x, 0.8, holeCenter.z))
+        buildHole(at: SCNVector3(holeCenter.x, 0.0, holeCenter.z))
     }
 
     private func buildHole(at center: SCNVector3) {
@@ -262,15 +257,13 @@ final class TikiJungleCourse {
     private func buildBunker() {
         let center = SCNVector3(2.0, 0, 4.0) // lower-central loop
         let radius: Float = 2.4
-        let disc = SCNCylinder(radius: CGFloat(radius), height: 0.14)
+        let disc = SCNCylinder(radius: CGFloat(radius), height: 0.05)
         disc.materials = [pbr(TikiTex.sand(), roughness: 1.0, tile: (2, 2))]
         let node = SCNNode(geometry: disc)
-        node.position = SCNVector3(center.x, 0.02, center.z)
-        // High friction here, but the real slow-down comes from the game loop
-        // spiking the ball's linear damping while isOverSand(...) is true.
-        let body = staticBody(category: Category.sand, friction: 1.0, restitution: 0.0)
-        body.contactTestBitMask = Category.ball
-        node.physicsBody = body
+        node.position = SCNVector3(center.x, 0.04, center.z)
+        // Pure decal — NO physics body (a raised bunker body was a collision seam).
+        // The slow-down is the game loop spiking the ball's linear damping while
+        // isOverSand(...) is true, so the ball just rolls flat over the slab.
         bunkerNode.addChildNode(node)
         sandTraps.append((center: SCNVector3(center.x, 0, center.z), radius: radius))
     }
@@ -286,16 +279,16 @@ final class TikiJungleCourse {
         waterMat.transparency = 0.9
         pool.materials = [waterMat]
         let poolNode = SCNNode(geometry: pool)
-        // Sits just below the fairway surface — no collision body, so a ball that
-        // reaches it sinks; the loop's isOverWater check fires the OOB reset.
-        poolNode.position = SCNVector3(center.x, -0.18, center.z)
+        // Decal resting ON the slab (no collision body). A ball that rolls over
+        // it is caught by the loop's isOverWater check, which fires the OOB reset.
+        poolNode.position = SCNVector3(center.x, 0.05, center.z)
         poolNode.runAction(.repeatForever(.sequence([
-            .moveBy(x: 0, y: 0.04, z: 0, duration: 1.6),
-            .moveBy(x: 0, y: -0.04, z: 0, duration: 1.6),
+            .moveBy(x: 0, y: 0.03, z: 0, duration: 1.6),
+            .moveBy(x: 0, y: -0.03, z: 0, duration: 1.6),
         ])))
         waterHazardNode.addChildNode(poolNode)
 
-        addHippo(at: SCNVector3(center.x, 0.05, center.z))
+        addHippo(at: SCNVector3(center.x, 0.25, center.z))
         waterHazards.append((center: SCNVector3(center.x, 0, center.z), radius: radius))
     }
 
