@@ -21,7 +21,11 @@ struct GolfBoardView: View {
     @EnvironmentObject var client: GameClient
     @ObservedObject private var loc = Localization.shared
     @State private var controller: GolfSceneController?
+    /// Which map the current controller was built for — rebuild when it changes.
+    @State private var builtMap: String?
     @State private var finished: [PlayerState] = []
+
+    private var golf: GolfState? { client.room?.golf }
 
     var body: some View {
         ZStack {
@@ -36,7 +40,8 @@ struct GolfBoardView: View {
             }
             hud
         }
-        .onAppear { setup() }
+        .onAppear { rebuildIfNeeded() }
+        .onChange(of: golf?.map) { _, _ in rebuildIfNeeded() } // Round 1 → Round 2 swaps the map
         .onDisappear {
             client.onAim = nil
             client.onAimClear = nil
@@ -47,42 +52,61 @@ struct GolfBoardView: View {
     private var hud: some View {
         VStack {
             HStack(alignment: .top) {
-                Text(loc.tr("⛳️ GUERILLA GOLF"))
-                    .font(Theme.title(30))
-                    .foregroundStyle(.white)
-                    .neonGlow(Theme.cyan, radius: 10)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc.tr(golf?.map == "tiki" ? "🌴 TIKI JUNGLE" : "⛳️ GUERILLA GOLF"))
+                        .font(Theme.title(30))
+                        .foregroundStyle(.white)
+                        .neonGlow(Theme.cyan, radius: 10)
+                    Text(loc.tr("ROUND %@/2", "\(golf?.round ?? 1)"))
+                        .font(Theme.body(15))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
-                    if let golf = client.room?.golf {
+                    if let golf {
                         CountdownLabel(endsAt: golf.endsAtDate, font: Theme.title(42))
                     }
-                    Text(loc.tr("1st 500 · 2nd 300 · 3rd 200"))
+                    Text(loc.tr("FEWEST STROKES WINS"))
                         .font(Theme.body(15))
-                        .foregroundStyle(Theme.yellow.opacity(0.8))
+                        .foregroundStyle(Theme.yellow.opacity(0.85))
                 }
             }
             .padding(.horizontal, 30)
             .padding(.top, 16)
 
             turnBanner
-
-            HStack(spacing: 12) {
-                ForEach(Array(finished.enumerated()), id: \.element.id) { index, player in
-                    HStack(spacing: 6) {
-                        Text(index < 3 ? ["🥇", "🥈", "🥉"][index] : "🏁")
-                        Text("\(player.avatar) \(player.name)")
-                            .font(Theme.body(16))
-                            .foregroundStyle(.white)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Theme.panel.opacity(0.9)))
-                    .transition(.scale.combined(with: .opacity))
-                }
-            }
-            .animation(.spring(response: 0.4, dampingFraction: 0.6), value: finished)
+            strokeLeaderboard
 
             Spacer()
+        }
+    }
+
+    /// Live standings: every player by fewest strokes (lowest = leading).
+    @ViewBuilder
+    private var strokeLeaderboard: some View {
+        if let golf, let room = client.room {
+            let ranked = room.players.sorted {
+                (golf.strokes[$0.id] ?? 0) < (golf.strokes[$1.id] ?? 0)
+            }
+            HStack(spacing: 10) {
+                ForEach(Array(ranked.enumerated()), id: \.element.id) { index, player in
+                    HStack(spacing: 5) {
+                        Text(index == 0 ? "🏆" : "\(index + 1)")
+                        Text(player.avatar)
+                        Text("\(golf.strokes[player.id] ?? 0)")
+                            .font(Theme.body(16))
+                            .foregroundStyle(Theme.yellow)
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Theme.panel.opacity(0.9)))
+                }
+            }
+            .font(Theme.body(15))
+            .foregroundStyle(.white)
+            .padding(.top, 6)
+            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: golf.strokes)
         }
     }
 
@@ -107,8 +131,18 @@ struct GolfBoardView: View {
         }
     }
 
-    private func setup() {
-        guard controller == nil, let room = client.room, let golf = room.golf else { return }
+    /// Build the scene for the current golf map. Rebuilds from scratch when the
+    /// map changes (Round 1 Guerilla → Round 2 Tiki) so Round 2 spawns cleanly.
+    private func rebuildIfNeeded() {
+        guard let room = client.room, let golf = room.golf else { return }
+        if controller != nil, builtMap == golf.map { return } // already built for this map
+
+        // Tear down the previous round's controller/input routing.
+        client.onAim = nil
+        client.onAimClear = nil
+        client.onFire = nil
+        finished = []
+
         let infos = room.players.map { player in
             GolfPlayerInfo(
                 id: player.id,
@@ -124,6 +158,7 @@ struct GolfBoardView: View {
             // The HDR stack is the prime suspect for the AirPlay crash, so it
             // stays off whenever the board is on the external display.
             useHDR: !client.boardDisplayConnected,
+            map: golf.map,
             onSank: { playerId in
                 if let p = room.player(playerId) {
                     finished.append(p)
@@ -146,6 +181,7 @@ struct GolfBoardView: View {
             sceneController?.fire(playerId: id, angle: angle, power: power)
         }
         controller = sceneController
+        builtMap = golf.map
         sceneController.begin()
     }
 }
@@ -368,6 +404,10 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private let players: [GolfPlayerInfo]
     private let endsAt: Date
     private let useHDR: Bool
+    /// "guerilla" (Round 1) or "tiki" (Round 2) — which course to build.
+    private let courseMap: String
+    /// Backing course for the Tiki map; provides tee, hole, and hazard regions.
+    private var tikiCourse: TikiJungleCourse?
     private let onSank: (String) -> Void
     private let onProgress: (String?, [String]) -> Void
     private let onFinished: ([String]) -> Void
@@ -387,7 +427,9 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private var settleMaxTime: TimeInterval = 0
 
     private let shotClock: TimeInterval = 14
-    private let holeCenter = SCNVector3(2.6, 0, -13)
+    /// Cup location. Set per map in buildWorld (Guerilla default below; Tiki uses
+    /// its own course hole).
+    private var holeCenter = SCNVector3(2.6, 0, -13)
 
     /// Below this Y a ball has fallen off the platform — the ONLY condition that
     /// resets a ball to the tee. A ball resting safely on the fairway (y≈0.4) is
@@ -424,6 +466,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         players: [GolfPlayerInfo],
         endsAt: Date,
         useHDR: Bool,
+        map: String = "guerilla",
         onSank: @escaping (String) -> Void,
         onProgress: @escaping (String?, [String]) -> Void,
         onFinished: @escaping ([String]) -> Void
@@ -431,6 +474,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         self.players = players
         self.endsAt = endsAt
         self.useHDR = useHDR
+        self.courseMap = map
         self.onSank = onSank
         self.onProgress = onProgress
         self.onFinished = onFinished
@@ -486,6 +530,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     // MARK: world building
 
     private func buildWorld() {
+        if courseMap == "tiki" { buildTikiWorld(); return } // Round 2 course
         let skyImage = Tex.sky()
         scene.background.contents = skyImage
         scene.lightingEnvironment.contents = skyImage
@@ -669,6 +714,43 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         buildScenery()
     }
 
+    /// Round 2: assemble the Tiki Jungle Adventure course and frame the camera.
+    /// The course module owns its own geometry, lights, hole, and hazards.
+    private func buildTikiWorld() {
+        let course = TikiJungleCourse()
+        tikiCourse = course
+        holeCenter = course.holeCenter
+
+        scene.background.contents = UIColor(red: 0.55, green: 0.83, blue: 0.6, alpha: 1)
+        scene.physicsWorld.gravity = SCNVector3(0, -9.8, 0)
+        scene.physicsWorld.contactDelegate = self
+        scene.fogColor = UIColor(red: 0.5, green: 0.72, blue: 0.55, alpha: 1)
+        scene.fogStartDistance = 70
+        scene.fogEndDistance = 150
+
+        let camera = SCNCamera()
+        camera.fieldOfView = 50
+        camera.zFar = 320
+        #if !targetEnvironment(simulator)
+        if useHDR {
+            camera.wantsHDR = true
+            camera.bloomIntensity = 0.6
+            camera.bloomThreshold = 0.6
+        }
+        #endif
+        cameraNode.camera = camera
+        cameraNode.position = SCNVector3(0, 30, 30)
+        let lookTarget = SCNNode()
+        lookTarget.position = SCNVector3(0, 0, -2)
+        scene.rootNode.addChildNode(lookTarget)
+        let look = SCNLookAtConstraint(target: lookTarget)
+        look.isGimbalLockEnabled = true
+        cameraNode.constraints = [look]
+        scene.rootNode.addChildNode(cameraNode)
+
+        scene.rootNode.addChildNode(course.root)
+    }
+
     private func buildHole() {
         let cup = SCNNode(geometry: SCNCylinder(radius: 0.62, height: 0.08))
         cup.geometry?.materials = [pbr(UIColor(white: 0.02, alpha: 1), roughness: 1)]
@@ -825,7 +907,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private func spawnBalls() {
         let count = players.count
         for (index, info) in players.enumerated() {
-            let tee = SCNVector3(Float(index) * 1.1 - Float(count - 1) * 0.55, 0.8, 15)
+            // Spread the field across the active map's tee, so Round 2 spawns
+            // cleanly at the Tiki tee instead of the Guerilla pad.
+            let teeBase = tikiCourse?.teePosition ?? SCNVector3(0, 0.8, 15)
+            let tee = SCNVector3(teeBase.x + Float(index) * 1.1 - Float(count - 1) * 0.55,
+                                 teeBase.y, teeBase.z)
             let color = UIColor(Color(hex: info.colorHex))
 
             let sphere = SCNSphere(radius: 0.42)
@@ -1081,6 +1167,12 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             ball.tag.position = SCNVector3(p.x, p.y + ball.tagHeight, p.z)
             ball.trail.birthRate = speed > 2.5 ? 110 : 0
 
+            // Tiki hazards. Sand drastically increases linear damping while the
+            // ball is inside the bunker; restore the default once it rolls out.
+            if let tiki = tikiCourse {
+                ball.node.physicsBody?.damping = tiki.isOverSand(p) ? 0.85 : 0.16
+            }
+
             let horizontalDist = sqrt(pow(p.x - holeCenter.x, 2) + pow(p.z - holeCenter.z, 2))
             if horizontalDist < 0.7, p.y < 1.4, speed < 5.5 {
                 ball.sunk = true
@@ -1102,9 +1194,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
                 continue
             }
 
-            // The ONLY reset-to-tee path: the ball has dropped off the platform.
-            // A ball resting safely on the fairway never enters this branch. (Req 1)
-            if p.y < outOfBoundsY, !ball.respawning {
+            // Reset-to-tee paths: the ball dropped off the platform, OR (Tiki) it
+            // landed in the hippo water pool. A ball resting safely on the fairway
+            // never enters this branch.
+            let inWater = tikiCourse?.isOverWater(p) ?? false
+            if (p.y < outOfBoundsY || inWater), !ball.respawning {
                 ball.respawning = true
                 balls[id] = ball
                 ball.node.runAction(.sequence([

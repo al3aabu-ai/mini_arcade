@@ -50,6 +50,9 @@ struct GolfState: Codable, Equatable {
     let turnId: String?
     let sunk: [String]
     let results: GolfResults?
+    let round: Int
+    let map: String          // "guerilla" (Round 1) | "tiki" (Round 2)
+    let strokes: [String: Int] // cumulative strokes per player, lower = better
 
     var endsAtDate: Date { Date(timeIntervalSince1970: endsAt / 1000) }
 }

@@ -106,6 +106,9 @@ export interface GolfResults {
   awarded: Record<string, number>;
 }
 
+/** Which course is being played this golf round. */
+export type GolfMap = "guerilla" | "tiki";
+
 export interface GolfState {
   /** epoch ms deadline; the board shows the countdown from this */
   endsAt: number;
@@ -116,6 +119,12 @@ export interface GolfState {
   /** players already in the cup, in sink order */
   sunk: string[];
   results: GolfResults | null;
+  /** 1 = Guerilla Golf (Round 1), 2 = Tiki Jungle Adventure (Round 2) */
+  round: number;
+  /** course the board should build this round */
+  map: GolfMap;
+  /** cumulative strokes per player across all golf rounds so far (lower = better) */
+  strokes: Record<string, number>;
 }
 
 export type BombStage = "ticking" | "exploded" | "done";

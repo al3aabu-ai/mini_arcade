@@ -166,8 +166,9 @@ async function main() {
   ok(reveal.auction!.targetId === bob.playerId, "Bob is the anvil target");
   ok(reveal.players.find((p) => p.id === bob.playerId)?.debuff === "anvil", "Bob carries the anvil debuff");
 
-  console.log("\n— guerilla golf (turn-based) —");
+  console.log("\n— golf round 1 (Guerilla, turn-based) —");
   await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "golf", "golf phase")));
+  ok(host.state!.golf!.round === 1 && host.state!.golf!.map === "guerilla", "Round 1 is on the Guerilla map");
   ok(host.state!.golf!.debuffs[bob.playerId] === "anvil", "board is told about Bob's anvil");
 
   // The host board owns the rotation: it makes it Alice's turn.
@@ -175,7 +176,7 @@ async function main() {
   await bob.waitForState((s) => s.golf?.turnId === alice.playerId, "phones learn it's Alice's turn");
   ok(true, "turnId propagates to every phone");
 
-  // Bob mashes fire off-turn — the server must NOT relay it to the board.
+  // Bob mashes fire off-turn — the server must NOT relay it, NOR count a stroke.
   bob.send({ t: "fire", angle: 1.2, power: 0.9 });
   await new Promise((r) => setTimeout(r, 250));
   ok(
@@ -186,26 +187,59 @@ async function main() {
   alice.send({ t: "aim", angle: 0.9, power: 0.5 });
   const aimRelay = await host.waitForMsg((m) => m.t === "aim" && m.playerId === alice.playerId, "aim relay");
   ok(Math.abs(aimRelay.power - 0.5) < 1e-9, "host board receives Alice's aim relay");
+
+  // Each player takes one stroke on their turn; the server counts strokes.
   alice.send({ t: "fire", angle: 0.9, power: 1.0 });
-  await host.waitForMsg((m) => m.t === "fire" && m.playerId === alice.playerId, "fire relay");
-  ok(true, "host board receives Alice's fire relay");
+  const aliceStroke = await alice.waitForState((s) => (s.golf?.strokes?.[alice.playerId] ?? 0) === 1, "Alice's stroke counted");
+  ok(aliceStroke.golf!.strokes[alice.playerId] === 1, "server counts Alice's stroke");
+  ok(aliceStroke.golf!.strokes[bob.playerId] === 0, "off-turn fire never counted as a stroke");
 
-  // Alice sinks; the board reports progress, then the final order.
-  host.send({ t: "golf_progress", turnId: bob.playerId, sunk: [alice.playerId] });
-  await cara.waitForState(
-    (s) => s.golf?.sunk.includes(alice.playerId) === true && s.golf?.turnId === bob.playerId,
-    "sunk list + next turn propagate",
-  );
-  ok(true, "sunk list + next turn propagate");
+  host.send({ t: "golf_progress", turnId: host.playerId, sunk: [alice.playerId] });
+  await host.waitForState((s) => s.golf?.turnId === host.playerId, "host's turn");
+  host.send({ t: "fire", angle: 0.5, power: 0.8 });
+  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 1, "host's stroke counted");
 
-  // The host board's physics decides the finish order and reports it.
+  host.send({ t: "golf_progress", turnId: bob.playerId, sunk: [alice.playerId, host.playerId] });
+  await bob.waitForState((s) => s.golf?.turnId === bob.playerId, "bob's turn");
+  bob.send({ t: "fire", angle: 0.5, power: 0.8 });
+  await host.waitForState((s) => s.golf!.strokes[bob.playerId] === 1, "bob's stroke counted");
+
+  // Board reports the Round 1 sink order; server advances to ROUND 2 (Tiki).
   host.send({ t: "golf_finished", order: [alice.playerId, host.playerId, bob.playerId] });
+  const round2 = await cara.waitForState((s) => s.phase === "golf" && s.golf?.round === 2, "Round 1 → Round 2");
+  ok(round2.golf!.map === "tiki", "Round 2 loads the Tiki Jungle map");
+  ok(round2.golf!.strokes[alice.playerId] === 1, "Alice's strokes carry into Round 2");
+  ok(round2.golf!.results === null && round2.golf!.sunk.length === 0, "Round 2 starts on a clean board");
+
+  console.log("\n— golf round 2 (Tiki Jungle, lowest-stroke standings) —");
+  // Alice 1 stroke, Bob 1 stroke, Host 2 strokes → totals: Alice 2, Bob 2, Host 3.
+  host.send({ t: "golf_progress", turnId: alice.playerId, sunk: [] });
+  await alice.waitForState((s) => s.golf?.turnId === alice.playerId, "round 2 Alice turn");
+  alice.send({ t: "fire", angle: 1, power: 1 });
+  await alice.waitForState((s) => s.golf!.strokes[alice.playerId] === 2, "Alice total strokes = 2");
+
+  host.send({ t: "golf_progress", turnId: host.playerId, sunk: [alice.playerId] });
+  await host.waitForState((s) => s.golf?.turnId === host.playerId, "round 2 host turn");
+  host.send({ t: "fire", angle: 0.5, power: 0.7 });
+  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 2, "host stroke 1 of round 2");
+  host.send({ t: "fire", angle: 0.5, power: 0.7 });
+  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 3, "host stroke 2 of round 2");
+
+  host.send({ t: "golf_progress", turnId: bob.playerId, sunk: [alice.playerId, host.playerId] });
+  await bob.waitForState((s) => s.golf?.turnId === bob.playerId, "round 2 bob turn");
+  bob.send({ t: "fire", angle: 0.5, power: 0.7 });
+  await host.waitForState((s) => s.golf!.strokes[bob.playerId] === 2, "bob total strokes = 2");
+
+  // Round 2 sink order is Alice, Bob, Host — but ranking is by fewest TOTAL strokes.
+  host.send({ t: "golf_finished", order: [alice.playerId, bob.playerId, host.playerId] });
   const golfDone = await cara.waitForState((s) => !!s.golf?.results, "golf results");
-  ok(golfDone.golf!.results!.awarded[alice.playerId] === 500, "1st place bounty is 500");
-  ok(alice.score(golfDone, alice.playerId) === 1250, "Alice: 750 + 500 = 1250");
-  ok(alice.score(golfDone, host.playerId) === 1300, "Host: 1000 + 300 = 1300");
-  ok(alice.score(golfDone, bob.playerId) === 1200, "Bob: 1000 + 200 = 1200");
-  ok(golfDone.players.find((p) => p.id === bob.playerId)?.debuff === null, "anvil consumed after golf");
+  ok(golfDone.golf!.results!.order[0] === alice.playerId, "fewest strokes (Alice, 2) ranks first");
+  ok(golfDone.golf!.results!.order[1] === bob.playerId, "Bob (2, sank later) ranks second on the tie-break");
+  ok(golfDone.golf!.results!.order[2] === host.playerId, "Host (3) ranks third");
+  ok(golfDone.golf!.results!.awarded[alice.playerId] === 500, "stroke leader takes 500");
+  ok(golfDone.golf!.results!.awarded[bob.playerId] === 300, "2nd-fewest takes 300");
+  ok(golfDone.golf!.results!.awarded[host.playerId] === 200, "3rd takes 200");
+  ok(golfDone.players.find((p) => p.id === bob.playerId)?.debuff === null, "anvil consumed after the golf segment");
 
   console.log("\n— auction round 2 (butter fingers) —");
   await Promise.all(

@@ -169,6 +169,7 @@
       if (p) this.send(p, { t: "error", message });
     }
     snapshot() {
+      var _a, _b;
       this.rev += 1;
       const players = this.players.map((p) => ({
         id: p.id,
@@ -195,12 +196,19 @@
       }
       let golf = null;
       if (this.phase === "golf" && this.golf) {
+        const strokes = {};
+        for (const p of this.players) {
+          strokes[p.id] = ((_a = this.golf.priorStrokes[p.id]) != null ? _a : 0) + ((_b = this.golf.roundStrokes[p.id]) != null ? _b : 0);
+        }
         golf = {
           endsAt: this.golf.endsAt,
           debuffs: this.golf.debuffs,
           turnId: this.golf.turnId,
           sunk: this.golf.sunk,
-          results: this.golf.results
+          results: this.golf.results,
+          round: this.golf.round,
+          map: this.golf.map,
+          strokes
         };
       }
       let bomb = null;
@@ -353,23 +361,37 @@
     }
     afterAuction() {
       if (!this.auction) return;
-      if (this.auction.round === 1) this.startGolf();
+      if (this.auction.round === 1) this.startGolf(1);
       else this.startBomb();
     }
     // ------------------------------ golf -------------------------------------
-    startGolf() {
+    /**
+     * Golf is played over two rounds: Round 1 on Guerilla Golf, Round 2 on the
+     * Tiki Jungle Adventure map. `priorStrokes` carries each player's running
+     * stroke total into the next round so the leaderboard is cumulative.
+     */
+    startGolf(round, priorStrokes = {}) {
+      var _a;
       this.newGen();
       this.phase = "golf";
       const debuffs = {};
+      const prior = {};
+      const round0 = {};
       for (const p of this.players) {
         if (p.debuff === "anvil") debuffs[p.id] = "anvil";
+        prior[p.id] = (_a = priorStrokes[p.id]) != null ? _a : 0;
+        round0[p.id] = 0;
       }
       this.golf = {
         endsAt: Date.now() + CONST.GOLF_TIME_LIMIT_MS,
         debuffs,
         turnId: null,
         sunk: [],
-        results: null
+        results: null,
+        round,
+        map: round >= 2 ? "tiki" : "guerilla",
+        priorStrokes: prior,
+        roundStrokes: round0
       };
       this.after(CONST.GOLF_TIME_LIMIT_MS + 5e3, () => this.finishGolf([]));
       this.broadcast();
@@ -389,7 +411,13 @@
       this.sendToHost({ t: "aim_clear", playerId });
     }
     relayFire(playerId, angle, power) {
+      var _a;
       if (this.phase !== "golf" || !this.isOnTurn(playerId)) return;
+      let strokeCounted = false;
+      if (this.golf && this.golf.turnId === playerId) {
+        this.golf.roundStrokes[playerId] = ((_a = this.golf.roundStrokes[playerId]) != null ? _a : 0) + 1;
+        strokeCounted = true;
+      }
       this.touch();
       this.sendToHost({
         t: "fire",
@@ -397,6 +425,7 @@
         angle,
         power: Math.max(0, Math.min(1, power))
       });
+      if (strokeCounted) this.broadcast();
     }
     /** Host board reports whose turn it is and who has sunk so far. */
     golfProgress(reporterId, turnId, sunk) {
@@ -414,21 +443,38 @@
       this.finishGolf(order);
     }
     finishGolf(order) {
+      var _a, _b;
       if (this.phase !== "golf" || !this.golf || this.golf.results) return;
-      const validOrder = order.filter((id) => this.players.some((p) => p.id === id));
+      const golf = this.golf;
+      const sinkers = order.filter((id) => this.players.some((p) => p.id === id));
+      const totals = {};
+      for (const p of this.players) {
+        totals[p.id] = ((_a = golf.priorStrokes[p.id]) != null ? _a : 0) + ((_b = golf.roundStrokes[p.id]) != null ? _b : 0);
+      }
+      const ranking = [...sinkers].sort((a, b) => {
+        const sa = totals[a], sb = totals[b];
+        if (sa !== sb) return sa - sb;
+        return sinkers.indexOf(a) - sinkers.indexOf(b);
+      });
       const awarded = {};
       for (const p of this.players) awarded[p.id] = 0;
-      validOrder.forEach((id, i) => {
-        var _a;
-        const points = (_a = CONST.GOLF_BOUNTIES[i]) != null ? _a : CONST.GOLF_FINISH_POINTS;
-        awarded[id] = points;
-        const p = this.players.find((x) => x.id === id);
-        if (p) p.score += points;
-      });
-      for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
-      this.golf.results = { order: validOrder, awarded };
-      this.newGen();
-      this.after(CONST.GOLF_RESULTS_MS, () => this.startAuction(2));
+      if (golf.round < 2) {
+        golf.results = { order: ranking, awarded };
+        this.newGen();
+        this.after(CONST.GOLF_RESULTS_MS, () => this.startGolf(golf.round + 1, totals));
+      } else {
+        ranking.forEach((id, i) => {
+          var _a2;
+          const points = (_a2 = CONST.GOLF_BOUNTIES[i]) != null ? _a2 : CONST.GOLF_FINISH_POINTS;
+          awarded[id] = points;
+          const p = this.players.find((x) => x.id === id);
+          if (p) p.score += points;
+        });
+        for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
+        golf.results = { order: ranking, awarded };
+        this.newGen();
+        this.after(CONST.GOLF_RESULTS_MS, () => this.startAuction(2));
+      }
       this.touch();
       this.broadcast();
     }

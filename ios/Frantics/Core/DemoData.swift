@@ -44,7 +44,8 @@ enum DemoData {
             phase: "golf",
             golf: GolfState(
                 endsAt: Date().addingTimeInterval(140).timeIntervalSince1970 * 1000,
-                debuffs: ["p3": "anvil"], turnId: "p2", sunk: [], results: nil
+                debuffs: ["p3": "anvil"], turnId: "p2", sunk: [], results: nil,
+                round: 1, map: "guerilla", strokes: ["p1": 2, "p2": 1, "p3": 3, "p4": 0]
             )
         )
     }

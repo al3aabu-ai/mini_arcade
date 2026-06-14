@@ -6,6 +6,7 @@ import {
   type AuctionState,
   type BombState,
   type Debuff,
+  type GolfMap,
   type GolfState,
   type Phase,
   type PlayerState,
@@ -47,6 +48,12 @@ interface GolfInternal {
   turnId: string | null;
   sunk: string[];
   results: { order: string[]; awarded: Record<string, number> } | null;
+  round: number;
+  map: GolfMap;
+  /** strokes banked from completed rounds (carried into later rounds) */
+  priorStrokes: Record<string, number>;
+  /** strokes taken this round, counted server-side from on-turn fires */
+  roundStrokes: Record<string, number>;
 }
 
 interface BombInternal {
@@ -204,12 +211,19 @@ export class Room {
     }
     let golf: GolfState | null = null;
     if (this.phase === "golf" && this.golf) {
+      const strokes: Record<string, number> = {};
+      for (const p of this.players) {
+        strokes[p.id] = (this.golf.priorStrokes[p.id] ?? 0) + (this.golf.roundStrokes[p.id] ?? 0);
+      }
       golf = {
         endsAt: this.golf.endsAt,
         debuffs: this.golf.debuffs,
         turnId: this.golf.turnId,
         sunk: this.golf.sunk,
         results: this.golf.results,
+        round: this.golf.round,
+        map: this.golf.map,
+        strokes,
       };
     }
     let bomb: BombState | null = null;
@@ -372,18 +386,27 @@ export class Room {
 
   private afterAuction() {
     if (!this.auction) return;
-    if (this.auction.round === 1) this.startGolf();
+    if (this.auction.round === 1) this.startGolf(1);
     else this.startBomb();
   }
 
   // ------------------------------ golf -------------------------------------
 
-  private startGolf() {
+  /**
+   * Golf is played over two rounds: Round 1 on Guerilla Golf, Round 2 on the
+   * Tiki Jungle Adventure map. `priorStrokes` carries each player's running
+   * stroke total into the next round so the leaderboard is cumulative.
+   */
+  private startGolf(round: number, priorStrokes: Record<string, number> = {}) {
     this.newGen();
     this.phase = "golf";
     const debuffs: Record<string, Debuff> = {};
+    const prior: Record<string, number> = {};
+    const round0: Record<string, number> = {};
     for (const p of this.players) {
       if (p.debuff === "anvil") debuffs[p.id] = "anvil";
+      prior[p.id] = priorStrokes[p.id] ?? 0;
+      round0[p.id] = 0;
     }
     this.golf = {
       endsAt: Date.now() + CONST.GOLF_TIME_LIMIT_MS,
@@ -391,6 +414,10 @@ export class Room {
       turnId: null,
       sunk: [],
       results: null,
+      round,
+      map: round >= 2 ? "tiki" : "guerilla",
+      priorStrokes: prior,
+      roundStrokes: round0,
     };
     // Backstop: if the host board never reports (e.g. host died), finish with no finishers.
     this.after(CONST.GOLF_TIME_LIMIT_MS + 5000, () => this.finishGolf([]));
@@ -415,6 +442,13 @@ export class Room {
 
   relayFire(playerId: string, angle: number, power: number) {
     if (this.phase !== "golf" || !this.isOnTurn(playerId)) return;
+    // Count a stroke for the active shooter. Strict turnId match avoids the
+    // settling window (turnId === null), where isOnTurn() is permissive.
+    let strokeCounted = false;
+    if (this.golf && this.golf.turnId === playerId) {
+      this.golf.roundStrokes[playerId] = (this.golf.roundStrokes[playerId] ?? 0) + 1;
+      strokeCounted = true;
+    }
     this.touch();
     this.sendToHost({
       t: "fire",
@@ -422,6 +456,8 @@ export class Room {
       angle,
       power: Math.max(0, Math.min(1, power)),
     });
+    // Push the updated stroke leaderboard to every client (fire is infrequent).
+    if (strokeCounted) this.broadcast();
   }
 
   /** Host board reports whose turn it is and who has sunk so far. */
@@ -444,20 +480,44 @@ export class Room {
 
   private finishGolf(order: string[]) {
     if (this.phase !== "golf" || !this.golf || this.golf.results) return;
-    const validOrder = order.filter((id) => this.players.some((p) => p.id === id));
+    const golf = this.golf;
+    const sinkers = order.filter((id) => this.players.some((p) => p.id === id));
+
+    // Cumulative strokes across rounds so far (this round folded in).
+    const totals: Record<string, number> = {};
+    for (const p of this.players) {
+      totals[p.id] = (golf.priorStrokes[p.id] ?? 0) + (golf.roundStrokes[p.id] ?? 0);
+    }
+    // Standings = sinkers ranked by fewest total strokes; ties broken by who
+    // sank first. Players who never sank don't place (you can't win by not playing).
+    const ranking = [...sinkers].sort((a, b) => {
+      const sa = totals[a], sb = totals[b];
+      if (sa !== sb) return sa - sb;
+      return sinkers.indexOf(a) - sinkers.indexOf(b);
+    });
+
     const awarded: Record<string, number> = {};
     for (const p of this.players) awarded[p.id] = 0;
-    validOrder.forEach((id, i) => {
-      const points = CONST.GOLF_BOUNTIES[i] ?? CONST.GOLF_FINISH_POINTS;
-      awarded[id] = points;
-      const p = this.players.find((x) => x.id === id);
-      if (p) p.score += points;
-    });
-    // The anvil is consumed by this game.
-    for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
-    this.golf.results = { order: validOrder, awarded };
-    this.newGen();
-    this.after(CONST.GOLF_RESULTS_MS, () => this.startAuction(2));
+
+    if (golf.round < 2) {
+      // Round 1 of 2 — record standings, carry total strokes into Round 2 (Tiki).
+      golf.results = { order: ranking, awarded };
+      this.newGen();
+      this.after(CONST.GOLF_RESULTS_MS, () => this.startGolf(golf.round + 1, totals));
+    } else {
+      // Final golf round — award points strictly by lowest total strokes.
+      ranking.forEach((id, i) => {
+        const points = CONST.GOLF_BOUNTIES[i] ?? CONST.GOLF_FINISH_POINTS;
+        awarded[id] = points;
+        const p = this.players.find((x) => x.id === id);
+        if (p) p.score += points;
+      });
+      // The anvil is consumed once the golf segment ends.
+      for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
+      golf.results = { order: ranking, awarded };
+      this.newGen();
+      this.after(CONST.GOLF_RESULTS_MS, () => this.startAuction(2));
+    }
     this.touch();
     this.broadcast();
   }

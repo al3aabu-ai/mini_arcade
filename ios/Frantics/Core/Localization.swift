@@ -181,6 +181,9 @@ final class Localization: ObservableObject {
         // Golf board HUD
         "1st 500 · 2nd 300 · 3rd 200": "الأول 500 · الثاني 300 · الثالث 200",
         "%@'S SHOT": "دور %@",
+        "🌴 TIKI JUNGLE": "🌴 أدغال التيكي",
+        "ROUND %@/2": "الجولة %@/2",
+        "FEWEST STROKES WINS": "الأقل ضربات يفوز",
 
         // Tiki Jungle Adventure — Hole 5 (course identity)
         "Tiki Jungle Adventure": "مغامرة أدغال التيكي",
