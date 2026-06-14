@@ -14,6 +14,8 @@ setup below. The SceneKit version is untouched and preserved on the
 | `SandBunker.cs` | Trigger that spikes `Rigidbody.drag` while the ball is inside. |
 | `WaterHazard.cs` | Trigger that resets the ball to the spawn point on entry. |
 | `MalletSwing.cs` | Kinematic mallet swing loop (deflects the ball). |
+| `BallShooter.cs` | Pull-back slingshot: drag to aim (LineRenderer), release to launch an impulse. |
+| `GolfCameraController.cs` | Damped follow camera that trails the ball without cuts. |
 
 ## Quick start
 
@@ -21,11 +23,29 @@ setup below. The SceneKit version is untouched and preserved on the
 2. Copy `Assets/Scripts/` into the project's `Assets/`.
 3. **Add two layers** (Project Settings ▸ Tags and Layers): `Ball` and `Environment`.
 4. Create an empty GameObject in the scene, name it `TikiCourse`, add the
-   **`TikiJungleCourse`** component, press Play. The hole builds itself and a ball
-   drops onto the tee.
+   **`TikiJungleCourse`** component, press Play. The hole builds itself, a ball
+   drops onto the tee, the camera follows it, and you can shoot.
 
 That's it — everything else (colliders, Rigidbodies, physic materials, the ball,
-hazard triggers, lights) is created in code.
+the shooter, the follow camera, hazard triggers, lights) is created in code.
+
+## Gameplay — shooting & camera
+
+`TikiJungleCourse` now also attaches `BallShooter` to the ball and a
+`GolfCameraController` to the Main Camera, so the hole is playable on Play. If you
+prefer to wire them by hand:
+
+- **`BallShooter`** → on the **ball** (needs the `Rigidbody`). Drag back and release
+  to launch *opposite* the drag; power scales with drag length (as a fraction of
+  screen height, so it's resolution-independent). The aim `LineRenderer` stretches
+  and goes cyan→red with power. Mouse drives it in the Editor and a single touch on
+  device (Unity's mouse API reports touch). Tunables: `min/maxHorizontal`,
+  `min/maxLoft`, `fullPowerDragFraction`, `maxArrowLength`, `restSpeed` (you can
+  only shoot when the ball is stopped). `OnShoot(float power)` is exposed for
+  SFX / haptics / networking.
+- **`GolfCameraController`** → on the **Main Camera**. Set `target` to the ball
+  (the builder does this automatically); tune `offset`, `followSmoothTime`,
+  `lookSmoothTime`. It damps both position and look-target for cut-free framing.
 
 ## 4. Layers & the collision matrix (instead of bitmasks)
 

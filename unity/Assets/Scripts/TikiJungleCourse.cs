@@ -70,7 +70,10 @@ namespace Frantics.Golf
             BuildMonkey();
             BuildScenery();
             SpawnBall();
+            SetupCamera();
         }
+
+        GameObject spawnedBall;
 
         // ----------------------------------------------------------------- setup
 
@@ -397,6 +400,23 @@ namespace Frantics.Golf
             var gb = ball.AddComponent<GolfBall>();
             gb.spawnPoint = teeSpawn;
             gb.normalDrag = ballDrag;
+
+            ball.AddComponent<BallShooter>(); // pull-back shooting + aim line
+            spawnedBall = ball;
+        }
+
+        /// Ensure a Main Camera exists and smoothly follows the ball.
+        void SetupCamera()
+        {
+            var cam = Camera.main;
+            if (cam == null)
+            {
+                var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
+                cam = camGo.AddComponent<Camera>();
+            }
+            var follow = cam.GetComponent<GolfCameraController>()
+                         ?? cam.gameObject.AddComponent<GolfCameraController>();
+            if (spawnedBall != null) follow.target = spawnedBall.transform;
         }
 
         // ------------------------------------------------------------- helpers
