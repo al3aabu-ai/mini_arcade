@@ -8,7 +8,11 @@ struct PhoneRootView: View {
     var body: some View {
         #if DEBUG
         if let demo = ProcessInfo.processInfo.environment["FRANTICS_DEMO"] {
-            DemoContainerView(mode: demo)
+            if demo == "tiki" {
+                TikiJungleCoursePreview()   // FRANTICS_DEMO=tiki → inspect the new level
+            } else {
+                DemoContainerView(mode: demo)
+            }
         } else {
             content
         }

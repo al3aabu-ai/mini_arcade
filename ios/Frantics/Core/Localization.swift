@@ -182,6 +182,11 @@ final class Localization: ObservableObject {
         "1st 500 · 2nd 300 · 3rd 200": "الأول 500 · الثاني 300 · الثالث 200",
         "%@'S SHOT": "دور %@",
 
+        // Tiki Jungle Adventure — Hole 5 (course identity)
+        "Tiki Jungle Adventure": "مغامرة أدغال التيكي",
+        "Hole 5": "الحفرة 5",
+        "Par 4 · 75 ft": "بار 4 · 75 قدم",
+
         // Sabotage items (sent by the server as data, shown in the UI)
         "The Heavy Anvil": "السندان الثقيل",
         "Butter Fingers": "أصابع زلقة",
