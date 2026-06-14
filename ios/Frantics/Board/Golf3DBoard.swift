@@ -440,8 +440,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     /// Low Y + behind for a dramatic low-profile angle; the look offset aims up and
     /// down the fairway (ahead toward the −Z hole, a touch above the ball).
     private var lookTargetNode: SCNNode?
-    private var cameraFollowOffset = SCNVector3(0, 5, 15)
-    private var cameraLookOffset = SCNVector3(0, 6, -10)
+    private var cameraFollowOffset = SCNVector3(0, 3, 20)
+    private var cameraLookOffset = SCNVector3(0, 6, -16)
     private var sunkOrder: [String] = []
     private var done = false
     private var turnQueue: [String] = []
@@ -594,7 +594,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         cameraNode.constraints = [look]
         scene.rootNode.addChildNode(cameraNode)
         lookTargetNode = lookTarget
-        cameraFollowOffset = SCNVector3(0, 5, 14)
+        cameraFollowOffset = SCNVector3(0, 3, 18)
 
         // Warm key light + cool purple fill.
         let sun = SCNNode()
@@ -751,7 +751,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         holeCenter = course.holeCenter
         installCourseEnvironment(background: UIColor(red: 0.55, green: 0.83, blue: 0.6, alpha: 1),
                                  cameraPos: SCNVector3(0, 30, 30), lookAt: SCNVector3(0, 0, -2),
-                                 followOffset: SCNVector3(0, 5, 15))
+                                 followOffset: SCNVector3(0, 3, 19))
         scene.rootNode.addChildNode(course.root)
     }
 
@@ -764,13 +764,13 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         // the whole lane from the tee to the finish.
         installCourseEnvironment(background: UIColor(red: 0.20, green: 0.42, blue: 0.62, alpha: 1),
                                  cameraPos: SCNVector3(0, 40, 34), lookAt: SCNVector3(0, 0, -4),
-                                 followOffset: SCNVector3(0, 5, 16))
+                                 followOffset: SCNVector3(0, 3, 22))
         scene.rootNode.addChildNode(course.root)
     }
 
     /// Shared sky/gravity/contacts/camera setup for the Tiki course modules.
     private func installCourseEnvironment(background: UIColor, cameraPos: SCNVector3, lookAt: SCNVector3,
-                                          followOffset: SCNVector3 = SCNVector3(0, 5, 15)) {
+                                          followOffset: SCNVector3 = SCNVector3(0, 3, 20)) {
         scene.background.contents = background
         scene.physicsWorld.gravity = SCNVector3(0, -9.8, 0)
         scene.physicsWorld.contactDelegate = self
@@ -1225,7 +1225,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             }
 
             let horizontalDist = sqrt(pow(p.x - holeCenter.x, 2) + pow(p.z - holeCenter.z, 2))
-            if horizontalDist < 0.7, p.y < 1.4, speed < 5.5 {
+            if horizontalDist < 0.8, p.y < 1.4, speed < 5.5 {
                 ball.sunk = true
                 balls[id] = ball
                 sunkOrder.append(id)

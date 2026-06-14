@@ -47,7 +47,7 @@ Golf is a **three-round segment**, each round a different course, played turn-ba
 
 ### Camera follow — LOW, DRAMATIC, looking up the fairway
 - `GolfSceneController.updateFollowCamera()` (every frame) **smoothly lerps** the camera toward `activeBall + cameraFollowOffset` and the look-target toward `activeBall + cameraLookOffset` (factors 0.06 / 0.10) — a damped chase cam, no hard cuts.
-- **Spec:** the follow offset is **low to the ground and behind** (`y ≈ 5`, `z ≈ +14…16`); `cameraLookOffset ≈ (0, 6, −10)` aims **up and ahead down the fairway** (toward the −Z hole), giving a dramatic low-profile angle that frames the ball with the lane receding above it. Each course sets its own `cameraFollowOffset` in `build*World()`; `cameraLookOffset` is shared.
+- **Spec:** the follow offset is **low and pulled well back** (`y ≈ 3`, `z ≈ +18…22`); `cameraLookOffset ≈ (0, 6, −16)` aims **up and far ahead down the fairway** (toward the −Z hole), giving a dramatic low-profile angle with real depth that frames the ball with the lane receding above it (not a flat straight-down-the-axis view). Each course sets its own `cameraFollowOffset` in `build*World()`; `cameraLookOffset` is shared.
 
 ### No particle splash effects
 - The launch/roll **trail** and the **sink celebration** particles are removed (trail `birthRate` forced to 0; `celebrate()` deleted). Only the ball↔ball contact spark remains.
@@ -125,16 +125,22 @@ physically deflect the ball.
 Standalone inspection: run with env `FRANTICS_DEMO=runway` (or the `#Preview` in the file).
 Round 1 (`FRANTICS_DEMO` not needed — live) and Round 2 (`FRANTICS_DEMO=tiki`).
 
-### Hole construction — STEEP CONCAVE FUNNEL
-- The cup must **funnel**, not be a flat dark disc. Build a ring of angled facet
-  panels around the cup (`TikiRunwayCourse.buildFunnelHole`), oriented with
-  `node.look(at: outerRimPoint, ...)` so each panel slopes from a raised outer rim
-  down to the cup — balls near the edge dip and roll in, and the rim backstops
-  overshoots. (We can't recess below the seamless slab, so it's a raised "pot"
-  rim; rim height / radius are tunable constants.) Static bodies, `collisionBitMask = -1`.
+### Hole construction — REAL DOWNWARD FUNNEL (carved below grade)
+- The cup must be a concave funnel carved **DOWNWARD**, never a raised rim. A raised
+  "pot" ring reads as a **volcano** and bounces the ball away — do NOT do that.
+- The seamless slab is solid, so to carve below it: **the slab STOPS at the green's
+  near edge** (`TikiRunwayCourse.buildFairwayAndWater` shortens the slab to z ≈ −14.5),
+  and `buildFunnelHole` lays a ring of facet panels whose **outer rim is flush at
+  y = 0** (meeting the slab end and the side rails) and whose **inner edge dips below
+  grade** (`cupY ≈ −0.8`) to the cup. With no slab beneath, the facets ARE the floor,
+  so gravity rolls a nearby ball straight down into the hole. Each panel is oriented
+  with `node.look(at: outerRimPoint, ...)`; the rim is clamped to the lane rectangle
+  so it fills the full width with no gaps. Static bodies, `collisionBitMask = -1`.
+- The controller's sink radius is `horizontalDist < 0.8` (a touch generous so the
+  funnel reliably drops close balls).
 - **Secure boundaries:** every course must close ALL edges. Tiki Runway has bamboo
-  **end fences** (`addEndFence`) behind the tee (+Z) and behind the green (−Z) in
-  addition to the side rails, so nothing rolls off an open end into the water.
+  **end fences** (`addEndFence`) behind the tee (+Z) and behind the green (−Z, just
+  past the funnel's far rim) in addition to the side rails — nothing rolls off an end.
 
 ---
 

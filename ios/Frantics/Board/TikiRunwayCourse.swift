@@ -107,14 +107,16 @@ final class TikiRunwayCourse: GolfHazardCourse {
     // MARK: - 1. Seamless slab + side water
 
     private func buildFairwayAndWater() {
-        // One thick slab — the whole lane, top flush at y = 0, 3 units deep.
-        let slab = SCNBox(width: CGFloat(laneHalfWidth * 2 + 0.8), height: 3.0, length: 48, chamferRadius: 0.25)
-        let top = pbr(RunwayTex.grass(), roughness: 0.95, tile: (2, 12))
+        // One thick slab — the lane, top flush at y = 0, 3 units deep. It STOPS at
+        // z ≈ -14.5 (the green's near edge) so the funnel hole can be carved BELOW
+        // grade past it (no slab beneath the funnel to push the ball back up).
+        let slab = SCNBox(width: CGFloat(laneHalfWidth * 2 + 0.8), height: 3.0, length: 36.5, chamferRadius: 0.25)
+        let top = pbr(RunwayTex.grass(), roughness: 0.95, tile: (2, 9))
         let side = pbr(UIColor(red: 0.46, green: 0.33, blue: 0.20, alpha: 1), roughness: 0.95)
         let bottom = pbr(UIColor(red: 0.22, green: 0.15, blue: 0.10, alpha: 1))
         slab.materials = [side, side, side, side, top, bottom]
         let node = SCNNode(geometry: slab)
-        node.position = SCNVector3(0, -1.5, -2) // top at y = 0; spans z ≈ +22 … -26
+        node.position = SCNVector3(0, -1.5, 3.75) // top at y = 0; spans z ≈ +22 … -14.5
         node.physicsBody = staticBody(Category.fairway, friction: 0.95, restitution: 0.2)
         fairwayNode.addChildNode(node)
 
@@ -158,7 +160,7 @@ final class TikiRunwayCourse: GolfHazardCourse {
         // behind the green (−Z), so the boundary is fully closed (no rolling off
         // the ends into the water).
         addEndFence(z: 20)    // behind the start tee
-        addEndFence(z: -20.5) // behind the finish green
+        addEndFence(z: -21.5) // behind the finish green (just past the funnel's far rim)
     }
 
     /// A bamboo cross-fence running the lane's full width at one end.
@@ -297,12 +299,8 @@ final class TikiRunwayCourse: GolfHazardCourse {
     // MARK: - 3. Finish green + hole
 
     private func buildGreenAndHole() {
-        let green = SCNCylinder(radius: 3.2, height: 0.08)
-        green.materials = [pbr(UIColor(red: 0.42, green: 0.82, blue: 0.45, alpha: 1), roughness: 0.85)]
-        let g = SCNNode(geometry: green)
-        g.position = SCNVector3(holeCenter.x, 0.05, holeCenter.z)
-        sceneryNode.addChildNode(g)
-
+        // The funnel facets ARE the green surface (no flat disc — it would float
+        // over the carved funnel).
         buildFunnelHole(at: SCNVector3(holeCenter.x, 0, holeCenter.z))
 
         let pole = SCNNode(geometry: SCNCylinder(radius: 0.05, height: 2.6))
@@ -321,35 +319,43 @@ final class TikiRunwayCourse: GolfHazardCourse {
         sceneryNode.addChildNode(pennant)
     }
 
-    /// A steep concave funnel of angled facets ringing the cup, so balls near the
-    /// edge dip and roll down into the hole instead of skimming over a flat disc.
-    /// (We can't recess below the seamless slab, so it's a raised "pot" rim that
-    /// funnels inward — the outer rim also backstops overshooting balls.)
+    /// The green is a real concave funnel carved DOWNWARD: a ring of facet panels
+    /// whose outer rim is FLUSH at y = 0 (meeting the slab and the rails) and whose
+    /// inner edge dips below grade to the cup. Because the slab stops at the green's
+    /// near edge, there's nothing solid beneath the funnel — the facets ARE the
+    /// floor, so gravity rolls a nearby ball straight down into the hole. No raised
+    /// ridge anywhere (the previous "pot" rim is gone). The rim is clamped to the
+    /// lane rectangle so it fills the full width with no gaps.
     private func buildFunnelHole(at center: SCNVector3) {
-        let cupR: Float = 0.62, rimR: Float = 2.0
-        let cupY: Float = 0.05, rimY: Float = 0.42 // steep inner wall, tunable
-        let facets = 18
-        let feltMat = pbr(UIColor(red: 0.38, green: 0.78, blue: 0.42, alpha: 1), roughness: 0.85)
-        let slopeLen = CGFloat(sqrt(pow(rimR - cupR, 2) + pow(rimY - cupY, 2)))
-        let chord = CGFloat(2 * Float.pi * (cupR + rimR) / 2 / Float(facets) * 1.6)
+        let cupR: Float = 0.7
+        let cupY: Float = -0.8          // carved below grade (no slab beneath here)
+        let halfX = laneHalfWidth       // rim reaches the side rails
+        let halfZ: Float = 3.5          // rim reaches the slab end (+Z) and far fence (−Z)
+        let facets = 28
+        let feltMat = pbr(UIColor(red: 0.36, green: 0.74, blue: 0.40, alpha: 1), roughness: 0.85)
         for i in 0..<facets {
             let a = Float(i) * 2 * .pi / Float(facets)
-            let radial = SCNVector3(cos(a), 0, sin(a))
-            let inner = SCNVector3(center.x + radial.x * cupR, cupY, center.z + radial.z * cupR)
-            let outer = SCNVector3(center.x + radial.x * rimR, rimY, center.z + radial.z * rimR)
-            let panel = SCNBox(width: chord, height: 0.08, length: slopeLen, chamferRadius: 0.03)
+            let dx = cos(a), dz = sin(a)
+            let tX = abs(dx) > 0.001 ? halfX / abs(dx) : .greatestFiniteMagnitude
+            let tZ = abs(dz) > 0.001 ? halfZ / abs(dz) : .greatestFiniteMagnitude
+            let t = min(tX, tZ)
+            let outer = SCNVector3(center.x + dx * t, 0, center.z + dz * t)             // flush rim
+            let inner = SCNVector3(center.x + dx * cupR, cupY, center.z + dz * cupR)    // sunk cup edge
+            let len = CGFloat(sqrt(pow(outer.x - inner.x, 2) + pow(outer.y - inner.y, 2) + pow(outer.z - inner.z, 2)))
+            let width = CGFloat(t * 2 * .pi / Float(facets) * 1.6) // overlap so no gaps between facets
+            let panel = SCNBox(width: width, height: 0.1, length: len, chamferRadius: 0.02)
             panel.materials = [feltMat]
             let node = SCNNode(geometry: panel)
             node.position = SCNVector3((inner.x + outer.x) / 2, (inner.y + outer.y) / 2, (inner.z + outer.z) / 2)
-            // Orient +z up the slope toward the outer rim; the top face is the funnel.
+            // +Z up the slope toward the flush outer rim; the top face is the funnel.
             node.look(at: outer, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, 1))
-            node.physicsBody = staticBody(Category.fairway, friction: 0.9, restitution: 0.08)
+            node.physicsBody = staticBody(Category.fairway, friction: 0.9, restitution: 0.05)
             fairwayNode.addChildNode(node)
         }
-        // Recessed dark cup at the centre.
-        let cup = SCNNode(geometry: SCNCylinder(radius: CGFloat(cupR), height: 0.35))
+        // Dark cup pit at the bottom of the funnel.
+        let cup = SCNNode(geometry: SCNCylinder(radius: CGFloat(cupR), height: 0.6))
         cup.geometry?.materials = [pbr(UIColor(white: 0.03, alpha: 1), roughness: 1)]
-        cup.position = SCNVector3(center.x, cupY - 0.12, center.z)
+        cup.position = SCNVector3(center.x, cupY - 0.25, center.z)
         fairwayNode.addChildNode(cup)
     }
 
