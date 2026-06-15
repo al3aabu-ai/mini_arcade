@@ -41,7 +41,7 @@ struct BoardRootView: View {
         VStack(spacing: 18) {
             Text("🎉")
                 .font(.system(size: 90))
-            Text("FRANTICS")
+            Text("PARTY ARCADE")
                 .font(Theme.title(96))
                 .foregroundStyle(
                     LinearGradient(colors: [Theme.pink, Theme.purple, Theme.cyan],

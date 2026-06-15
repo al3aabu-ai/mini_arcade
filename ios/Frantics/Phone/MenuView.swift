@@ -41,7 +41,7 @@ struct MenuView: View {
 
             Text("🎉")
                 .font(.system(size: 64))
-            Text("FRANTICS")
+            Text("PARTY ARCADE")
                 .font(Theme.title(56))
                 .foregroundStyle(
                     LinearGradient(

@@ -146,7 +146,7 @@ final class Localization: ObservableObject {
         "REPLAY?  🔁": "نعيدها؟  🔁",
 
         // Board lobby
-        "Grab your phone → open Frantics → JOIN PARTY": "خذ جوالك، افتح Frantics، واضغط (لِحق علينا)",
+        "Grab your phone → open PartyArcade → JOIN PARTY": "خذ جوالك، افتح PartyArcade، واضغط (لِحق علينا)",
         "Need at least 2 players…": "نبي لاعبين اثنين على الأقل…",
         "%@/8 in — host hits START when ready": "%@/8 داخلين — صاحب الحفلة يضغط (ابدأ) لين تجهزون",
 

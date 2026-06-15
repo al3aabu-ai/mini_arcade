@@ -8,7 +8,7 @@ struct BoardLobbyView: View {
         VStack(spacing: 28) {
             Spacer()
 
-            Text("FRANTICS")
+            Text("PARTY ARCADE")
                 .font(Theme.title(64))
                 .foregroundStyle(
                     LinearGradient(colors: [Theme.pink, Theme.purple, Theme.cyan],
@@ -30,7 +30,7 @@ struct BoardLobbyView: View {
             .padding(.vertical, 18)
             .background(RoundedRectangle(cornerRadius: 30).fill(Theme.panel))
 
-            Text(loc.tr("Grab your phone → open Frantics → JOIN PARTY"))
+            Text(loc.tr("Grab your phone → open PartyArcade → JOIN PARTY"))
                 .font(Theme.body(24))
                 .foregroundStyle(.white.opacity(0.6))
 
