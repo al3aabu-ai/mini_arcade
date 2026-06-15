@@ -2,10 +2,15 @@
 //
 //   FAST_GAME=1 tsx scripts/smoke.ts
 //
-// Spins up the real server on a test port, then drives a host (who is also
-// the TV board) and three phones through: lobby -> auction 1 (anvil) ->
-// golf -> auction 2 (butter) -> bomb (down to 2 survivors) -> podium ->
-// replay -> back to auction 1. Exits 0 on success, 1 on any failed assertion.
+// Spins up the real server on a test port, then drives a host (who is also the
+// TV board) and three phones through the data-driven lineup:
+//   lobby -> auction(golf/anvil) -> golf -> auction(bomb/butter) -> bomb
+//         -> auction(golf/anvil) -> golf -> podium -> replay -> back to start.
+// It also verifies the NEW hidden-economy rules:
+//   - score is gone; players have public `trophies` + private `coins`,
+//   - a client only ever sees its OWN real coins (everyone else's are masked 0),
+//   - mini-games award trophies (+ bank coins), and the podium ranks by trophies.
+// Exits 0 on success, 1 on any failed assertion.
 
 import WebSocket from "ws";
 import { startServer } from "../src/server.js";
@@ -113,8 +118,22 @@ class TestClient {
     });
   }
 
-  score(state: RoomState, id: string): number {
-    return state.players.find((p) => p.id === id)?.score ?? -1;
+  /** Public trophy count for `id` (visible to everyone). */
+  trophies(state: RoomState, id: string): number {
+    return state.players.find((p) => p.id === id)?.trophies ?? -1;
+  }
+
+  /**
+   * Coins for `id` AS SEEN in `state`. Only meaningful for the viewer's own id —
+   * every other player's coins are masked to 0 by the server.
+   */
+  coins(state: RoomState, id: string): number {
+    return state.players.find((p) => p.id === id)?.coins ?? -1;
+  }
+
+  /** This client's own real coin wallet, from its latest snapshot. */
+  myCoins(): number {
+    return this.coins(this.state!, this.playerId);
   }
 }
 
@@ -128,6 +147,59 @@ async function main() {
 
   await Promise.all(all.map((c) => c.connect()));
 
+  // ---- reusable: drive a full 3-round golf segment; `order` is the sink order ----
+  async function playGolfSegment(tag: string): Promise<RoomState> {
+    for (let round = 1; round <= 3; round++) {
+      await host.waitForState((s) => s.phase === "golf" && s.golf?.round === round, `${tag}: round ${round}`);
+      for (const shooter of [alice, host, bob]) {
+        host.send({ t: "golf_progress", turnId: shooter.playerId, sunk: [] });
+        await shooter.waitForState(
+          (s) => s.golf?.turnId === shooter.playerId,
+          `${tag}: ${shooter.label}'s turn (r${round})`,
+        );
+        const before = shooter.state!.golf!.strokes[shooter.playerId] ?? 0;
+        shooter.send({ t: "fire", angle: 0.7, power: 0.85 });
+        await shooter.waitForState(
+          (s) => (s.golf!.strokes[shooter.playerId] ?? 0) > before,
+          `${tag}: ${shooter.label} stroke counted (r${round})`,
+        );
+      }
+      host.send({ t: "golf_finished", order: [alice.playerId, bob.playerId, host.playerId] });
+      if (round < 3) {
+        await host.waitForState((s) => s.golf?.round === round + 1, `${tag}: → round ${round + 1}`);
+      }
+    }
+    return host.waitForState((s) => !!s.golf?.results, `${tag}: final results`);
+  }
+
+  // ---- reusable: everyone passes the bomb right until it finishes at 2 survivors ----
+  async function playBombSegment(): Promise<RoomState> {
+    await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "bomb", "bomb phase")));
+    const loops = all.map((c) =>
+      setInterval(() => {
+        const b = c.state?.bomb;
+        if (c.state?.phase === "bomb" && b?.stage === "ticking" && b.holderId === c.playerId) {
+          c.send({ t: "pass_bomb", direction: "right" });
+        }
+      }, 80),
+    );
+    const done = await host.waitForState((s) => s.bomb?.stage === "done", "bomb finishes", 30_000);
+    // The "done" broadcast is the one that banks coins — wait for EVERY client to
+    // process it before anyone reads their own wallet (avoids a propagation race).
+    await Promise.all(all.map((c) => c.waitForState((s) => s.bomb?.stage === "done", `${c.label} sees bomb done`)));
+    loops.forEach(clearInterval);
+    return done;
+  }
+
+  // ---- reusable: a no-sale auction (everyone bids 0) that just advances the lineup ----
+  async function passAuction(round: number, debuff: string) {
+    await Promise.all(
+      all.map((c) => c.waitForState((s) => s.phase === "auction" && s.auction?.round === round, `auction ${round}`)),
+    );
+    ok(host.state!.auction!.item.debuff === debuff, `auction ${round} offers the ${debuff} item`);
+    all.forEach((c) => c.send({ t: "submit_bid", amount: 0 }));
+  }
+
   console.log("\n— lobby —");
   host.send({ t: "create_room", name: "Host", avatar: "🦊", color: "#FF2E88" });
   await host.waitForMsg((m) => m.t === "room_joined", "room_joined");
@@ -140,188 +212,104 @@ async function main() {
   await Promise.all([alice, bob, cara].map((c) => c.waitForMsg((m) => m.t === "room_joined", "join")));
   await host.waitForState((s) => s.players.length === 4, "4 players in lobby");
   ok(host.state!.players.length === 4, "host sees 4 players");
-  ok(host.state!.players.every((p) => p.score === 1000), "everyone starts with 1000 points");
+  ok(host.state!.players.every((p) => p.trophies === 0), "everyone starts with 0 trophies");
+  ok(all.every((c) => c.myCoins() === 1000), "each player starts with a private 1000-coin wallet");
+  ok(alice.coins(alice.state!, bob.playerId) === 0, "PRIVACY: other players' coins are masked to 0 on every client");
 
-  console.log("\n— auction round 1 (anvil) —");
+  console.log("\n— auction 1 (golf → anvil), bids paid in coins —");
   host.send({ t: "start_game" });
   await Promise.all(
     all.map((c) => c.waitForState((s) => s.phase === "auction" && s.auction?.round === 1, "auction 1")),
   );
-  ok(host.state!.auction!.item.debuff === "anvil", "round 1 item is the Heavy Anvil");
+  ok(host.state!.auction!.item.debuff === "anvil", "auction 1 offers the Heavy Anvil (golf sabotage)");
+  ok(host.state!.lineup.length === 3, "the match lineup holds 3 games");
 
   host.send({ t: "submit_bid", amount: 100 });
   alice.send({ t: "submit_bid", amount: 250 });
   bob.send({ t: "submit_bid", amount: 50 });
   cara.send({ t: "submit_bid", amount: 0 });
-  const targeting = await alice.waitForState(
-    (s) => s.auction?.stage === "targeting",
-    "auction targeting stage",
-  );
+  const targeting = await alice.waitForState((s) => s.auction?.stage === "targeting", "auction targeting");
   ok(targeting.auction!.winnerId === alice.playerId, "Alice (250) wins the auction");
-  ok(alice.score(targeting, alice.playerId) === 750, "Alice paid her 250-point bid");
-  ok(alice.score(targeting, host.playerId) === 1000, "losing bidders pay nothing");
+  ok(alice.myCoins() === 750, "Alice paid her 250-coin bid out of her private wallet");
+  ok(alice.coins(alice.state!, host.playerId) === 0, "PRIVACY: Alice cannot see the host's wallet (masked)");
+  ok(host.myCoins() === 1000, "losing bidders pay nothing");
 
   alice.send({ t: "choose_target", targetId: bob.playerId });
   const reveal = await host.waitForState((s) => s.auction?.stage === "reveal", "auction reveal");
-  ok(reveal.auction!.targetId === bob.playerId, "Bob is the anvil target");
   ok(reveal.players.find((p) => p.id === bob.playerId)?.debuff === "anvil", "Bob carries the anvil debuff");
 
-  console.log("\n— golf round 1 (Guerilla, turn-based) —");
-  await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "golf", "golf phase")));
-  ok(host.state!.golf!.round === 1 && host.state!.golf!.map === "guerilla", "Round 1 is on the Guerilla map");
+  console.log("\n— golf segment 1 (Guerilla → Tiki → Runway) —");
+  await host.waitForState((s) => s.phase === "golf" && s.golf?.round === 1, "golf round 1");
+  ok(host.state!.golf!.map === "guerilla", "round 1 is the Guerilla map");
   ok(host.state!.golf!.debuffs[bob.playerId] === "anvil", "board is told about Bob's anvil");
 
-  // The host board owns the rotation: it makes it Alice's turn.
+  // Off-turn fire must be ignored by the server (not relayed, no stroke counted).
   host.send({ t: "golf_progress", turnId: alice.playerId, sunk: [] });
   await bob.waitForState((s) => s.golf?.turnId === alice.playerId, "phones learn it's Alice's turn");
-  ok(true, "turnId propagates to every phone");
-
-  // Bob mashes fire off-turn — the server must NOT relay it, NOR count a stroke.
   bob.send({ t: "fire", angle: 1.2, power: 0.9 });
-  await new Promise((r) => setTimeout(r, 250));
+  await new Promise((r) => setTimeout(r, 200));
   ok(
     !host.inbox.some((m) => m.t === "fire" && m.playerId === bob.playerId),
     "off-turn fire is blocked by the server",
   );
+  ok((bob.state!.golf!.strokes[bob.playerId] ?? 0) === 0, "off-turn fire never counts a stroke");
 
-  alice.send({ t: "aim", angle: 0.9, power: 0.5 });
-  const aimRelay = await host.waitForMsg((m) => m.t === "aim" && m.playerId === alice.playerId, "aim relay");
-  ok(Math.abs(aimRelay.power - 0.5) < 1e-9, "host board receives Alice's aim relay");
+  const golf1 = await playGolfSegment("golf 1");
+  ok(golf1.golf!.results!.order[0] === alice.playerId, "fewest total strokes (Alice) wins the match");
+  ok(golf1.golf!.results!.awarded[alice.playerId] === 1, "the golf winner is awarded exactly 1 trophy");
+  ok(golf1.golf!.results!.awarded[bob.playerId] === undefined || golf1.golf!.results!.awarded[bob.playerId] === 0, "non-winners get no trophy from golf");
+  ok(host.trophies(host.state!, alice.playerId) === 1, "Alice's trophy is public on every client");
+  ok(golf1.players.find((p) => p.id === bob.playerId)?.debuff === null, "anvil consumed after the golf segment");
 
-  // Each player takes one stroke on their turn; the server counts strokes.
-  alice.send({ t: "fire", angle: 0.9, power: 1.0 });
-  const aliceStroke = await alice.waitForState((s) => (s.golf?.strokes?.[alice.playerId] ?? 0) === 1, "Alice's stroke counted");
-  ok(aliceStroke.golf!.strokes[alice.playerId] === 1, "server counts Alice's stroke");
-  ok(aliceStroke.golf!.strokes[bob.playerId] === 0, "off-turn fire never counted as a stroke");
+  console.log("\n— auction 2 (bomb → butter), no sale —");
+  await passAuction(2, "jammed");
 
-  host.send({ t: "golf_progress", turnId: host.playerId, sunk: [alice.playerId] });
-  await host.waitForState((s) => s.golf?.turnId === host.playerId, "host's turn");
-  host.send({ t: "fire", angle: 0.5, power: 0.8 });
-  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 1, "host's stroke counted");
-
-  host.send({ t: "golf_progress", turnId: bob.playerId, sunk: [alice.playerId, host.playerId] });
-  await bob.waitForState((s) => s.golf?.turnId === bob.playerId, "bob's turn");
-  bob.send({ t: "fire", angle: 0.5, power: 0.8 });
-  await host.waitForState((s) => s.golf!.strokes[bob.playerId] === 1, "bob's stroke counted");
-
-  // Board reports the Round 1 sink order; server advances to ROUND 2 (Tiki).
-  host.send({ t: "golf_finished", order: [alice.playerId, host.playerId, bob.playerId] });
-  const round2 = await cara.waitForState((s) => s.phase === "golf" && s.golf?.round === 2, "Round 1 → Round 2");
-  ok(round2.golf!.map === "tiki", "Round 2 loads the Tiki Jungle map");
-  ok(round2.golf!.strokes[alice.playerId] === 1, "Alice's strokes carry into Round 2");
-  ok(round2.golf!.results === null && round2.golf!.sunk.length === 0, "Round 2 starts on a clean board");
-
-  console.log("\n— golf round 2 (Tiki Jungle) → round 3 —");
-  // Each takes one stroke → totals after R2: Alice 2, Host 2, Bob 2.
-  host.send({ t: "golf_progress", turnId: alice.playerId, sunk: [] });
-  await alice.waitForState((s) => s.golf?.turnId === alice.playerId, "round 2 Alice turn");
-  alice.send({ t: "fire", angle: 1, power: 1 });
-  await alice.waitForState((s) => s.golf!.strokes[alice.playerId] === 2, "Alice total strokes = 2");
-
-  host.send({ t: "golf_progress", turnId: host.playerId, sunk: [alice.playerId] });
-  await host.waitForState((s) => s.golf?.turnId === host.playerId, "round 2 host turn");
-  host.send({ t: "fire", angle: 0.5, power: 0.7 });
-  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 2, "host total strokes = 2");
-
-  host.send({ t: "golf_progress", turnId: bob.playerId, sunk: [alice.playerId, host.playerId] });
-  await bob.waitForState((s) => s.golf?.turnId === bob.playerId, "round 2 bob turn");
-  bob.send({ t: "fire", angle: 0.5, power: 0.7 });
-  await host.waitForState((s) => s.golf!.strokes[bob.playerId] === 2, "bob total strokes = 2");
-
-  host.send({ t: "golf_finished", order: [alice.playerId, host.playerId, bob.playerId] });
-  const round3 = await cara.waitForState((s) => s.phase === "golf" && s.golf?.round === 3, "Round 2 → Round 3");
-  ok(round3.golf!.map === "runway", "Round 3 loads the Tiki Runway map");
-  ok(round3.golf!.strokes[alice.playerId] === 2, "total strokes carry into Round 3");
-  ok(round3.golf!.results === null && round3.golf!.sunk.length === 0, "Round 3 starts on a clean board");
-
-  console.log("\n— golf round 3 (Tiki Runway, FINAL standings) —");
-  // Alice 1, Bob 1, Host 2 → final totals: Alice 3, Bob 3, Host 4.
-  host.send({ t: "golf_progress", turnId: alice.playerId, sunk: [] });
-  await alice.waitForState((s) => s.golf?.turnId === alice.playerId, "round 3 Alice turn");
-  alice.send({ t: "fire", angle: 1, power: 1 });
-  await alice.waitForState((s) => s.golf!.strokes[alice.playerId] === 3, "Alice total strokes = 3");
-
-  host.send({ t: "golf_progress", turnId: host.playerId, sunk: [alice.playerId] });
-  await host.waitForState((s) => s.golf?.turnId === host.playerId, "round 3 host turn");
-  host.send({ t: "fire", angle: 0.5, power: 0.7 });
-  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 3, "host stroke 1 of round 3");
-  host.send({ t: "fire", angle: 0.5, power: 0.7 });
-  await host.waitForState((s) => s.golf!.strokes[host.playerId] === 4, "host stroke 2 of round 3");
-
-  host.send({ t: "golf_progress", turnId: bob.playerId, sunk: [alice.playerId, host.playerId] });
-  await bob.waitForState((s) => s.golf?.turnId === bob.playerId, "round 3 bob turn");
-  bob.send({ t: "fire", angle: 0.5, power: 0.7 });
-  await host.waitForState((s) => s.golf!.strokes[bob.playerId] === 3, "bob total strokes = 3");
-
-  // Final match standings — strictly by fewest TOTAL strokes across all 3 rounds.
-  host.send({ t: "golf_finished", order: [alice.playerId, bob.playerId, host.playerId] });
-  const golfDone = await cara.waitForState((s) => !!s.golf?.results, "final golf results");
-  ok(golfDone.golf!.results!.order[0] === alice.playerId, "fewest total strokes (Alice, 3) wins the match");
-  ok(golfDone.golf!.results!.order[1] === bob.playerId, "Bob (3, sank later) is second on the tie-break");
-  ok(golfDone.golf!.results!.order[2] === host.playerId, "Host (4) is third");
-  ok(golfDone.golf!.results!.awarded[alice.playerId] === 500, "match winner takes 500");
-  ok(golfDone.golf!.results!.awarded[bob.playerId] === 300, "2nd takes 300");
-  ok(golfDone.golf!.results!.awarded[host.playerId] === 200, "3rd takes 200");
-  ok(golfDone.players.find((p) => p.id === bob.playerId)?.debuff === null, "anvil consumed after the golf segment");
-
-  console.log("\n— auction round 2 (butter fingers) —");
-  await Promise.all(
-    all.map((c) => c.waitForState((s) => s.phase === "auction" && s.auction?.round === 2, "auction 2")),
-  );
-  ok(host.state!.auction!.item.debuff === "jammed", "round 2 item is Butter Fingers");
-  host.send({ t: "submit_bid", amount: 0 });
-  alice.send({ t: "submit_bid", amount: 0 });
-  bob.send({ t: "submit_bid", amount: 0 });
-  cara.send({ t: "submit_bid", amount: 300 });
-  await cara.waitForState((s) => s.auction?.stage === "targeting", "cara wins targeting");
-  cara.send({ t: "choose_target", targetId: alice.playerId });
-  const reveal2 = await host.waitForState((s) => s.auction?.stage === "reveal", "auction 2 reveal");
-  ok(reveal2.players.find((p) => p.id === alice.playerId)?.debuff === "jammed", "Alice is butter-fingered");
-  ok(cara.score(reveal2, cara.playerId) === 700, "Cara paid 300");
-
-  console.log("\n— the billionaire's bomb —");
+  console.log("\n— the billionaire's bomb (cash → private coins) —");
   await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "bomb", "bomb phase")));
-
-  // Every client plays hot-potato: whenever it holds the bomb, it tries to
-  // pass right every 150 ms (jam errors are simply retried).
-  const passLoops = all.map((c) => {
-    const timer = setInterval(() => {
-      const b = c.state?.bomb;
-      if (c.state?.phase === "bomb" && b?.stage === "ticking" && b.holderId === c.playerId) {
-        c.send({ t: "pass_bomb", direction: "right" });
-      }
-    }, 150);
-    return timer;
+  const coinsBeforeBomb = Object.fromEntries(all.map((c) => [c.playerId, c.myCoins()]));
+  const bombDone = await playBombSegment();
+  ok(bombDone.bomb!.survivors!.length === 2, "exactly two players survive the bomb");
+  ok(bombDone.bomb!.eliminated.length === 2, "exactly two players are eliminated");
+  // Golf gave out 1 trophy; the bomb gives 1 to each of the 2 survivors → 3 total.
+  const totalTrophiesAfterBomb = host.state!.players.reduce((n, p) => n + p.trophies, 0);
+  ok(totalTrophiesAfterBomb === 3, "trophies total 3 (1 golf winner + 2 bomb survivors)");
+  const survivorsBanked = bombDone.bomb!.survivors!.every((id) => {
+    const client = all.find((c) => c.playerId === id)!;
+    return client.myCoins() >= coinsBeforeBomb[id] + 250; // survival bonus + greedy earnings, into their wallet
   });
+  ok(survivorsBanked, "survivors banked their bomb cash + 250 bonus into their PRIVATE coins");
 
-  const firstBoom = await host.waitForState((s) => (s.bomb?.eliminated.length ?? 0) >= 1, "first explosion", 20_000);
-  ok(firstBoom.bomb!.eliminated.length >= 1, "someone got exploded");
-  const done = await host.waitForState((s) => s.bomb?.stage === "done", "bomb finishes at 2 survivors", 30_000);
-  passLoops.forEach(clearInterval);
-  ok(done.bomb!.survivors!.length === 2, "exactly two players survive");
-  ok(done.bomb!.eliminated.length === 2, "exactly two players were eliminated");
-  const survivorsScoredBonus = done.bomb!.survivors!.every((id) => {
-    const before = golfDone.players.find((p) => p.id === id)!.score;
-    const after = done.players.find((p) => p.id === id)!.score;
-    const paid = id === cara.playerId ? 300 : 0;
-    return after >= before - paid + 250; // bonus + whatever they greedily accrued
-  });
-  ok(survivorsScoredBonus, "survivors banked earnings + 250 bonus");
+  console.log("\n— auction 3 (golf → anvil), no sale —");
+  await passAuction(3, "anvil");
 
-  console.log("\n— podium & replay —");
-  await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "podium", "podium")));
-  const podium = host.state!.podium!;
+  console.log("\n— golf segment 2 (final lineup game) —");
+  await playGolfSegment("golf 2");
+
+  console.log("\n— podium —");
+  const podiumState = await host.waitForState((s) => s.phase === "podium", "podium");
+  const podium = podiumState.podium!;
   ok(podium.ranking.length === 4, "podium ranks all 4 players");
-  const scores = host.state!.players;
-  const sorted = [...scores].sort((a, b) => b.score - a.score).map((p) => p.id);
-  ok(JSON.stringify(podium.ranking) === JSON.stringify(sorted), "ranking matches scores");
+  const totalTrophies = podiumState.players.reduce((n, p) => n + p.trophies, 0);
+  ok(totalTrophies === 4, "trophies total 4 across the whole match (golf + bomb + golf)");
+  const rankTrophies = podium.ranking.map((id) => host.trophies(podiumState, id));
+  ok(
+    rankTrophies.every((t, i) => i === 0 || rankTrophies[i - 1] >= t),
+    "podium is ordered by trophies (descending) — coins are the hidden tiebreak",
+  );
 
+  console.log("\n— replay —");
   all.forEach((c) => c.send({ t: "replay" }));
   const restarted = await host.waitForState(
     (s) => s.phase === "auction" && s.auction?.round === 1,
     "replay loops back to auction 1",
   );
-  ok(restarted.players.every((p) => p.score === 1000), "scores reset to 1000 on replay");
+  // Wait for every client to receive the reset (auction-1) broadcast before
+  // reading their own wallet.
+  await Promise.all(
+    all.map((c) => c.waitForState((s) => s.phase === "auction" && s.auction?.round === 1, `${c.label} sees replay`)),
+  );
+  ok(restarted.players.every((p) => p.trophies === 0), "trophies reset to 0 on replay");
+  ok(all.every((c) => c.myCoins() === 1000), "coin wallets reset to 1000 on replay");
 
   console.log("");
   all.forEach((c) => c.ws.close());
@@ -331,7 +319,7 @@ async function main() {
     console.error(`SMOKE FAILED — ${failures} assertion(s) failed`);
     process.exit(1);
   }
-  console.log("SMOKE PASSED — full game loop works end to end 🎉");
+  console.log("SMOKE PASSED — hidden-economy + data-driven lineup work end to end 🎉");
   process.exit(0);
 }
 

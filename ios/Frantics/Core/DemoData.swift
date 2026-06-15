@@ -6,20 +6,23 @@ import SwiftUI
 ///   board-lobby | board-auction | board-golf | board-bomb | board-podium
 ///   phone-auction | phone-golf | phone-bomb | phone-podium
 enum DemoData {
+    // p2 ("Omar") is the demo's local viewer, so his coins are the real wallet;
+    // in a live game every other coins value would arrive masked to 0.
     static let players: [PlayerState] = [
-        .init(id: "p1", name: "Maya", avatar: "🦊", color: "#FF2E88", score: 1250,
+        .init(id: "p1", name: "Maya", avatar: "🦊", color: "#FF2E88", trophies: 2, coins: 450,
               connected: true, isHost: true, debuff: nil),
-        .init(id: "p2", name: "Omar", avatar: "🐸", color: "#00F5D4", score: 1300,
+        .init(id: "p2", name: "Omar", avatar: "🐸", color: "#00F5D4", trophies: 3, coins: 600,
               connected: true, isHost: false, debuff: nil),
-        .init(id: "p3", name: "Lina", avatar: "🦄", color: "#9B5DE5", score: 950,
+        .init(id: "p3", name: "Lina", avatar: "🦄", color: "#9B5DE5", trophies: 1, coins: 700,
               connected: true, isHost: false, debuff: "anvil"),
-        .init(id: "p4", name: "Ziad", avatar: "🐼", color: "#FEE440", score: 1100,
+        .init(id: "p4", name: "Ziad", avatar: "🐼", color: "#FEE440", trophies: 1, coins: 300,
               connected: true, isHost: false, debuff: nil),
     ]
 
     static func state(phase: String, auction: AuctionState? = nil, golf: GolfState? = nil,
                       bomb: BombState? = nil, podium: PodiumState? = nil) -> RoomState {
         RoomState(code: "FRNX", phase: phase, players: players,
+                  lineup: ["golf", "bomb", "golf"], currentLineupIndex: 0,
                   auction: auction, golf: golf, bomb: bomb, podium: podium, rev: 1)
     }
 

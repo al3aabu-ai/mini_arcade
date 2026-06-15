@@ -102,11 +102,17 @@ struct PartyStatusBar: View {
             Spacer()
 
             if let me = client.me {
-                HStack(spacing: 6) {
+                // Your own seat: trophies (public) + your PRIVATE coin wallet —
+                // this is the only place coins are ever shown, on your own phone.
+                HStack(spacing: 8) {
                     Text(me.avatar)
-                    Text("\(me.score)")
+                    Text("\(me.trophies)🏆")
                         .font(Theme.body(16))
                         .foregroundStyle(Theme.yellow)
+                        .contentTransition(.numericText())
+                    Text("\(me.coins)🪙")
+                        .font(Theme.body(16))
+                        .foregroundStyle(Theme.cyan)
                         .contentTransition(.numericText())
                 }
                 .padding(.horizontal, 12)

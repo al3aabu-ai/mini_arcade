@@ -91,7 +91,9 @@ struct BoardAuctionView: View {
     private func targeting(_ auction: AuctionState) -> some View {
         let winner = room.player(auction.winnerId)
         VStack(spacing: 14) {
-            Text(loc.tr("SOLD to %@ %@ for %@!", winner?.name ?? "?", winner?.avatar ?? "", "\(auction.winningBid ?? 0)"))
+            // The winning bid is a coin amount, so we DON'T show it on the TV —
+            // players see what they paid on their own phones. Big screen = drama only.
+            Text(loc.tr("SOLD to %@ %@!", winner?.name ?? "?", winner?.avatar ?? ""))
                 .font(Theme.title(34))
                 .foregroundStyle(Theme.yellow)
                 .neonGlow(Theme.yellow)
@@ -125,19 +127,21 @@ struct BoardAuctionView: View {
         } else {
             VStack(spacing: 12) {
                 Text("🦗").font(.system(size: 80))
-                Text(loc.tr("NO SALE — everyone kept their points"))
+                Text(loc.tr("NO SALE — everyone kept their coins"))
                     .font(Theme.title(30))
                     .foregroundStyle(.white.opacity(0.6))
             }
         }
     }
 
+    // Trophy standings strip. We show trophies (public) — never coin wallets,
+    // which are private to each phone and must never appear on the TV.
     private var scoreStrip: some View {
         HStack(spacing: 30) {
             ForEach(room.players) { player in
                 HStack(spacing: 8) {
                     Text(player.avatar).font(.system(size: 26))
-                    Text("\(player.score)")
+                    Text("\(player.trophies)🏆")
                         .font(Theme.body(22))
                         .foregroundStyle(Theme.yellow)
                         .contentTransition(.numericText())

@@ -6,6 +6,7 @@ import {
   type AuctionState,
   type BombState,
   type Debuff,
+  type GameType,
   type GolfMap,
   type GolfState,
   type Phase,
@@ -23,7 +24,10 @@ interface Player {
   name: string;
   avatar: string;
   color: string;
-  score: number;
+  /** public mini-game wins */
+  trophies: number;
+  /** private spendable wallet (masked from everyone else) */
+  coins: number;
   isHost: boolean;
   debuff: Debuff | null;
   ws: Socket | null;
@@ -40,6 +44,8 @@ interface AuctionInternal {
   winnerId: string | null;
   winningBid: number | null;
   targetId: string | null;
+  /** which mini-game this intermission precedes — launched when the auction ends */
+  forGame: GameType;
 }
 
 interface GolfInternal {
@@ -72,6 +78,9 @@ export class Room {
   readonly code: string;
   private players: Player[] = [];
   private phase: Phase = "lobby";
+  /** Ordered mini-games for this match, and where we are in it. */
+  private lineup: GameType[] = [];
+  private lineupIndex = 0;
   private auction: AuctionInternal | null = null;
   private golf: GolfInternal | null = null;
   private bomb: BombInternal | null = null;
@@ -103,7 +112,8 @@ export class Room {
       name,
       avatar: opts.avatar || "🙂",
       color: opts.color || "#FF2E88",
-      score: CONST.START_POINTS,
+      trophies: 0,
+      coins: CONST.START_COINS,
       isHost: opts.isHost,
       debuff: null,
       ws: opts.ws,
@@ -172,10 +182,16 @@ export class Room {
   }
 
   broadcast() {
-    const msg: ServerMessage = { t: "room_state", state: this.snapshot() };
-    const raw = JSON.stringify(msg);
+    // Per-recipient snapshots: each socket gets a state where ONLY its own
+    // coins are real and every other wallet is masked to 0. The TV/board shares
+    // the host's socket, so this is also what guarantees no wallet reaches the
+    // big screen. rev bumps once per change, not once per recipient.
+    this.rev += 1;
     for (const p of this.players) {
-      if (p.ws && p.ws.readyState === p.ws.OPEN) p.ws.send(raw);
+      if (p.ws && p.ws.readyState === p.ws.OPEN) {
+        const msg: ServerMessage = { t: "room_state", state: this.viewState(p.id) };
+        p.ws.send(JSON.stringify(msg));
+      }
     }
   }
 
@@ -184,14 +200,27 @@ export class Room {
     if (p) this.send(p, { t: "error", message });
   }
 
-  snapshot(): RoomState {
+  /** Snapshot for a player who just (re)joined — goes in their room_joined. */
+  snapshotFor(viewerId: string): RoomState {
     this.rev += 1;
+    return this.viewState(viewerId);
+  }
+
+  /**
+   * Build the room snapshot from `viewerId`'s perspective. PRIVACY RULE: every
+   * player's `coins` is masked to 0 except the viewer's own, so a wallet never
+   * travels to a device that shouldn't see it — and since the TV shares the
+   * host's socket, coins never reach the big screen. Trophies are public.
+   * Does NOT bump `rev` (callers bump it once per change).
+   */
+  private viewState(viewerId: string | null): RoomState {
     const players: PlayerState[] = this.players.map((p) => ({
       id: p.id,
       name: p.name,
       avatar: p.avatar,
       color: p.color,
-      score: p.score,
+      trophies: p.trophies,
+      coins: p.id === viewerId ? p.coins : 0, // mask everyone else's wallet
       connected: !!p.ws,
       isHost: p.isHost,
       debuff: p.debuff,
@@ -245,11 +274,31 @@ export class Room {
     let podium: PodiumState | null = null;
     if (this.phase === "podium") {
       podium = {
-        ranking: [...this.players].sort((a, b) => b.score - a.score).map((p) => p.id),
+        // Rank by most trophies; the hidden coin wallet is the absolute
+        // tiebreaker (computed from the TRUE values, never the masked ones).
+        ranking: this.rankedPlayerIds(),
         replayVotes: [...this.replayVotes],
       };
     }
-    return { code: this.code, phase: this.phase, players, auction, golf, bomb, podium, rev: this.rev };
+    return {
+      code: this.code,
+      phase: this.phase,
+      players,
+      lineup: this.lineup,
+      currentLineupIndex: this.lineupIndex,
+      auction,
+      golf,
+      bomb,
+      podium,
+      rev: this.rev,
+    };
+  }
+
+  /** Standings: most trophies first, hidden coins as the absolute tiebreaker. */
+  private rankedPlayerIds(): string[] {
+    return [...this.players]
+      .sort((a, b) => b.trophies - a.trophies || b.coins - a.coins)
+      .map((p) => p.id);
   }
 
   // ------------------------------ timers -----------------------------------
@@ -291,27 +340,57 @@ export class Room {
     if (connected < min)
       return this.sendError(playerId, `Need at least ${CONST.MIN_PLAYERS} players`);
     this.touch();
-    this.startAuction(1);
+    // TEMP: until the host picker UI lands, every match runs a fixed lineup.
+    this.lineup = this.defaultLineup();
+    this.lineupIndex = 0;
+    this.advanceLineup();
+  }
+
+  // --------------------------- lineup flow ---------------------------------
+
+  /** Placeholder lineup; the host will choose these in the next milestone. */
+  private defaultLineup(): GameType[] {
+    return ["golf", "bomb", "golf"].slice(0, CONST.LINEUP_SIZE) as GameType[];
+  }
+
+  /**
+   * Generic match driver: run the bidding intermission for the next game in the
+   * lineup, or finish at the podium once every game has been played.
+   */
+  private advanceLineup() {
+    if (this.lineupIndex >= this.lineup.length) {
+      this.startPodium();
+      return;
+    }
+    this.startAuction(this.lineup[this.lineupIndex]);
+  }
+
+  /** Launch a mini-game by type (golf begins at its first round). */
+  private launchGame(game: GameType) {
+    if (game === "golf") this.startGolf(1);
+    else this.startBomb();
   }
 
   // ------------------------------ auction ----------------------------------
 
-  private startAuction(round: number) {
+  private startAuction(forGame: GameType) {
     this.newGen();
     this.phase = "auction";
     for (const p of this.players) {
       p.bid = null;
       p.bidLockedAt = 0;
     }
-    const item = SABOTAGE_ITEMS[(round - 1) % SABOTAGE_ITEMS.length];
+    // The sabotage on offer is the one that bites the game it precedes.
+    const item = SABOTAGE_ITEMS.find((s) => s.appliesTo === forGame) ?? SABOTAGE_ITEMS[0];
     this.auction = {
-      round,
+      round: this.lineupIndex + 1, // 1-based position in the lineup, for display
       stage: "bidding",
       item,
       endsAt: Date.now() + CONST.AUCTION_BID_MS,
       winnerId: null,
       winningBid: null,
       targetId: null,
+      forGame,
     };
     this.after(CONST.AUCTION_BID_MS, () => this.resolveAuction());
     this.broadcast();
@@ -322,7 +401,8 @@ export class Room {
     const p = this.players.find((x) => x.id === playerId);
     if (!p) return;
     if (p.bid !== null) return this.sendError(playerId, "Bid already locked in");
-    const clamped = Math.max(0, Math.min(p.score, Math.floor(amount)));
+    // Bids are paid from the private coin wallet — you can't bid what you don't have.
+    const clamped = Math.max(0, Math.min(p.coins, Math.floor(amount)));
     p.bid = clamped;
     p.bidLockedAt = Date.now();
     this.touch();
@@ -347,7 +427,7 @@ export class Room {
       this.broadcast();
       return;
     }
-    winner.score -= winner.bid!;
+    winner.coins -= winner.bid!;
     this.auction.winnerId = winner.id;
     this.auction.winningBid = winner.bid!;
     this.auction.stage = "targeting";
@@ -386,8 +466,7 @@ export class Room {
 
   private afterAuction() {
     if (!this.auction) return;
-    if (this.auction.round === 1) this.startGolf(1);
-    else this.startBomb();
+    this.launchGame(this.auction.forGame);
   }
 
   // ------------------------------ golf -------------------------------------
@@ -501,23 +580,25 @@ export class Room {
 
     if (golf.round < 3) {
       // Rounds 1 & 2 — record standings, carry total strokes into the next round
-      // (Guerilla → Tiki Jungle → Tiki Runway).
+      // (Guerilla → Tiki Jungle → Tiki Runway). No trophy yet; the segment runs on.
       golf.results = { order: ranking, awarded };
       this.newGen();
       this.after(CONST.GOLF_RESULTS_MS, () => this.startGolf(golf.round + 1, totals));
     } else {
-      // Final golf round (Round 3) — award points strictly by lowest total strokes.
-      ranking.forEach((id, i) => {
-        const points = CONST.GOLF_BOUNTIES[i] ?? CONST.GOLF_FINISH_POINTS;
-        awarded[id] = points;
-        const p = this.players.find((x) => x.id === id);
-        if (p) p.score += points;
-      });
+      // Final golf round — the outright winner (fewest total strokes) takes ONE
+      // trophy. Golf banks no coins yet (coin pickups arrive in a later milestone).
+      const winnerId = ranking[0];
+      if (winnerId) {
+        awarded[winnerId] = CONST.TROPHY;
+        const winner = this.players.find((x) => x.id === winnerId);
+        if (winner) winner.trophies += CONST.TROPHY;
+      }
       // The anvil is consumed once the golf segment ends.
       for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
       golf.results = { order: ranking, awarded };
       this.newGen();
-      this.after(CONST.GOLF_RESULTS_MS, () => this.startAuction(2));
+      this.lineupIndex += 1; // this golf segment is done — on to the next game
+      this.after(CONST.GOLF_RESULTS_MS, () => this.advanceLineup());
     }
     this.touch();
     this.broadcast();
@@ -619,12 +700,17 @@ export class Room {
     bomb.holderId = null;
     bomb.survivors = [...bomb.alive];
     for (const p of this.players) {
-      p.score += bomb.earnings[p.id] ?? 0;
-      if (bomb.survivors.includes(p.id)) p.score += CONST.BOMB_SURVIVOR_BONUS;
+      // Cash greedily accrued this game banks straight into the private wallet.
+      p.coins += bomb.earnings[p.id] ?? 0;
+      if (bomb.survivors.includes(p.id)) {
+        p.trophies += CONST.TROPHY;           // surviving the bomb is a win
+        p.coins += CONST.BOMB_SURVIVOR_BONUS; // plus a cash survival bonus
+      }
       if (p.debuff === "jammed") p.debuff = null;
     }
     this.broadcast();
-    this.after(CONST.BOMB_ROUND_BREAK_MS, () => this.startPodium());
+    this.lineupIndex += 1; // bomb segment done — advance the lineup
+    this.after(CONST.BOMB_ROUND_BREAK_MS, () => this.advanceLineup());
   }
 
   // ------------------------------ podium -----------------------------------
@@ -647,13 +733,17 @@ export class Room {
       connected.length > 0 && connected.every((p) => this.replayVotes.has(p.id));
     if (everyoneIn) {
       for (const p of this.players) {
-        p.score = CONST.START_POINTS;
+        p.trophies = 0;
+        p.coins = CONST.START_COINS;
         p.debuff = null;
       }
       this.golf = null;
       this.bomb = null;
       this.replayVotes.clear();
-      this.startAuction(1); // straight back to the Dirty Auction, per the design doc
+      // Fresh match: rebuild the lineup and drive it from the top.
+      this.lineup = this.defaultLineup();
+      this.lineupIndex = 0;
+      this.advanceLineup();
     } else {
       this.broadcast();
     }

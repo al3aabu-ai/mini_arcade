@@ -15,7 +15,10 @@ const FAST = process.env.FAST_GAME === "1";
 export const CONST = {
   MIN_PLAYERS: 2,
   MAX_PLAYERS: 8,
-  START_POINTS: 1000,
+  /** Spendable wallet every player starts with — coins fund the secret auction bids. */
+  START_COINS: 1000,
+  /** How many mini-games one match runs (the host will pick these next milestone). */
+  LINEUP_SIZE: 3,
 
   AUCTION_BID_MS: FAST ? 600 : 15_000,
   AUCTION_TARGET_MS: FAST ? 600 : 12_000,
@@ -23,8 +26,8 @@ export const CONST = {
 
   GOLF_TIME_LIMIT_MS: FAST ? 1_500 : 150_000, // turn-based: everyone needs shots
   GOLF_RESULTS_MS: FAST ? 400 : 6_000,
-  GOLF_BOUNTIES: [500, 300, 200],
-  GOLF_FINISH_POINTS: 100,
+  /** A mini-game win is worth one trophy — trophies decide the match. */
+  TROPHY: 1,
 
   BOMB_TICK_MS: FAST ? 100 : 1_000,
   BOMB_CASH_PER_TICK: 25,
@@ -40,6 +43,9 @@ export const CONST = {
 } as const;
 
 export type Phase = "lobby" | "auction" | "golf" | "bomb" | "podium";
+
+/** A playable mini-game. The match `lineup` is an ordered list of these. */
+export type GameType = "golf" | "bomb";
 
 export type Debuff = "anvil" | "jammed";
 
@@ -78,7 +84,14 @@ export interface PlayerState {
   name: string;
   avatar: string; // emoji
   color: string; // hex like "#FF2E88"
-  score: number;
+  /** Mini-game wins. PUBLIC — shown on the TV; decides the match. */
+  trophies: number;
+  /**
+   * Spendable money. PRIVATE — each player only ever sees their OWN real value;
+   * in every other player's snapshot (and therefore on the TV) it is masked to 0.
+   * Used as the hidden tiebreaker when trophies are level.
+   */
+  coins: number;
   connected: boolean;
   isHost: boolean;
   debuff: Debuff | null;
@@ -100,9 +113,9 @@ export interface AuctionState {
 }
 
 export interface GolfResults {
-  /** player ids in hole-arrival order (finishers only) */
+  /** player ids ranked by fewest total strokes (finishers only) */
   order: string[];
-  /** points awarded this game, per player id */
+  /** trophies awarded this game, per player id (1 for the outright winner) */
   awarded: Record<string, number>;
 }
 
@@ -157,6 +170,10 @@ export interface RoomState {
   code: string;
   phase: Phase;
   players: PlayerState[];
+  /** Ordered mini-games this match runs (max LINEUP_SIZE). */
+  lineup: GameType[];
+  /** Index into `lineup` of the game currently being set up / played. */
+  currentLineupIndex: number;
   auction: AuctionState | null;
   golf: GolfState | null;
   bomb: BombState | null;

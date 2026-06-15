@@ -9,15 +9,18 @@
   var CONST = {
     MIN_PLAYERS: 2,
     MAX_PLAYERS: 8,
-    START_POINTS: 1e3,
+    /** Spendable wallet every player starts with — coins fund the secret auction bids. */
+    START_COINS: 1e3,
+    /** How many mini-games one match runs (the host will pick these next milestone). */
+    LINEUP_SIZE: 3,
     AUCTION_BID_MS: FAST ? 600 : 15e3,
     AUCTION_TARGET_MS: FAST ? 600 : 12e3,
     AUCTION_REVEAL_MS: FAST ? 400 : 5e3,
     GOLF_TIME_LIMIT_MS: FAST ? 1500 : 15e4,
     // turn-based: everyone needs shots
     GOLF_RESULTS_MS: FAST ? 400 : 6e3,
-    GOLF_BOUNTIES: [500, 300, 200],
-    GOLF_FINISH_POINTS: 100,
+    /** A mini-game win is worth one trophy — trophies decide the match. */
+    TROPHY: 1,
     BOMB_TICK_MS: FAST ? 100 : 1e3,
     BOMB_CASH_PER_TICK: 25,
     BOMB_MULT_STEP: 0.25,
@@ -73,6 +76,9 @@
       __publicField(this, "code");
       __publicField(this, "players", []);
       __publicField(this, "phase", "lobby");
+      /** Ordered mini-games for this match, and where we are in it. */
+      __publicField(this, "lineup", []);
+      __publicField(this, "lineupIndex", 0);
       __publicField(this, "auction", null);
       __publicField(this, "golf", null);
       __publicField(this, "bomb", null);
@@ -98,7 +104,8 @@
         name,
         avatar: opts.avatar || "\u{1F642}",
         color: opts.color || "#FF2E88",
-        score: CONST.START_POINTS,
+        trophies: 0,
+        coins: CONST.START_COINS,
         isHost: opts.isHost,
         debuff: null,
         ws: opts.ws,
@@ -158,25 +165,40 @@
       if (host) this.send(host, msg);
     }
     broadcast() {
-      const msg = { t: "room_state", state: this.snapshot() };
-      const raw = JSON.stringify(msg);
+      this.rev += 1;
       for (const p of this.players) {
-        if (p.ws && p.ws.readyState === p.ws.OPEN) p.ws.send(raw);
+        if (p.ws && p.ws.readyState === p.ws.OPEN) {
+          const msg = { t: "room_state", state: this.viewState(p.id) };
+          p.ws.send(JSON.stringify(msg));
+        }
       }
     }
     sendError(playerId, message) {
       const p = this.players.find((x) => x.id === playerId);
       if (p) this.send(p, { t: "error", message });
     }
-    snapshot() {
-      var _a, _b;
+    /** Snapshot for a player who just (re)joined — goes in their room_joined. */
+    snapshotFor(viewerId) {
       this.rev += 1;
+      return this.viewState(viewerId);
+    }
+    /**
+     * Build the room snapshot from `viewerId`'s perspective. PRIVACY RULE: every
+     * player's `coins` is masked to 0 except the viewer's own, so a wallet never
+     * travels to a device that shouldn't see it — and since the TV shares the
+     * host's socket, coins never reach the big screen. Trophies are public.
+     * Does NOT bump `rev` (callers bump it once per change).
+     */
+    viewState(viewerId) {
+      var _a, _b;
       const players = this.players.map((p) => ({
         id: p.id,
         name: p.name,
         avatar: p.avatar,
         color: p.color,
-        score: p.score,
+        trophies: p.trophies,
+        coins: p.id === viewerId ? p.coins : 0,
+        // mask everyone else's wallet
         connected: !!p.ws,
         isHost: p.isHost,
         debuff: p.debuff
@@ -230,11 +252,28 @@
       let podium = null;
       if (this.phase === "podium") {
         podium = {
-          ranking: [...this.players].sort((a, b) => b.score - a.score).map((p) => p.id),
+          // Rank by most trophies; the hidden coin wallet is the absolute
+          // tiebreaker (computed from the TRUE values, never the masked ones).
+          ranking: this.rankedPlayerIds(),
           replayVotes: [...this.replayVotes]
         };
       }
-      return { code: this.code, phase: this.phase, players, auction, golf, bomb, podium, rev: this.rev };
+      return {
+        code: this.code,
+        phase: this.phase,
+        players,
+        lineup: this.lineup,
+        currentLineupIndex: this.lineupIndex,
+        auction,
+        golf,
+        bomb,
+        podium,
+        rev: this.rev
+      };
+    }
+    /** Standings: most trophies first, hidden coins as the absolute tiebreaker. */
+    rankedPlayerIds() {
+      return [...this.players].sort((a, b) => b.trophies - a.trophies || b.coins - a.coins).map((p) => p.id);
     }
     // ------------------------------ timers -----------------------------------
     /** Schedule a callback that silently dies if the room moved on (gen changed). */
@@ -272,25 +311,51 @@
       if (connected < min)
         return this.sendError(playerId, `Need at least ${CONST.MIN_PLAYERS} players`);
       this.touch();
-      this.startAuction(1);
+      this.lineup = this.defaultLineup();
+      this.lineupIndex = 0;
+      this.advanceLineup();
+    }
+    // --------------------------- lineup flow ---------------------------------
+    /** Placeholder lineup; the host will choose these in the next milestone. */
+    defaultLineup() {
+      return ["golf", "bomb", "golf"].slice(0, CONST.LINEUP_SIZE);
+    }
+    /**
+     * Generic match driver: run the bidding intermission for the next game in the
+     * lineup, or finish at the podium once every game has been played.
+     */
+    advanceLineup() {
+      if (this.lineupIndex >= this.lineup.length) {
+        this.startPodium();
+        return;
+      }
+      this.startAuction(this.lineup[this.lineupIndex]);
+    }
+    /** Launch a mini-game by type (golf begins at its first round). */
+    launchGame(game) {
+      if (game === "golf") this.startGolf(1);
+      else this.startBomb();
     }
     // ------------------------------ auction ----------------------------------
-    startAuction(round) {
+    startAuction(forGame) {
+      var _a;
       this.newGen();
       this.phase = "auction";
       for (const p of this.players) {
         p.bid = null;
         p.bidLockedAt = 0;
       }
-      const item = SABOTAGE_ITEMS[(round - 1) % SABOTAGE_ITEMS.length];
+      const item = (_a = SABOTAGE_ITEMS.find((s) => s.appliesTo === forGame)) != null ? _a : SABOTAGE_ITEMS[0];
       this.auction = {
-        round,
+        round: this.lineupIndex + 1,
+        // 1-based position in the lineup, for display
         stage: "bidding",
         item,
         endsAt: Date.now() + CONST.AUCTION_BID_MS,
         winnerId: null,
         winningBid: null,
-        targetId: null
+        targetId: null,
+        forGame
       };
       this.after(CONST.AUCTION_BID_MS, () => this.resolveAuction());
       this.broadcast();
@@ -300,7 +365,7 @@
       const p = this.players.find((x) => x.id === playerId);
       if (!p) return;
       if (p.bid !== null) return this.sendError(playerId, "Bid already locked in");
-      const clamped = Math.max(0, Math.min(p.score, Math.floor(amount)));
+      const clamped = Math.max(0, Math.min(p.coins, Math.floor(amount)));
       p.bid = clamped;
       p.bidLockedAt = Date.now();
       this.touch();
@@ -325,7 +390,7 @@
         this.broadcast();
         return;
       }
-      winner.score -= winner.bid;
+      winner.coins -= winner.bid;
       this.auction.winnerId = winner.id;
       this.auction.winningBid = winner.bid;
       this.auction.stage = "targeting";
@@ -361,8 +426,7 @@
     }
     afterAuction() {
       if (!this.auction) return;
-      if (this.auction.round === 1) this.startGolf(1);
-      else this.startBomb();
+      this.launchGame(this.auction.forGame);
     }
     // ------------------------------ golf -------------------------------------
     /**
@@ -463,17 +527,17 @@
         this.newGen();
         this.after(CONST.GOLF_RESULTS_MS, () => this.startGolf(golf.round + 1, totals));
       } else {
-        ranking.forEach((id, i) => {
-          var _a2;
-          const points = (_a2 = CONST.GOLF_BOUNTIES[i]) != null ? _a2 : CONST.GOLF_FINISH_POINTS;
-          awarded[id] = points;
-          const p = this.players.find((x) => x.id === id);
-          if (p) p.score += points;
-        });
+        const winnerId = ranking[0];
+        if (winnerId) {
+          awarded[winnerId] = CONST.TROPHY;
+          const winner = this.players.find((x) => x.id === winnerId);
+          if (winner) winner.trophies += CONST.TROPHY;
+        }
         for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
         golf.results = { order: ranking, awarded };
         this.newGen();
-        this.after(CONST.GOLF_RESULTS_MS, () => this.startAuction(2));
+        this.lineupIndex += 1;
+        this.after(CONST.GOLF_RESULTS_MS, () => this.advanceLineup());
       }
       this.touch();
       this.broadcast();
@@ -566,12 +630,16 @@
       bomb.holderId = null;
       bomb.survivors = [...bomb.alive];
       for (const p of this.players) {
-        p.score += (_a = bomb.earnings[p.id]) != null ? _a : 0;
-        if (bomb.survivors.includes(p.id)) p.score += CONST.BOMB_SURVIVOR_BONUS;
+        p.coins += (_a = bomb.earnings[p.id]) != null ? _a : 0;
+        if (bomb.survivors.includes(p.id)) {
+          p.trophies += CONST.TROPHY;
+          p.coins += CONST.BOMB_SURVIVOR_BONUS;
+        }
         if (p.debuff === "jammed") p.debuff = null;
       }
       this.broadcast();
-      this.after(CONST.BOMB_ROUND_BREAK_MS, () => this.startPodium());
+      this.lineupIndex += 1;
+      this.after(CONST.BOMB_ROUND_BREAK_MS, () => this.advanceLineup());
     }
     // ------------------------------ podium -----------------------------------
     startPodium() {
@@ -590,13 +658,16 @@
       const everyoneIn = connected.length > 0 && connected.every((p) => this.replayVotes.has(p.id));
       if (everyoneIn) {
         for (const p of this.players) {
-          p.score = CONST.START_POINTS;
+          p.trophies = 0;
+          p.coins = CONST.START_COINS;
           p.debuff = null;
         }
         this.golf = null;
         this.bomb = null;
         this.replayVotes.clear();
-        this.startAuction(1);
+        this.lineup = this.defaultLineup();
+        this.lineupIndex = 0;
+        this.advanceLineup();
       } else {
         this.broadcast();
       }
@@ -660,7 +731,7 @@
             t: "room_joined",
             playerId: res.player.id,
             token: res.player.token,
-            state: room.snapshot()
+            state: room.snapshotFor(res.player.id)
           });
           break;
         }
@@ -682,7 +753,7 @@
             t: "room_joined",
             playerId: res.player.id,
             token: res.player.token,
-            state: room.snapshot()
+            state: room.snapshotFor(res.player.id)
           });
           break;
         }
@@ -697,7 +768,7 @@
             t: "room_joined",
             playerId: player.id,
             token: player.token,
-            state: room.snapshot()
+            state: room.snapshotFor(player.id)
           });
           break;
         }

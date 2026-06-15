@@ -6,12 +6,22 @@ enum GamePhase: String {
     case lobby, auction, golf, bomb, podium
 }
 
+/// A playable mini-game. The match `lineup` is an ordered list of these.
+enum GameType: String, Codable {
+    case golf, bomb
+}
+
 struct PlayerState: Codable, Identifiable, Equatable, Hashable {
     let id: String
     let name: String
     let avatar: String
     let color: String
-    let score: Int
+    /// Mini-game wins — PUBLIC, shown on the TV, decides the match.
+    let trophies: Int
+    /// Spendable money — PRIVATE. The server only sends each player their OWN
+    /// real value; every other player's `coins` arrives masked to 0, so wallets
+    /// never reach the TV. Only show this on the owner's own phone.
+    let coins: Int
     let connected: Bool
     let isHost: Bool
     let debuff: String?
@@ -81,6 +91,11 @@ struct RoomState: Codable, Equatable {
     let code: String
     let phase: String
     let players: [PlayerState]
+    /// Ordered mini-games this match runs (max 3). Decoded as raw strings so an
+    /// unknown future game type can't fail the whole snapshot.
+    let lineup: [String]
+    /// Index into `lineup` of the game currently being set up / played.
+    let currentLineupIndex: Int
     let auction: AuctionState?
     let golf: GolfState?
     let bomb: BombState?

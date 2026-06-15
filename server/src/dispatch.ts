@@ -41,7 +41,7 @@ export function handleClientMessage(
           t: "room_joined",
           playerId: res.player.id,
           token: res.player.token,
-          state: room.snapshot(),
+          state: room.snapshotFor(res.player.id),
         });
         break;
       }
@@ -63,7 +63,7 @@ export function handleClientMessage(
           t: "room_joined",
           playerId: res.player.id,
           token: res.player.token,
-          state: room.snapshot(),
+          state: room.snapshotFor(res.player.id),
         });
         break;
       }
@@ -78,7 +78,7 @@ export function handleClientMessage(
           t: "room_joined",
           playerId: player.id,
           token: player.token,
-          state: room.snapshot(),
+          state: room.snapshotFor(player.id),
         });
         break;
       }

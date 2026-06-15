@@ -33,7 +33,7 @@ struct BoardPodiumView: View {
                 if ranked.count > 3 {
                     HStack(spacing: 22) {
                         ForEach(ranked.dropFirst(3)) { player in
-                            Text("#\(rank(of: player))  \(player.avatar) \(player.name) · \(player.score)")
+                            Text("#\(rank(of: player))  \(player.avatar) \(player.name) · \(player.trophies)🏆")
                                 .font(Theme.body(18))
                                 .foregroundStyle(.white.opacity(0.55))
                         }
@@ -78,7 +78,7 @@ struct BoardPodiumView: View {
                         Text("👑").font(.system(size: 44))
                     }
                     AvatarChip(player: slot.player, size: slot.place == 1 ? 110 : 84)
-                    Text("\(slot.player.score)")
+                    Text("\(slot.player.trophies)🏆")
                         .font(Theme.title(28))
                         .foregroundStyle(Theme.yellow)
                     RoundedRectangle(cornerRadius: 14)

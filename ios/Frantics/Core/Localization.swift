@@ -96,7 +96,7 @@ final class Localization: ObservableObject {
         "LOCK IN SECRET BID  🤫": "صكّ مزايدتك بالسر  🤫",
         "BID NOTHING  🙅": "لا تزايد  🙅",
         "YOU WON %@": "كسبت %@",
-        "for %@ points. Now… who suffers?": "بـ %@ نقطة. الحين… مين بيدفع الثمن؟",
+        "for %@ coins. Now… who suffers?": "بـ %@ كوينز. الحين… مين بيدفع الثمن؟",
         "%@ won the %@": "%@ كسب %@",
         "…and is choosing a victim. Look innocent.": "…ويختار ضحية. سوِّ نفسك ما تدري.",
         "IT'S YOU.": "إنت الضحية.",
@@ -155,10 +155,10 @@ final class Localization: ObservableObject {
         "Bid in secret on your phones…": "زايدوا بالسر من جوالاتكم…",
         "🔒 LOCKED": "🔒 مصكوك",
         "thinking…": "يفكّر…",
-        "SOLD to %@ %@ for %@!": "انباع لـ %@ %@ بـ %@!",
+        "SOLD to %@ %@!": "انباع لـ %@ %@!",
         "They're choosing a victim right now…": "يختار ضحيته الحين…",
         "%@ sabotaged %@!": "%@ خرّب على %@!",
-        "NO SALE — everyone kept their points": "ما انباع — كلٍّ احتفظ بنقاطه",
+        "NO SALE — everyone kept their coins": "ما انباع — كلٍّ احتفظ بكوينزه",
 
         // Bomb board
         "💣 THE BILLIONAIRE'S BOMB": "💣 قنبلة المليونير",

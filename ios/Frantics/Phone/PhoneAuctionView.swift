@@ -40,7 +40,7 @@ struct PhoneAuctionView: View {
 
     @ViewBuilder
     private func bidding(_ auction: AuctionState) -> some View {
-        let maxBid = Double(max(0, client.me?.score ?? 0))
+        let maxBid = Double(max(0, client.me?.coins ?? 0)) // bids are paid from your private coin wallet
 
         VStack(spacing: 6) {
             Text(loc.tr("THE DIRTY AUCTION"))
@@ -111,7 +111,7 @@ struct PhoneAuctionView: View {
             .font(Theme.title(28))
             .foregroundStyle(Theme.yellow)
             .neonGlow(Theme.yellow)
-        Text(loc.tr("for %@ points. Now… who suffers?", "\(auction.winningBid ?? 0)"))
+        Text(loc.tr("for %@ coins. Now… who suffers?", "\(auction.winningBid ?? 0)"))
             .font(Theme.body(16))
             .foregroundStyle(.white.opacity(0.7))
         CountdownLabel(endsAt: auction.endsAtDate, font: Theme.title(30))

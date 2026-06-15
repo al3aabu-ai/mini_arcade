@@ -22,7 +22,9 @@ struct PhonePodiumView: View {
                     .foregroundStyle(place == 1 ? Theme.yellow : .white)
                     .neonGlow(place == 1 ? Theme.yellow : Theme.purple)
                 if let me = client.me {
-                    Text(loc.tr("%@ points", "\(me.score)"))
+                    // Trophies decided your place; your private coin wallet was the
+                    // hidden tiebreaker — both shown only here, on your own phone.
+                    Text("\(me.trophies)🏆   \(me.coins)🪙")
                         .font(Theme.body(20))
                         .foregroundStyle(.white.opacity(0.7))
                 }
