@@ -55,10 +55,12 @@ Golf is a **three-round segment**, each round a different course, played turn-ba
 
 ### Thermal / rendering budget (host phone runs the server AND renders)
 The host phone runs the JS game server *and* renders the 3D board, so the GPU
-budget is tight — it throttles fast. Keep these levers in place:
+budget is tight — it throttles fast. A 60fps + 2X-MSAA pass pushed the heat
+threshold from ~3min to ~6min; the levers below are the aggressive low-power
+**baseline** (visuals deliberately stripped — raise them back once thermals hold):
 - **Cap the frame rate.** Every `SceneView` passes `preferredFramesPerSecond:
-  GolfSceneController.targetFPS` (60). Uncapped, ProMotion hardware renders 120Hz
-  and overheats within minutes. Flip `targetFPS` to 30 to baseline thermals.
+  GolfSceneController.targetFPS`. Currently **30** (baseline); was 60. Uncapped,
+  ProMotion hardware renders 120Hz and overheats within minutes. One constant.
 - **On-demand rendering.** `SceneView` `options` deliberately OMIT
   `.rendersContinuously`, so SceneKit only redraws when the scene is dirty.
 - **Cheaper AA.** `antialiasingMode: .multisampling2X` (not the 4X default) — half
@@ -67,9 +69,16 @@ budget is tight — it throttles fast. Keep these levers in place:
   .isPaused = true` (and `.onAppear` clears it). One flag freezes every looping
   obstacle action, the physics step, and the render loop while the board isn't
   visible (lobby, podium, between rounds, host closing the preview).
-- **HDR only off-AirPlay.** The HDR/bloom/SSAO post stack runs only when *not*
-  mirroring (`useHDR: !boardDisplayConnected`) — so it's already off during normal
-  TV play. If the phone still runs hot, this stack is the next lever to trim.
+- **No HDR/bloom/SSAO (baseline).** `useHDR` is force-`false` at the
+  `GolfSceneController(...)` call site, so the camera keeps SceneKit's defaults
+  (`wantsHDR=false`, bloom 0, SSAO 0) and **no post-processing pass runs**. The
+  glow + screen-space ambient-occlusion passes were a prime GPU/thermal cost on
+  mobile. Restore the rich look by reverting to `!client.boardDisplayConnected`.
+- **No real-time shadows (baseline).** All three directional "sun" lights set
+  `castsShadow = false`. A 2048² shadow map was re-rendering every frame as the
+  moving props/gates dirtied it. The **baked-AO vignette** over the fairway still
+  grounds the scene, so it's not fully flat. Flip `castsShadow` back to `true`
+  (Guerilla keeps its tuned `shadowMapSize`/`shadowRadius`) to restore them.
 - The render loop (`renderer(_:updateAtTime:)`) is **frame-rate independent** —
   all timing gates on wall-clock `CACurrentMediaTime()`/`Date`, never frame counts.
 - Decorative looping actions (pennants, torches, water bob, propeller, gates) are

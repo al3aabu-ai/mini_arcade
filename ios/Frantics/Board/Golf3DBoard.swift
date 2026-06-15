@@ -183,9 +183,13 @@ struct GolfBoardView: View {
         let sceneController = GolfSceneController(
             players: infos,
             endsAt: golf.endsAtDate,
-            // The HDR stack is the prime suspect for the AirPlay crash, so it
-            // stays off whenever the board is on the external display.
-            useHDR: !client.boardDisplayConnected,
+            // THERMAL BASELINE: HDR/bloom/SSAO are force-disabled everywhere.
+            // The post-processing passes (glow + screen-space ambient occlusion)
+            // cook the mobile GPU; with useHDR=false the camera keeps SceneKit's
+            // defaults (wantsHDR=false, bloom 0, SSAO 0) so none of them run. This
+            // also keeps the AirPlay-crash-prone HDR path off. To restore the rich
+            // look later, revert to `!client.boardDisplayConnected`.
+            useHDR: false,
             map: golf.map,
             onSank: { playerId in
                 if let p = room.player(playerId) {
@@ -440,10 +444,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     let scene = SCNScene()
     let cameraNode = SCNNode()
 
-    /// Thermal cap — the SceneView renders at most this many FPS. 60 plays
-    /// smoothly; flip to 30 here to baseline thermals on a hot device. Without
-    /// the cap, ProMotion hardware pushes 120Hz and needlessly cooks the GPU.
-    static let targetFPS = 60
+    /// Thermal cap — the SceneView renders at most this many FPS. Dropped to 30
+    /// for a rock-solid low-power baseline (was 60); raise back to 60 once we've
+    /// confirmed the heat buildup is under control. Without the cap, ProMotion
+    /// hardware pushes 120Hz and needlessly cooks the GPU.
+    static let targetFPS = 30
 
     private let players: [GolfPlayerInfo]
     private let endsAt: Date
@@ -627,7 +632,12 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         sun.light?.type = .directional
         sun.light?.intensity = 1250
         sun.light?.color = UIColor(red: 1.0, green: 0.93, blue: 0.82, alpha: 1)
-        sun.light?.castsShadow = true
+        // THERMAL BASELINE: real-time shadow casting OFF. A 2048² shadow map was
+        // re-rendering every frame as the props/gates moved — a major GPU cost.
+        // The baked-AO vignette over the fairway still grounds the scene. Flip
+        // castsShadow back to true (and keep the tuned map/radius below) to
+        // restore dynamic shadows once thermals are confirmed acceptable.
+        sun.light?.castsShadow = false
         sun.light?.shadowRadius = 9
         sun.light?.shadowMapSize = CGSize(width: 2048, height: 2048)
         sun.light?.shadowColor = UIColor(red: 0.05, green: 0.0, blue: 0.15, alpha: 0.55)

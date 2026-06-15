@@ -390,7 +390,7 @@ final class TikiRunwayCourse: GolfHazardCourse {
         sun.light?.type = .directional
         sun.light?.intensity = 1100
         sun.light?.color = UIColor(red: 1.0, green: 0.96, blue: 0.86, alpha: 1)
-        sun.light?.castsShadow = true
+        sun.light?.castsShadow = false // THERMAL BASELINE: no per-frame shadow map (flip back to true to restore)
         sun.eulerAngles = SCNVector3(-Float.pi / 3, 0.4, 0)
         sceneryNode.addChildNode(sun)
 
