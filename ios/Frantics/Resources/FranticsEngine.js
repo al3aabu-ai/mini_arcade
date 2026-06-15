@@ -21,6 +21,8 @@
     GOLF_RESULTS_MS: FAST ? 400 : 6e3,
     /** A mini-game win is worth one trophy — trophies decide the match. */
     TROPHY: 1,
+    /** Flat coins credited for grabbing a loose coin on the field. */
+    COIN_VALUE: 50,
     BOMB_TICK_MS: FAST ? 100 : 1e3,
     BOMB_CASH_PER_TICK: 25,
     BOMB_MULT_STEP: 0.25,
@@ -236,7 +238,8 @@
           results: this.golf.results,
           round: this.golf.round,
           map: this.golf.map,
-          strokes
+          strokes,
+          spawnedCoins: this.golf.spawnedCoins
         };
       }
       let bomb = null;
@@ -252,7 +255,8 @@
           earnings: this.bomb.earnings,
           jamUntil: this.bomb.jamUntil,
           lastExplodedId: this.bomb.lastExplodedId,
-          survivors: this.bomb.survivors
+          survivors: this.bomb.survivors,
+          spawnedCoins: this.bomb.spawnedCoins
         };
       }
       let podium = null;
@@ -495,7 +499,9 @@
         round,
         map: round >= 3 ? "runway" : round === 2 ? "tiki" : "guerilla",
         priorStrokes: prior,
-        roundStrokes: round0
+        roundStrokes: round0,
+        spawnedCoins: []
+        // the host board registers this round's layout once it builds
       };
       this.after(CONST.GOLF_TIME_LIMIT_MS + 5e3, () => this.finishGolf([]));
       this.broadcast();
@@ -582,6 +588,50 @@
       this.touch();
       this.broadcast();
     }
+    // ------------------------------ coins ------------------------------------
+    /** Keep only well-formed coins (id + finite x/y/z), capped to a sane count. */
+    sanitizeCoins(coins) {
+      if (!Array.isArray(coins)) return [];
+      const num = (v) => typeof v === "number" && Number.isFinite(v) ? v : 0;
+      return coins.filter((c) => typeof c === "object" && c !== null && typeof c.id === "string").slice(0, 8).map((c) => ({ id: String(c.id), x: num(c.x), y: num(c.y), z: num(c.z) }));
+    }
+    /** Host board registers the loose coins it placed on this golf round's course. */
+    registerCoins(reporterId, coins) {
+      const reporter = this.players.find((p) => p.id === reporterId);
+      if (!(reporter == null ? void 0 : reporter.isHost)) return;
+      if (this.phase !== "golf" || !this.golf) return;
+      this.golf.spawnedCoins = this.sanitizeCoins(coins);
+      this.touch();
+      this.broadcast();
+    }
+    /**
+     * A ball ran into a coin (reported by the host board). Validate the coin still
+     * exists, remove it from the map, and credit the flat COIN_VALUE to the player
+     * whose ball grabbed it. Host-only — the board owns the physics.
+     */
+    collectCoin(reporterId, coinId, collectorId) {
+      const reporter = this.players.find((p) => p.id === reporterId);
+      if (!(reporter == null ? void 0 : reporter.isHost)) return;
+      if (this.phase !== "golf" || !this.golf) return;
+      const idx = this.golf.spawnedCoins.findIndex((c) => c.id === coinId);
+      if (idx === -1) return;
+      this.golf.spawnedCoins.splice(idx, 1);
+      const collector = this.players.find((p) => p.id === collectorId);
+      if (collector) collector.coins += CONST.COIN_VALUE;
+      this.touch();
+      this.broadcast();
+    }
+    /** Scatter 2–3 coins around the 2-D bomb arena (fractional screen coords). */
+    generateBombCoins() {
+      const count = 2 + Math.floor(Math.random() * 2);
+      const coins = [];
+      for (let i = 0; i < count; i++) {
+        const x = 0.16 + Math.random() * 0.68;
+        const y = 0.24 + Math.random() * 0.42;
+        coins.push({ id: `bcoin-${i}`, x, y, z: 0 });
+      }
+      return coins;
+    }
     // ------------------------------ bomb -------------------------------------
     startBomb() {
       this.newGen();
@@ -597,7 +647,8 @@
         earnings,
         jamUntil: null,
         lastExplodedId: null,
-        survivors: null
+        survivors: null,
+        spawnedCoins: this.generateBombCoins()
       };
       this.startBombRound();
     }
@@ -640,6 +691,11 @@
       const next = bomb.alive[(idx + step + bomb.alive.length) % bomb.alive.length];
       if (next === playerId) return;
       this.setBombHolder(next);
+      const coin = bomb.spawnedCoins.shift();
+      if (coin) {
+        const passer = this.players.find((p) => p.id === playerId);
+        if (passer) passer.coins += CONST.COIN_VALUE;
+      }
       this.touch();
       this.broadcast();
     }
@@ -822,6 +878,12 @@
               break;
             case "select_lineup":
               room.selectLineup(playerId, msg.lineup);
+              break;
+            case "register_coins":
+              room.registerCoins(playerId, msg.coins);
+              break;
+            case "collect_coin":
+              room.collectCoin(playerId, String(msg.coinId), String(msg.playerId));
               break;
             case "submit_bid":
               room.submitBid(playerId, Number(msg.amount));

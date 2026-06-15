@@ -201,6 +201,12 @@ struct GolfBoardView: View {
             },
             onFinished: { order in
                 client.golfFinished(order: order)
+            },
+            onRegisterCoins: { coins in
+                client.registerCoins(coins)
+            },
+            onCollectCoin: { coinId, playerId in
+                client.collectCoin(coinId: coinId, playerId: playerId)
             }
         )
         client.onAim = { [weak sceneController] id, angle, power in
@@ -417,6 +423,13 @@ protocol GolfHazardCourse {
     var holeCenter: SCNVector3 { get }
     func isOverWater(_ p: SCNVector3) -> Bool
     func isOverSand(_ p: SCNVector3) -> Bool
+    /// World positions where the controller should drop spinning collectible
+    /// coins — placed strategically along the course's pathways.
+    var coinPositions: [SCNVector3] { get }
+}
+
+extension GolfHazardCourse {
+    var coinPositions: [SCNVector3] { [] } // courses opt in by overriding
 }
 
 final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsContactDelegate {
@@ -460,6 +473,12 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     private let onSank: (String) -> Void
     private let onProgress: (String?, [String]) -> Void
     private let onFinished: ([String]) -> Void
+    /// Coin callbacks: register the placed layout with the server, and report a
+    /// pickup (coinId, collecting playerId) so the server credits the wallet.
+    private let onRegisterCoins: ([GolfCoinSpawn]) -> Void
+    private let onCollectCoin: (String, String) -> Void
+    /// Live coin nodes by id (render-thread-only, like `balls`).
+    private var coins: [String: SCNNode] = [:]
 
     // Render-thread state. Only touched inside renderer(_:updateAtTime:).
     private var balls: [String: Ball] = [:]
@@ -506,6 +525,9 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     /// static/static pair and skip it, so balls fell through the floor. Use a
     /// private high bit instead.
     private static let ballCategory = 1 << 5
+    /// Coins live on their own bit so they can be a contact-only trigger that the
+    /// ball passes THROUGH (the ball's collisionBitMask excludes this bit).
+    private static let coinCategory = 1 << 6
     /// Immutable set of ball ids, safe to read from the physics thread inside the
     /// contact delegate (the `balls` dictionary is render-thread-only).
     private let ballIds: Set<String>
@@ -525,7 +547,9 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         map: String = "guerilla",
         onSank: @escaping (String) -> Void,
         onProgress: @escaping (String?, [String]) -> Void,
-        onFinished: @escaping ([String]) -> Void
+        onFinished: @escaping ([String]) -> Void,
+        onRegisterCoins: @escaping ([GolfCoinSpawn]) -> Void = { _ in },
+        onCollectCoin: @escaping (String, String) -> Void = { _, _ in }
     ) {
         self.players = players
         self.endsAt = endsAt
@@ -534,6 +558,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         self.onSank = onSank
         self.onProgress = onProgress
         self.onFinished = onFinished
+        self.onRegisterCoins = onRegisterCoins
+        self.onCollectCoin = onCollectCoin
         self.turnQueue = players.map(\.id)
         self.ballIds = Set(players.map(\.id)) // NEW: physics-thread-safe id lookup
         super.init()
@@ -581,6 +607,51 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             m.diffuse.contentsTransform = SCNMatrix4MakeScale(tile.0, tile.1, 1)
         }
         return m
+    }
+
+    // MARK: coins
+
+    /// Drop spinning gold coins at the course's strategic positions, then tell
+    /// the server about them so it owns coin existence + crediting. Called by the
+    /// Tiki/Runway builders (Guerilla ships no coins).
+    private func spawnCoins(at positions: [SCNVector3]) {
+        guard !positions.isEmpty else { return }
+        var spawns: [GolfCoinSpawn] = []
+        for (i, pos) in positions.enumerated() {
+            let id = "coin-\(i)"
+            let node = makeCoinNode(id: id, at: pos)
+            scene.rootNode.addChildNode(node)
+            coins[id] = node
+            spawns.append(GolfCoinSpawn(id: id, x: Double(pos.x), y: Double(pos.y), z: Double(pos.z)))
+        }
+        DispatchQueue.main.async { [onRegisterCoins] in onRegisterCoins(spawns) }
+    }
+
+    /// A low-poly gold coin: a thin upright box that slowly spins on its Y axis,
+    /// with a STATIC contact-only trigger body (the ball passes through it).
+    private func makeCoinNode(id: String, at position: SCNVector3) -> SCNNode {
+        let box = SCNBox(width: 0.62, height: 0.62, length: 0.12, chamferRadius: 0.06)
+        let gold = SCNMaterial()
+        gold.lightingModel = .physicallyBased
+        gold.diffuse.contents = UIColor(Theme.yellow)
+        gold.metalness.contents = 0.95
+        gold.roughness.contents = 0.25
+        gold.emission.contents = UIColor(red: 0.45, green: 0.36, blue: 0.0, alpha: 1)
+        box.materials = [gold]
+
+        let node = SCNNode(geometry: box)
+        node.name = id
+        node.position = position
+
+        let body = SCNPhysicsBody(type: .static, shape: SCNPhysicsShape(geometry: box, options: nil))
+        body.isAffectedByGravity = false
+        body.categoryBitMask = Self.coinCategory
+        body.collisionBitMask = 0                    // never push anything (pure trigger)
+        body.contactTestBitMask = Self.ballCategory  // fire didBegin when a ball touches it
+        node.physicsBody = body
+
+        node.runAction(.repeatForever(.rotateBy(x: 0, y: CGFloat.pi * 2, z: 0, duration: 2.0)))
+        return node
     }
 
     // MARK: world building
@@ -788,6 +859,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
                                  cameraPos: SCNVector3(0, 30, 30), lookAt: SCNVector3(0, 0, -2),
                                  followOffset: SCNVector3(0, 14, 19))
         scene.rootNode.addChildNode(course.root)
+        spawnCoins(at: course.coinPositions)
     }
 
     /// Round 3: assemble the long, straight Tiki Runway gauntlet.
@@ -801,6 +873,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
                                  cameraPos: SCNVector3(0, 40, 34), lookAt: SCNVector3(0, 0, -4),
                                  followOffset: SCNVector3(0, 14, 22))
         scene.rootNode.addChildNode(course.root)
+        spawnCoins(at: course.coinPositions)
     }
 
     /// Shared sky/gravity/contacts/camera setup for the Tiki course modules.
@@ -1024,7 +1097,9 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             // contactTestBitMask = ballCategory only, so the contact delegate
             // fires for ball↔ball alone (the floor no longer spams it).
             body.categoryBitMask = Self.ballCategory
-            body.collisionBitMask = -1            // ~0 = all layers (incl. the floor)
+            // Collide with every layer EXCEPT coins — coins are contact-only
+            // triggers the ball rolls straight through (no deflection).
+            body.collisionBitMask = ~Self.coinCategory
             body.contactTestBitMask = Self.ballCategory
             // Never let the body sleep. A sleeping body caches a stale transform
             // and, on the wake-up impulse, re-solves its matrices a frame behind —
@@ -1396,9 +1471,23 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     /// (`ballIds`) and the value-typed contact, then hops to the render thread via
     /// `enqueue` for anything that mutates the scene.
     func physicsWorld(_ world: SCNPhysicsWorld, didBegin contact: SCNPhysicsContact) {
+        let nameA = contact.nodeA.name
+        let nameB = contact.nodeB.name
+
+        // Coin pickup: one node is a coin ("coin-…"), the other an active ball.
+        // The collecting player IS the ball's owner (node name == player id).
+        if let coinId = nameA, coinId.hasPrefix("coin-"), let p = nameB, ballIds.contains(p) {
+            enqueue { s in s.collectCoinLocally(coinId: coinId, by: p) }
+            return
+        }
+        if let coinId = nameB, coinId.hasPrefix("coin-"), let p = nameA, ballIds.contains(p) {
+            enqueue { s in s.collectCoinLocally(coinId: coinId, by: p) }
+            return
+        }
+
         // Ball-ball only — reject ball↔course/bumper contacts.
-        guard let a = contact.nodeA.name, ballIds.contains(a),
-              let b = contact.nodeB.name, ballIds.contains(b) else { return }
+        guard let a = nameA, ballIds.contains(a),
+              let b = nameB, ballIds.contains(b) else { return }
         let now = CACurrentMediaTime()
         guard now - lastBallContactTime > 0.08 else { return } // collapse the contact burst
         lastBallContactTime = now
@@ -1426,5 +1515,24 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         emitter.addParticleSystem(sparks)
         scene.rootNode.addChildNode(emitter)
         emitter.runAction(.sequence([.wait(duration: 1.0), .removeFromParentNode()]))
+    }
+
+    /// Render-thread coin pickup: animate the coin out locally, then report it to
+    /// the server (which removes it globally and credits the collector). The
+    /// `coins` registry guard makes a burst of contacts collect a coin only once.
+    private func collectCoinLocally(coinId: String, by playerId: String) {
+        guard let node = coins.removeValue(forKey: coinId) else { return } // already grabbed
+        node.physicsBody = nil
+        let point = node.presentation.position
+        node.runAction(.sequence([
+            .group([
+                .scale(to: 0.01, duration: 0.28),
+                .moveBy(x: 0, y: 1.4, z: 0, duration: 0.28),
+                .fadeOut(duration: 0.28),
+            ]),
+            .removeFromParentNode(),
+        ]))
+        spawnCollisionSpark(at: point, strength: 0.5) // a little golden pop
+        DispatchQueue.main.async { [onCollectCoin] in onCollectCoin(coinId, playerId) }
     }
 }

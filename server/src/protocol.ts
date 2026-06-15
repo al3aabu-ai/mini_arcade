@@ -28,6 +28,8 @@ export const CONST = {
   GOLF_RESULTS_MS: FAST ? 400 : 6_000,
   /** A mini-game win is worth one trophy — trophies decide the match. */
   TROPHY: 1,
+  /** Flat coins credited for grabbing a loose coin on the field. */
+  COIN_VALUE: 50,
 
   BOMB_TICK_MS: FAST ? 100 : 1_000,
   BOMB_CASH_PER_TICK: 25,
@@ -46,6 +48,18 @@ export type Phase = "lobby" | "selection" | "auction" | "golf" | "bomb" | "podiu
 
 /** A playable mini-game. The match `lineup` is an ordered list of these. */
 export type GameType = "golf" | "bomb";
+
+/**
+ * A collectible coin on the active field. PUBLIC map state (positions are not
+ * secret — only the wallet total is). For golf, (x,y,z) are SceneKit world
+ * coordinates; for the 2-D bomb arena, (x,y) are fractional screen coords [0,1].
+ */
+export interface Coin {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+}
 
 export type Debuff = "anvil" | "jammed";
 
@@ -146,6 +160,8 @@ export interface GolfState {
   map: GolfMap;
   /** cumulative strokes per player across all golf rounds so far (lower = better) */
   strokes: Record<string, number>;
+  /** loose coins currently on the course (registered by the host board) */
+  spawnedCoins: Coin[];
 }
 
 export type BombStage = "ticking" | "exploded" | "done";
@@ -166,6 +182,8 @@ export interface BombState {
   jamUntil: number | null;
   lastExplodedId: string | null;
   survivors: string[] | null;
+  /** loose coins in the arena; a passer grabs one each time they pass the bomb */
+  spawnedCoins: Coin[];
 }
 
 export interface PodiumState {
@@ -201,6 +219,8 @@ export type ClientMessage =
   | { t: "start_game" }
   | { t: "preview_lineup"; lineup: GameType[] } // host live-updates the in-progress picks (TV mirror)
   | { t: "select_lineup"; lineup: GameType[] } // host commits exactly `size` games → starts the match
+  | { t: "register_coins"; coins: Coin[] } // host board → server: this golf round's coin layout
+  | { t: "collect_coin"; coinId: string; playerId: string } // host board → server: a ball hit a coin
   | { t: "submit_bid"; amount: number }
   | { t: "choose_target"; targetId: string }
   | { t: "aim"; angle: number; power: number } // power 0..1, angle radians (0 = right, pi/2 = up)

@@ -95,6 +95,12 @@ export function handleClientMessage(
           case "select_lineup":
             room.selectLineup(playerId, msg.lineup); // sanitized + validated server-side
             break;
+          case "register_coins":
+            room.registerCoins(playerId, msg.coins); // sanitized server-side
+            break;
+          case "collect_coin":
+            room.collectCoin(playerId, String(msg.coinId), String(msg.playerId));
+            break;
           case "submit_bid":
             room.submitBid(playerId, Number(msg.amount));
             break;

@@ -5,6 +5,7 @@ import {
   type AuctionStage,
   type AuctionState,
   type BombState,
+  type Coin,
   type Debuff,
   type GameType,
   type GolfMap,
@@ -61,6 +62,8 @@ interface GolfInternal {
   priorStrokes: Record<string, number>;
   /** strokes taken this round, counted server-side from on-turn fires */
   roundStrokes: Record<string, number>;
+  /** loose coins on the course this round, registered by the host board */
+  spawnedCoins: Coin[];
 }
 
 interface BombInternal {
@@ -73,6 +76,7 @@ interface BombInternal {
   jamUntil: number | null;
   lastExplodedId: string | null;
   survivors: string[] | null;
+  spawnedCoins: Coin[];
 }
 
 export class Room {
@@ -260,6 +264,7 @@ export class Room {
         round: this.golf.round,
         map: this.golf.map,
         strokes,
+        spawnedCoins: this.golf.spawnedCoins,
       };
     }
     let bomb: BombState | null = null;
@@ -276,6 +281,7 @@ export class Room {
         jamUntil: this.bomb.jamUntil,
         lastExplodedId: this.bomb.lastExplodedId,
         survivors: this.bomb.survivors,
+        spawnedCoins: this.bomb.spawnedCoins,
       };
     }
     let podium: PodiumState | null = null;
@@ -543,6 +549,7 @@ export class Room {
       map: round >= 3 ? "runway" : round === 2 ? "tiki" : "guerilla",
       priorStrokes: prior,
       roundStrokes: round0,
+      spawnedCoins: [], // the host board registers this round's layout once it builds
     };
     // Backstop: if the host board never reports (e.g. host died), finish with no finishers.
     this.after(CONST.GOLF_TIME_LIMIT_MS + 5000, () => this.finishGolf([]));
@@ -650,6 +657,59 @@ export class Room {
     this.broadcast();
   }
 
+  // ------------------------------ coins ------------------------------------
+
+  /** Keep only well-formed coins (id + finite x/y/z), capped to a sane count. */
+  private sanitizeCoins(coins: unknown): Coin[] {
+    if (!Array.isArray(coins)) return [];
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    return coins
+      .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null && typeof (c as any).id === "string")
+      .slice(0, 8)
+      .map((c) => ({ id: String(c.id), x: num(c.x), y: num(c.y), z: num(c.z) }));
+  }
+
+  /** Host board registers the loose coins it placed on this golf round's course. */
+  registerCoins(reporterId: string, coins: Coin[]) {
+    const reporter = this.players.find((p) => p.id === reporterId);
+    if (!reporter?.isHost) return; // only the authoritative board places coins
+    if (this.phase !== "golf" || !this.golf) return;
+    this.golf.spawnedCoins = this.sanitizeCoins(coins);
+    this.touch();
+    this.broadcast();
+  }
+
+  /**
+   * A ball ran into a coin (reported by the host board). Validate the coin still
+   * exists, remove it from the map, and credit the flat COIN_VALUE to the player
+   * whose ball grabbed it. Host-only — the board owns the physics.
+   */
+  collectCoin(reporterId: string, coinId: string, collectorId: string) {
+    const reporter = this.players.find((p) => p.id === reporterId);
+    if (!reporter?.isHost) return;
+    if (this.phase !== "golf" || !this.golf) return;
+    const idx = this.golf.spawnedCoins.findIndex((c) => c.id === coinId);
+    if (idx === -1) return; // already collected or unknown
+    this.golf.spawnedCoins.splice(idx, 1);
+    const collector = this.players.find((p) => p.id === collectorId);
+    if (collector) collector.coins += CONST.COIN_VALUE;
+    this.touch();
+    this.broadcast();
+  }
+
+  /** Scatter 2–3 coins around the 2-D bomb arena (fractional screen coords). */
+  private generateBombCoins(): Coin[] {
+    const count = 2 + Math.floor(Math.random() * 2); // 2 or 3
+    const coins: Coin[] = [];
+    for (let i = 0; i < count; i++) {
+      // Keep them off the central pot and away from the very edges.
+      const x = 0.16 + Math.random() * 0.68;
+      const y = 0.24 + Math.random() * 0.42;
+      coins.push({ id: `bcoin-${i}`, x, y, z: 0 });
+    }
+    return coins;
+  }
+
   // ------------------------------ bomb -------------------------------------
 
   private startBomb() {
@@ -667,6 +727,7 @@ export class Room {
       jamUntil: null,
       lastExplodedId: null,
       survivors: null,
+      spawnedCoins: this.generateBombCoins(),
     };
     this.startBombRound();
   }
@@ -715,6 +776,14 @@ export class Room {
     const next = bomb.alive[(idx + step + bomb.alive.length) % bomb.alive.length];
     if (next === playerId) return; // alone in the circle, nowhere to pass
     this.setBombHolder(next);
+    // Pick-up-while-passing: the passer snatches one loose coin, if any remain.
+    // (The bomb is a 2-D arena, so this is the pass-to-collect analog of the
+    // golf ball's physics pickup — no spatial collision to detect.)
+    const coin = bomb.spawnedCoins.shift();
+    if (coin) {
+      const passer = this.players.find((p) => p.id === playerId);
+      if (passer) passer.coins += CONST.COIN_VALUE;
+    }
     this.touch();
     this.broadcast();
   }

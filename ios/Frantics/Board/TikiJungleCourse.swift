@@ -52,6 +52,15 @@ final class TikiJungleCourse: GolfHazardCourse {
     let teePosition = SCNVector3(0, 1.0, 15.5)
     let holeCenter = SCNVector3(2.5, 0.2, -16)
 
+    /// Loose coins along the tee→hole path, threaded between the sand bunker
+    /// (2,4 r2.4) and the hippo pool (-4,-6 r3) for some risk on the lines.
+    let coinPositions: [SCNVector3] = [
+        SCNVector3(0, 0.6, 9),     // mid-fairway, clear grab
+        SCNVector3(-1.5, 0.6, 1),  // hug the left to skirt the sand bunker
+        SCNVector3(1.0, 0.6, -3),  // threads between bunker and pool
+        SCNVector3(2.5, 0.6, -11), // on the approach to the cup
+    ]
+
     // Hazard regions for the game loop (xz centre + radius; y = surface height).
     private(set) var waterHazards: [(center: SCNVector3, radius: Float)] = []
     private(set) var sandTraps: [(center: SCNVector3, radius: Float)] = []

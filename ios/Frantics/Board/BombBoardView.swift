@@ -13,6 +13,7 @@ struct BombBoardView: View {
         GeometryReader { geo in
             ZStack {
                 if let bomb {
+                    loot(bomb, in: geo.size)
                     circleOfFear(bomb, in: geo.size)
                     centerpiece(bomb)
                     if bomb.stage == "exploded" {
@@ -46,6 +47,23 @@ struct BombBoardView: View {
                 shake = false
             }
         }
+    }
+
+    // MARK: loose loot
+
+    /// Coins scattered around the arena. Pass the bomb to snatch one — the server
+    /// removes it and banks +50 into the passer's private wallet, so they vanish
+    /// here as they're grabbed. (x,y) are fractional screen coords.
+    @ViewBuilder
+    private func loot(_ bomb: BombState, in size: CGSize) -> some View {
+        ForEach(bomb.spawnedCoins) { coin in
+            Text("🪙")
+                .font(.system(size: 46))
+                .shadow(color: Theme.yellow.opacity(0.75), radius: 10)
+                .position(x: size.width * CGFloat(coin.x), y: size.height * CGFloat(coin.y))
+                .transition(.scale.combined(with: .opacity))
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: bomb.spawnedCoins)
     }
 
     // MARK: circle

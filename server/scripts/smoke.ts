@@ -272,6 +272,18 @@ async function main() {
   );
   ok((bob.state!.golf!.strokes[bob.playerId] ?? 0) === 0, "off-turn fire never counts a stroke");
 
+  // Coin pickups — the host board registers the round's loose coins, then
+  // reports a ball running into one.
+  host.send({ t: "register_coins", coins: [{ id: "coin-0", x: 0, y: 0.6, z: 6 }, { id: "coin-1", x: 1.2, y: 0.6, z: -3 }] });
+  await host.waitForState((s) => (s.golf?.spawnedCoins?.length ?? 0) === 2, "coins registered on the course");
+  bob.send({ t: "collect_coin", coinId: "coin-0", playerId: bob.playerId }); // non-host
+  await new Promise((r) => setTimeout(r, 120));
+  ok((host.state!.golf?.spawnedCoins?.length ?? 0) === 2, "a non-host cannot collect coins");
+  const aliceCoinsBeforePickup = alice.myCoins();
+  host.send({ t: "collect_coin", coinId: "coin-0", playerId: alice.playerId });
+  await alice.waitForState((s) => (s.golf?.spawnedCoins?.length ?? 0) === 1, "collected coin removed from the course");
+  ok(alice.myCoins() === aliceCoinsBeforePickup + 50, "collecting a coin credits +50 to that player's PRIVATE wallet");
+
   const golf1 = await playGolfSegment("golf 1");
   ok(golf1.golf!.results!.order[0] === alice.playerId, "fewest total strokes (Alice) wins the match");
   ok(golf1.golf!.results!.awarded[alice.playerId] === 1, "the golf winner is awarded exactly 1 trophy");

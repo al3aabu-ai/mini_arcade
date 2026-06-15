@@ -328,6 +328,24 @@ final class GameClient: NSObject, ObservableObject {
     }
     func passBomb(direction: String) { send(["t": "pass_bomb", "direction": direction]) }
     func voteReplay() { send(["t": "replay"]) }
+
+    // MARK: coins (host board only)
+    /// Register the loose coins the board placed on this golf round's course.
+    func registerCoins(_ coins: [GolfCoinSpawn]) {
+        send(["t": "register_coins", "coins": coins.map { ["id": $0.id, "x": $0.x, "y": $0.y, "z": $0.z] }])
+    }
+    /// Report that `playerId`'s ball ran into a coin → server credits +COIN_VALUE.
+    func collectCoin(coinId: String, playerId: String) {
+        send(["t": "collect_coin", "coinId": coinId, "playerId": playerId])
+    }
+}
+
+/// A coin the board placed, sent to the server so it owns coin existence/credit.
+struct GolfCoinSpawn {
+    let id: String
+    let x: Double
+    let y: Double
+    let z: Double
 }
 
 extension GameClient: URLSessionWebSocketDelegate {

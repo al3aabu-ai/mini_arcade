@@ -31,6 +31,15 @@ final class TikiRunwayCourse: GolfHazardCourse {
     let teePosition = SCNVector3(0, 1.0, 18)
     let holeCenter = SCNVector3(0, 0.2, -18)
 
+    /// Loose coins along the runway. The big one sits dead-centre in the plank
+    /// wall's narrow gap (z = 4) — only a brave, straight power shot threads it.
+    let coinPositions: [SCNVector3] = [
+        SCNVector3(0, 0.6, 11),   // open fairway, easy warm-up grab
+        SCNVector3(0, 0.6, 4),    // ★ centre of the plank-wall gap — high risk/reward
+        SCNVector3(1.8, 0.6, -1), // off the propeller's centre, rewards an angled line
+        SCNVector3(0, 0.6, -10),  // past the propeller, on the green approach
+    ]
+
     private(set) var waterHazards: [(center: SCNVector3, radius: Float)] = [] // unused; side check below
 
     let root = SCNNode()

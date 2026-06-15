@@ -198,6 +198,43 @@ triggering Xcode Cloud builds on every push:
 
 ---
 
+## 5. Collectible coins (3D pickups + economy)
+
+Loose coins drop on the fields; grabbing one credits a flat `CONST.COIN_VALUE`
+(50) to that player's **private** `coins` wallet. Coin POSITIONS are public map
+state (`spawnedCoins` on the golf/bomb snapshot) — only the wallet TOTAL is masked.
+
+### Physics bitmasks (`Golf3DBoard.swift`)
+| body | category | collision | contactTest |
+|------|----------|-----------|-------------|
+| ball | `ballCategory = 1<<5` | `~coinCategory` (everything **except** coins) | `ballCategory` (ball↔ball spark) |
+| coin | `coinCategory = 1<<6` | `0` (pure trigger — pushes nothing) | `ballCategory` (fires `didBegin` on a ball) |
+
+- The ball's collision mask **excludes** the coin bit so it rolls straight
+  THROUGH the coin (no deflection); the coin is a **static, gravity-off** body
+  (`SCNPhysicsBody(type: .static)`, `isAffectedByGravity = false`).
+- Coins are thin gold `SCNBox`es named `"coin-<i>"`, spun by a looping
+  `rotateBy` on Y. `makeCoinNode` builds them; the per-course `coinPositions`
+  (in `TikiJungleCourse` / `TikiRunwayCourse`) say WHERE (Guerilla R1 has none).
+  Runway's marquee coin sits dead-centre in the plank-wall gap (z = 4).
+
+### Network layout
+- **Golf (authoritative board):** after building the course the board calls
+  `register_coins {coins:[{id,x,y,z}]}` (host-only) → server stores
+  `golf.spawnedCoins`. On a ball↔coin `didBegin` (host board), it animates the
+  coin out locally and sends `collect_coin {coinId, playerId}` where `playerId`
+  is the **ball's owner** (the active shooter). Server `collectCoin` (host-only)
+  validates the coin still exists, removes it, credits the collector, broadcasts.
+  The `coins[id]` node registry makes a burst of contacts collect a coin once.
+  `startGolf` clears `spawnedCoins`; the board re-registers each round.
+- **Bomb (2-D arena, no SceneKit):** the server spawns 2–3 coins at
+  `startBomb` (`generateBombCoins`, fractional screen coords). There's no
+  physics, so it's **pass-to-collect**: a successful `passBomb` shifts one coin
+  off `bomb.spawnedCoins` and banks +50 to the passer. The TV (`BombBoardView`)
+  scatters the remaining 🪙 and animates them out as they're grabbed.
+
+---
+
 ## Repo orientation (key files)
 
 ```

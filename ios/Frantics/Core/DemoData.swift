@@ -52,7 +52,8 @@ enum DemoData {
             golf: GolfState(
                 endsAt: Date().addingTimeInterval(140).timeIntervalSince1970 * 1000,
                 debuffs: ["p3": "anvil"], turnId: "p2", sunk: [], results: nil,
-                round: 1, map: "guerilla", strokes: ["p1": 2, "p2": 1, "p3": 3, "p4": 0]
+                round: 1, map: "guerilla", strokes: ["p1": 2, "p2": 1, "p3": 3, "p4": 0],
+                spawnedCoins: []
             )
         )
     }
@@ -64,7 +65,9 @@ enum DemoData {
                 stage: "ticking", alive: ["p1", "p2", "p3", "p4"], eliminated: [],
                 holderId: "p2", pot: 1325, multiplier: 2.75,
                 earnings: ["p1": 250, "p2": 575, "p3": 350, "p4": 150],
-                jamUntil: nil, lastExplodedId: nil, survivors: nil
+                jamUntil: nil, lastExplodedId: nil, survivors: nil,
+                spawnedCoins: [Coin(id: "bcoin-0", x: 0.2, y: 0.3, z: 0),
+                               Coin(id: "bcoin-1", x: 0.8, y: 0.34, z: 0)]
             )
         )
     }

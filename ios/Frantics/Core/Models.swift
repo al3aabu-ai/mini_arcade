@@ -45,6 +45,15 @@ struct SelectionState: Codable, Equatable {
     let size: Int       // how many games the host must pick
 }
 
+/// A collectible coin on the active field (public map state, not the wallet).
+/// Golf: (x,y,z) are SceneKit world coords. Bomb: (x,y) are fractional [0,1] screen coords.
+struct Coin: Codable, Equatable, Identifiable {
+    let id: String
+    let x: Double
+    let y: Double
+    let z: Double
+}
+
 struct PlayerState: Codable, Identifiable, Equatable, Hashable {
     let id: String
     let name: String
@@ -97,6 +106,7 @@ struct GolfState: Codable, Equatable {
     let round: Int
     let map: String          // "guerilla" (Round 1) | "tiki" (Round 2)
     let strokes: [String: Int] // cumulative strokes per player, lower = better
+    let spawnedCoins: [Coin]   // loose coins on the course this round
 
     var endsAtDate: Date { Date(timeIntervalSince1970: endsAt / 1000) }
 }
@@ -112,6 +122,7 @@ struct BombState: Codable, Equatable {
     let jamUntil: Double?
     let lastExplodedId: String?
     let survivors: [String]?
+    let spawnedCoins: [Coin]   // loose coins scattered in the arena
 
     var jamUntilDate: Date? { jamUntil.map { Date(timeIntervalSince1970: $0 / 1000) } }
 }
