@@ -61,6 +61,8 @@ final class GameClient: NSObject, ObservableObject {
     var onAim: ((String, Double, Double) -> Void)?
     var onAimClear: ((String) -> Void)?
     var onFire: ((String, Double, Double) -> Void)?
+    /// Bumper: a player's joystick vector, relayed to the host board.
+    var onJoystick: ((String, Double, Double) -> Void)?
 
     let isDemo: Bool
     private var session: URLSession?
@@ -283,6 +285,10 @@ final class GameClient: NSObject, ObservableObject {
             if let msg = try? decoder.decode(FireMsg.self, from: data) {
                 onFire?(msg.playerId, msg.angle, msg.power)
             }
+        case "joystick":
+            if let msg = try? decoder.decode(JoystickMsg.self, from: data) {
+                onJoystick?(msg.playerId, msg.x, msg.y)
+            }
         case "error":
             if let msg = try? decoder.decode(ErrorMsg.self, from: data) {
                 showError(msg.message)
@@ -328,6 +334,14 @@ final class GameClient: NSObject, ObservableObject {
     }
     func passBomb(direction: String) { send(["t": "pass_bomb", "direction": direction]) }
     func voteReplay() { send(["t": "replay"]) }
+
+    // MARK: bumper
+    /// Stream the player's normalized joystick vector (bumper movement).
+    func updateJoystick(x: Double, y: Double) { send(["t": "update_joystick", "x": x, "y": y]) }
+    /// Host board reports a player splashed off the slab (and who shoved them).
+    func reportBumperKnockout(playerId: String, byPlayerId: String?) {
+        send(["t": "bumper_knockout", "playerId": playerId, "byPlayerId": byPlayerId ?? NSNull()])
+    }
 
     // MARK: coins (host board only)
     /// Register the loose coins the board placed on this golf round's course.

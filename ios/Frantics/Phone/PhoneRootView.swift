@@ -50,6 +50,7 @@ struct PhoneRootView: View {
         case .auction: PhoneAuctionView()
         case .golf: PhoneGolfView()
         case .bomb: PhoneBombView()
+        case .bumper: PhoneBumperView()
         case .podium: PhonePodiumView()
         }
     }

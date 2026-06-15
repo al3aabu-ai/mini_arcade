@@ -273,6 +273,46 @@ own phone, paying `rewardCoins` (150) into their private wallet on completion.
 
 ---
 
+## 7. Bumper Sumo Arena (real-time mini-game)
+
+The third `GameType` (`"bumper"`) — a 45s last-one-standing sumo on a floating
+slab. The first **real-time, continuous-input** game (golf/bomb are turn/tap).
+
+### Authority + state
+- Like golf, the **host BOARD runs the physics** (`BumperSceneController` in
+  `BoardBumperView.swift`) — bumper positions/velocities are board-local and
+  never travel through the server. The server (`BumperState {endsAt, alive,
+  eliminated, winnerId}`) owns the authoritative game state + the 45s timer.
+- **Input:** phones stream `update_joystick {x,y}` (normalized screen vector,
+  ~25/s). The server **relays** it to the host (`{t:"joystick"}`, like `aim` —
+  not broadcast); the board's `client.onJoystick` applies continuous
+  `applyForce` to that player's bumper each frame.
+- **Knockout:** the board detects a bumper falling (`presentation.y < −3`),
+  splashes it, removes the node, and reports `bumper_knockout {playerId,
+  byPlayerId}` (host-only). The server marks `alive` minus that player; at
+  `alive ≤ 1` (or the buzzer) `finishBumper` gives every survivor a trophy.
+- **`byPlayerId`** = the last bumper to touch the victim, tracked in the contact
+  delegate (`lastHitBy`, mutated on the render thread via `enqueue`).
+
+### Bitmasks (`BumperSceneController` — separate scene from golf)
+- Bumpers: `categoryBitMask = bumperCategory (1<<5)`, `collisionBitMask = -1`
+  (collide with the slab and each other — that's the shoving), `contactTestBitMask
+  = bumperCategory` (report bumper↔bumper for the aggressor credit). High mass (4),
+  bouncy (`restitution 0.75`), `damping 0.7` so they coast to rest when released.
+- Slab: static `SCNCylinder` (radius 9) at origin, `collisionBitMask = -1`. Water
+  is a visual `SCNFloor`; the knockout is the `y < −3` fall check, not a collider.
+- Thermal: shares `GolfSceneController.targetFPS`, 2X MSAA, no shadows/HDR.
+
+### Secret tasks
+`aggressor` (shoved someone off → `taskBumperAggressor` in `bumperKnockout`) and
+`pacifist` (`taskBumperSurvived` = alive at the end AND (won OR survived ≥30s)).
+
+### No bumper-specific sabotage yet
+The pre-game auction has no `appliesTo: "bumper"` item, so it falls back to the
+anvil (harmless in bumper). Add a bumper sabotage item to `SABOTAGE_ITEMS` later.
+
+---
+
 ## Repo orientation (key files)
 
 ```
@@ -293,6 +333,8 @@ ios/Frantics/
   Board/Golf3DBoard.swift      GolfSceneController, GolfBoardView, GolfHazardCourse, Round 1
   Board/TikiJungleCourse.swift Round 2 course
   Board/TikiRunwayCourse.swift Round 3 course
+  Board/BoardBumperView.swift  Bumper Sumo arena (BumperSceneController, real-time)
+  Phone/PhoneBumperView.swift  Bumper 2D virtual joystick controller
 local-install.sh               side-load to a plugged-in iPhone
 ```
 

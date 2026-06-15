@@ -132,6 +132,16 @@ export function handleClientMessage(
           case "pass_bomb":
             room.passBomb(playerId, msg.direction === "left" ? "left" : "right");
             break;
+          case "update_joystick":
+            room.updateJoystick(playerId, Number(msg.x), Number(msg.y));
+            break;
+          case "bumper_knockout":
+            room.bumperKnockout(
+              playerId,
+              String(msg.playerId),
+              typeof msg.byPlayerId === "string" ? msg.byPlayerId : null,
+            );
+            break;
           case "replay":
             room.voteReplay(playerId);
             break;

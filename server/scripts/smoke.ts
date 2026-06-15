@@ -221,7 +221,7 @@ async function main() {
   await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "selection", "selection phase")));
   ok(host.state!.selection!.size === 3, "the host must pick 3 games");
   // A non-host cannot commit a lineup.
-  alice.send({ t: "select_lineup", lineup: ["golf", "bomb", "golf"] });
+  alice.send({ t: "select_lineup", lineup: ["golf", "bomb", "bumper"] });
   await new Promise((r) => setTimeout(r, 150));
   ok(host.state!.phase === "selection", "a non-host cannot start the match");
   // Host live-previews picks — the TV mirrors the slots filling up.
@@ -233,7 +233,7 @@ async function main() {
   await new Promise((r) => setTimeout(r, 100));
   ok(host.state!.phase === "selection", "a lineup that isn't exactly 3 games is rejected");
   // Host commits the full lineup → the match begins.
-  host.send({ t: "select_lineup", lineup: ["golf", "bomb", "golf"] });
+  host.send({ t: "select_lineup", lineup: ["golf", "bomb", "bumper"] });
 
   console.log("\n— auction 1 (golf → anvil), bids paid in coins —");
   await Promise.all(
@@ -334,18 +334,39 @@ async function main() {
   });
   ok(survivorsBanked, "survivors banked their bomb cash + 250 bonus into their PRIVATE coins");
 
-  console.log("\n— auction 3 (golf → anvil), no sale —");
-  await passAuction(3, "anvil");
+  console.log("\n— auction 3 (bumper → anvil fallback), no sale —");
+  await passAuction(3, "anvil"); // no bumper-specific sabotage yet → anvil fallback
 
-  console.log("\n— golf segment 2 (final lineup game) —");
-  await playGolfSegment("golf 2");
+  console.log("\n— bumper sumo arena (real-time joystick + knockouts) —");
+  await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "bumper", "bumper phase")));
+  ok(host.state!.bumper!.alive.length === 4, "all four players start on the slab");
+  ok(!!alice.state!.players.find((p) => p.id === alice.playerId)?.secretTask, "bumper: alice has a private secret task");
+  ok(
+    alice.state!.players.find((p) => p.id === bob.playerId)?.secretTask == null,
+    "bumper: other players' tasks stay masked",
+  );
+  // Joystick vectors stream to the host board (relay, not broadcast).
+  alice.send({ t: "update_joystick", x: 0.5, y: -0.5 });
+  const relay = await host.waitForMsg((m) => m.t === "joystick" && m.playerId === alice.playerId, "joystick relay");
+  ok(Math.abs(relay.x - 0.5) < 1e-9, "the host board receives the streamed joystick vector");
+  const aliceCoinsBeforeBumper = alice.myCoins();
+  // Host board shoves everyone else off — alice is the last one standing.
+  host.send({ t: "bumper_knockout", playerId: bob.playerId, byPlayerId: alice.playerId });
+  await host.waitForState((s) => s.bumper?.eliminated.includes(bob.playerId) ?? false, "bob splashed");
+  host.send({ t: "bumper_knockout", playerId: cara.playerId, byPlayerId: alice.playerId });
+  host.send({ t: "bumper_knockout", playerId: host.playerId, byPlayerId: alice.playerId });
+  await alice.waitForState(
+    (s) => s.players.find((p) => p.id === alice.playerId)?.secretTask?.isCompleted === true,
+    "alice completed her bumper task (aggressor + last standing)",
+  );
+  ok(alice.myCoins() === aliceCoinsBeforeBumper + 150, "bumper task reward (+150) credited to alice");
 
   console.log("\n— podium —");
   const podiumState = await host.waitForState((s) => s.phase === "podium", "podium");
   const podium = podiumState.podium!;
   ok(podium.ranking.length === 4, "podium ranks all 4 players");
   const totalTrophies = podiumState.players.reduce((n, p) => n + p.trophies, 0);
-  ok(totalTrophies === 4, "trophies total 4 across the whole match (golf + bomb + golf)");
+  ok(totalTrophies === 4, "trophies total 4 across the match (golf winner + 2 bomb survivors + bumper winner)");
   const rankTrophies = podium.ranking.map((id) => host.trophies(podiumState, id));
   ok(
     rankTrophies.every((t, i) => i === 0 || rankTrophies[i - 1] >= t),

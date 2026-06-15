@@ -32,6 +32,7 @@ struct BoardRootView: View {
         case .auction: BoardAuctionView(room: room)
         case .golf: GolfBoardView()
         case .bomb: BombBoardView(room: room)
+        case .bumper: BoardBumperView()
         case .podium: BoardPodiumView(room: room)
         }
     }

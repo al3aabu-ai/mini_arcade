@@ -6,6 +6,7 @@ import {
   type AuctionStage,
   type AuctionState,
   type BombState,
+  type BumperState,
   type Coin,
   type Debuff,
   type GameType,
@@ -46,6 +47,8 @@ interface Player {
   taskReset: boolean;         // golf: fell in water / reset this game
   taskBombHoldMs: number;     // bomb: cumulative time holding the bomb
   taskBombHotPotato: boolean; // bomb: passed within 1s of receiving at least once
+  taskBumperAggressor: boolean; // bumper: knocked another player off the slab
+  taskBumperSurvived: boolean;  // bumper: won or survived 30s without falling (set at finish)
 }
 
 interface AuctionInternal {
@@ -91,6 +94,14 @@ interface BombInternal {
   holderSince: number | null;
 }
 
+interface BumperInternal {
+  endsAt: number;
+  alive: string[];
+  eliminated: string[];
+  winnerId: string | null;
+  startedAt: number;
+}
+
 export class Room {
   readonly code: string;
   private players: Player[] = [];
@@ -103,6 +114,7 @@ export class Room {
   private auction: AuctionInternal | null = null;
   private golf: GolfInternal | null = null;
   private bomb: BombInternal | null = null;
+  private bumper: BumperInternal | null = null;
   private replayVotes = new Set<string>();
   private rev = 0;
   /** bumped on every phase/stage change so stale timer callbacks no-op */
@@ -144,6 +156,8 @@ export class Room {
       taskReset: false,
       taskBombHoldMs: 0,
       taskBombHotPotato: false,
+      taskBumperAggressor: false,
+      taskBumperSurvived: false,
     };
     this.players.push(player);
     this.touch();
@@ -304,6 +318,15 @@ export class Room {
         spawnedCoins: this.bomb.spawnedCoins,
       };
     }
+    let bumper: BumperState | null = null;
+    if (this.phase === "bumper" && this.bumper) {
+      bumper = {
+        endsAt: this.bumper.endsAt,
+        alive: this.bumper.alive,
+        eliminated: this.bumper.eliminated,
+        winnerId: this.bumper.winnerId,
+      };
+    }
     let podium: PodiumState | null = null;
     if (this.phase === "podium") {
       podium = {
@@ -323,6 +346,7 @@ export class Room {
       auction,
       golf,
       bomb,
+      bumper,
       podium,
       rev: this.rev,
     };
@@ -392,7 +416,7 @@ export class Room {
 
   /** Keep only valid game types, capped at the lineup size. */
   private sanitizeLineup(lineup: unknown): GameType[] {
-    const valid: GameType[] = ["golf", "bomb"];
+    const valid: GameType[] = ["golf", "bomb", "bumper"];
     if (!Array.isArray(lineup)) return [];
     return lineup
       .filter((g): g is GameType => valid.includes(g as GameType))
@@ -441,6 +465,7 @@ export class Room {
   /** Launch a mini-game by type (golf begins at its first round). */
   private launchGame(game: GameType) {
     if (game === "golf") this.startGolf(1);
+    else if (game === "bumper") this.startBumper();
     else this.startBomb();
   }
 
@@ -747,6 +772,8 @@ export class Room {
       p.taskReset = false;
       p.taskBombHoldMs = 0;
       p.taskBombHotPotato = false;
+      p.taskBumperAggressor = false;
+      p.taskBumperSurvived = false;
     }
   }
 
@@ -774,6 +801,8 @@ export class Room {
       case "safe_play": done = !p.taskReset; break;
       case "hot_potato": done = p.taskBombHotPotato; break;
       case "survivor": done = p.taskBombHoldMs <= 5000; break;
+      case "aggressor": done = p.taskBumperAggressor; break;
+      case "pacifist": done = p.taskBumperSurvived; break;
     }
     if (done) {
       task.isCompleted = true;
@@ -939,6 +968,73 @@ export class Room {
     this.after(CONST.BOMB_ROUND_BREAK_MS, () => this.advanceLineup());
   }
 
+  // ------------------------------ bumper -----------------------------------
+
+  private startBumper() {
+    this.newGen();
+    this.phase = "bumper";
+    const now = Date.now();
+    this.bumper = {
+      endsAt: now + CONST.BUMPER_TIME_MS,
+      alive: this.players.map((p) => p.id),
+      eliminated: [],
+      winnerId: null,
+      startedAt: now,
+    };
+    this.assignSecretTasks("bumper");
+    // Survival buzzer — whoever's still on the slab when it sounds wins.
+    this.after(CONST.BUMPER_TIME_MS, () => this.finishBumper());
+    this.broadcast();
+  }
+
+  /** Stream a player's joystick vector to the host board, which runs the physics. */
+  updateJoystick(playerId: string, x: number, y: number) {
+    if (this.phase !== "bumper" || !this.bumper) return;
+    if (!this.bumper.alive.includes(playerId)) return; // the dead don't drive
+    this.sendToHost({ t: "joystick", playerId, x, y });
+  }
+
+  /** Host board reports a player splashed off the slab; `byPlayerId` shoved them. */
+  bumperKnockout(reporterId: string, playerId: string, byPlayerId: string | null) {
+    const reporter = this.players.find((p) => p.id === reporterId);
+    if (!reporter?.isHost) return; // only the authoritative board calls knockouts
+    const bumper = this.bumper;
+    if (this.phase !== "bumper" || !bumper) return;
+    if (!bumper.alive.includes(playerId)) return; // already out
+    bumper.alive = bumper.alive.filter((id) => id !== playerId);
+    bumper.eliminated.push(playerId);
+    // Credit the shover for "The Aggressor".
+    if (byPlayerId) {
+      const aggressor = this.players.find((p) => p.id === byPlayerId);
+      if (aggressor && byPlayerId !== playerId) aggressor.taskBumperAggressor = true;
+    }
+    this.touch();
+    if (bumper.alive.length <= 1) {
+      this.finishBumper(); // last one standing — end early
+    } else {
+      this.broadcast();
+    }
+  }
+
+  private finishBumper() {
+    const bumper = this.bumper;
+    if (this.phase !== "bumper" || !bumper) return;
+    this.newGen();
+    bumper.winnerId = bumper.alive.length === 1 ? bumper.alive[0] : null;
+    const elapsed = Date.now() - bumper.startedAt;
+    for (const p of this.players) {
+      const survived = bumper.alive.includes(p.id);
+      if (survived) p.trophies += CONST.TROPHY; // everyone still on the slab wins
+      // "Pacifist": didn't fall, and either won or lasted the distance.
+      p.taskBumperSurvived =
+        survived && (bumper.winnerId === p.id || elapsed >= CONST.BUMPER_PACIFIST_MS);
+      this.evaluateSecretTask(p);
+    }
+    this.broadcast();
+    this.lineupIndex += 1;
+    this.after(CONST.BUMPER_RESULTS_MS, () => this.advanceLineup());
+  }
+
   // ------------------------------ podium -----------------------------------
 
   private startPodium() {
@@ -965,6 +1061,7 @@ export class Room {
       }
       this.golf = null;
       this.bomb = null;
+      this.bumper = null;
       this.replayVotes.clear();
       // Fresh match: the host curates a brand-new lineup from the picker.
       this.startSelection();

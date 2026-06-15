@@ -31,6 +31,11 @@
     BOMB_ROUND_BREAK_MS: FAST ? 400 : 4e3,
     BOMB_SURVIVOR_BONUS: 250,
     BOMB_JAM_MS: FAST ? 300 : 2e3,
+    BUMPER_TIME_MS: FAST ? 1500 : 45e3,
+    // survival timer
+    BUMPER_PACIFIST_MS: FAST ? 600 : 3e4,
+    // "Pacifist" survival threshold
+    BUMPER_RESULTS_MS: FAST ? 400 : 5e3,
     ROOM_IDLE_SWEEP_MS: 6e4,
     ROOM_MAX_IDLE_MS: 10 * 6e4
   };
@@ -70,6 +75,22 @@
         id: "survivor",
         descriptionEN: "The Survivor \u2014 never hold the bomb more than 5 seconds total.",
         descriptionAR: "\u0627\u0644\u0646\u0627\u062C\u064A \u2014 \u0644\u0627 \u062A\u0645\u0633\u0643 \u0627\u0644\u0642\u0646\u0628\u0644\u0629 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0665 \u062B\u0648\u0627\u0646\u064A \u0628\u0627\u0644\u0645\u062C\u0645\u0648\u0639.",
+        rewardCoins: 150,
+        isCompleted: false
+      }
+    ],
+    bumper: [
+      {
+        id: "aggressor",
+        descriptionEN: "The Aggressor \u2014 shove another player off the edge yourself.",
+        descriptionAR: "\u0627\u0644\u0645\u0647\u0627\u062C\u0645 \u2014 \u0637\u0650\u064A\u062D \u0644\u0627\u0639\u0628 \u062B\u0627\u0646\u064A \u0639\u0646 \u0627\u0644\u062D\u0644\u0628\u0629 \u0628\u0646\u0641\u0633\u0643.",
+        rewardCoins: 150,
+        isCompleted: false
+      },
+      {
+        id: "pacifist",
+        descriptionEN: "Pacifist \u2014 win, or survive 30 seconds without falling in.",
+        descriptionAR: "\u0627\u0644\u0645\u0633\u0627\u0644\u0645 \u2014 \u0627\u0641\u0648\u0632\u060C \u0623\u0648 \u0627\u0635\u0645\u062F \u0663\u0660 \u062B\u0627\u0646\u064A\u0629 \u0628\u062F\u0648\u0646 \u0645\u0627 \u062A\u0637\u064A\u062D \u0628\u0627\u0644\u0645\u0627\u064A.",
         rewardCoins: 150,
         isCompleted: false
       }
@@ -127,6 +148,7 @@
       __publicField(this, "auction", null);
       __publicField(this, "golf", null);
       __publicField(this, "bomb", null);
+      __publicField(this, "bumper", null);
       __publicField(this, "replayVotes", /* @__PURE__ */ new Set());
       __publicField(this, "rev", 0);
       /** bumped on every phase/stage change so stale timer callbacks no-op */
@@ -161,7 +183,9 @@
         taskCoins: 0,
         taskReset: false,
         taskBombHoldMs: 0,
-        taskBombHotPotato: false
+        taskBombHotPotato: false,
+        taskBumperAggressor: false,
+        taskBumperSurvived: false
       };
       this.players.push(player);
       this.touch();
@@ -308,6 +332,15 @@
           spawnedCoins: this.bomb.spawnedCoins
         };
       }
+      let bumper = null;
+      if (this.phase === "bumper" && this.bumper) {
+        bumper = {
+          endsAt: this.bumper.endsAt,
+          alive: this.bumper.alive,
+          eliminated: this.bumper.eliminated,
+          winnerId: this.bumper.winnerId
+        };
+      }
       let podium = null;
       if (this.phase === "podium") {
         podium = {
@@ -327,6 +360,7 @@
         auction,
         golf,
         bomb,
+        bumper,
         podium,
         rev: this.rev
       };
@@ -386,7 +420,7 @@
     }
     /** Keep only valid game types, capped at the lineup size. */
     sanitizeLineup(lineup) {
-      const valid = ["golf", "bomb"];
+      const valid = ["golf", "bomb", "bumper"];
       if (!Array.isArray(lineup)) return [];
       return lineup.filter((g) => valid.includes(g)).slice(0, CONST.LINEUP_SIZE);
     }
@@ -428,6 +462,7 @@
     /** Launch a mini-game by type (golf begins at its first round). */
     launchGame(game) {
       if (game === "golf") this.startGolf(1);
+      else if (game === "bumper") this.startBumper();
       else this.startBomb();
     }
     // ------------------------------ auction ----------------------------------
@@ -693,6 +728,8 @@
         p.taskReset = false;
         p.taskBombHoldMs = 0;
         p.taskBombHotPotato = false;
+        p.taskBumperAggressor = false;
+        p.taskBumperSurvived = false;
       }
     }
     /** Drop the current tasks (between games / on a fresh match). */
@@ -726,6 +763,12 @@
           break;
         case "survivor":
           done = p.taskBombHoldMs <= 5e3;
+          break;
+        case "aggressor":
+          done = p.taskBumperAggressor;
+          break;
+        case "pacifist":
+          done = p.taskBumperSurvived;
           break;
       }
       if (done) {
@@ -872,6 +915,64 @@
       this.lineupIndex += 1;
       this.after(CONST.BOMB_ROUND_BREAK_MS, () => this.advanceLineup());
     }
+    // ------------------------------ bumper -----------------------------------
+    startBumper() {
+      this.newGen();
+      this.phase = "bumper";
+      const now = Date.now();
+      this.bumper = {
+        endsAt: now + CONST.BUMPER_TIME_MS,
+        alive: this.players.map((p) => p.id),
+        eliminated: [],
+        winnerId: null,
+        startedAt: now
+      };
+      this.assignSecretTasks("bumper");
+      this.after(CONST.BUMPER_TIME_MS, () => this.finishBumper());
+      this.broadcast();
+    }
+    /** Stream a player's joystick vector to the host board, which runs the physics. */
+    updateJoystick(playerId, x, y) {
+      if (this.phase !== "bumper" || !this.bumper) return;
+      if (!this.bumper.alive.includes(playerId)) return;
+      this.sendToHost({ t: "joystick", playerId, x, y });
+    }
+    /** Host board reports a player splashed off the slab; `byPlayerId` shoved them. */
+    bumperKnockout(reporterId, playerId, byPlayerId) {
+      const reporter = this.players.find((p) => p.id === reporterId);
+      if (!(reporter == null ? void 0 : reporter.isHost)) return;
+      const bumper = this.bumper;
+      if (this.phase !== "bumper" || !bumper) return;
+      if (!bumper.alive.includes(playerId)) return;
+      bumper.alive = bumper.alive.filter((id) => id !== playerId);
+      bumper.eliminated.push(playerId);
+      if (byPlayerId) {
+        const aggressor = this.players.find((p) => p.id === byPlayerId);
+        if (aggressor && byPlayerId !== playerId) aggressor.taskBumperAggressor = true;
+      }
+      this.touch();
+      if (bumper.alive.length <= 1) {
+        this.finishBumper();
+      } else {
+        this.broadcast();
+      }
+    }
+    finishBumper() {
+      const bumper = this.bumper;
+      if (this.phase !== "bumper" || !bumper) return;
+      this.newGen();
+      bumper.winnerId = bumper.alive.length === 1 ? bumper.alive[0] : null;
+      const elapsed = Date.now() - bumper.startedAt;
+      for (const p of this.players) {
+        const survived = bumper.alive.includes(p.id);
+        if (survived) p.trophies += CONST.TROPHY;
+        p.taskBumperSurvived = survived && (bumper.winnerId === p.id || elapsed >= CONST.BUMPER_PACIFIST_MS);
+        this.evaluateSecretTask(p);
+      }
+      this.broadcast();
+      this.lineupIndex += 1;
+      this.after(CONST.BUMPER_RESULTS_MS, () => this.advanceLineup());
+    }
     // ------------------------------ podium -----------------------------------
     startPodium() {
       this.newGen();
@@ -895,6 +996,7 @@
         }
         this.golf = null;
         this.bomb = null;
+        this.bumper = null;
         this.replayVotes.clear();
         this.startSelection();
       } else {
@@ -1050,6 +1152,16 @@
               break;
             case "pass_bomb":
               room.passBomb(playerId, msg.direction === "left" ? "left" : "right");
+              break;
+            case "update_joystick":
+              room.updateJoystick(playerId, Number(msg.x), Number(msg.y));
+              break;
+            case "bumper_knockout":
+              room.bumperKnockout(
+                playerId,
+                String(msg.playerId),
+                typeof msg.byPlayerId === "string" ? msg.byPlayerId : null
+              );
               break;
             case "replay":
               room.voteReplay(playerId);

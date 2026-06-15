@@ -179,6 +179,17 @@ final class Localization: ObservableObject {
         "Task complete! +%@ coins": "المهمة اكتملت! +%@ عملة",
         "+%@ coins · kept secret": "+%@ عملة · يبقى سر",
 
+        // Bumper Sumo Arena
+        "Bumper Arena": "حلبة التصادم",
+        "Shove rivals off the slab — last one floating wins.": "زِق الباقين بره الحلبة — آخر واحد يثبت يكسب.",
+        "🤼 BUMPER ARENA": "🤼 حلبة التصادم",
+        "%@ still in": "%@ باقين",
+        "%@ still on the slab": "%@ باقين عالحلبة",
+        "Drag to shove — knock them in the water!": "اسحب وزِق — طيّحهم بالماي!",
+        "LAST ONE STANDING!": "آخر واحد ثابت!",
+        "You survived!": "نجوت!",
+        "Splashed! Spectating…": "طحت بالماي! تتفرّج…",
+
         // Bomb board
         "💣 THE BILLIONAIRE'S BOMB": "💣 قنبلة المليونير",
         "Hold it to earn. Pass it to survive. Last two standing bank everything.":

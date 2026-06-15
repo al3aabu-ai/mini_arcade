@@ -40,14 +40,18 @@ export const CONST = {
   BOMB_SURVIVOR_BONUS: 250,
   BOMB_JAM_MS: FAST ? 300 : 2_000,
 
+  BUMPER_TIME_MS: FAST ? 1_500 : 45_000,   // survival timer
+  BUMPER_PACIFIST_MS: FAST ? 600 : 30_000, // "Pacifist" survival threshold
+  BUMPER_RESULTS_MS: FAST ? 400 : 5_000,
+
   ROOM_IDLE_SWEEP_MS: 60_000,
   ROOM_MAX_IDLE_MS: 10 * 60_000,
 } as const;
 
-export type Phase = "lobby" | "selection" | "auction" | "golf" | "bomb" | "podium";
+export type Phase = "lobby" | "selection" | "auction" | "golf" | "bomb" | "bumper" | "podium";
 
 /** A playable mini-game. The match `lineup` is an ordered list of these. */
-export type GameType = "golf" | "bomb";
+export type GameType = "golf" | "bomb" | "bumper";
 
 /**
  * A collectible coin on the active field. PUBLIC map state (positions are not
@@ -111,6 +115,22 @@ export const SECRET_TASKS: Record<GameType, SecretTask[]> = {
       id: "survivor",
       descriptionEN: "The Survivor — never hold the bomb more than 5 seconds total.",
       descriptionAR: "الناجي — لا تمسك القنبلة أكثر من ٥ ثواني بالمجموع.",
+      rewardCoins: 150,
+      isCompleted: false,
+    },
+  ],
+  bumper: [
+    {
+      id: "aggressor",
+      descriptionEN: "The Aggressor — shove another player off the edge yourself.",
+      descriptionAR: "المهاجم — طِيح لاعب ثاني عن الحلبة بنفسك.",
+      rewardCoins: 150,
+      isCompleted: false,
+    },
+    {
+      id: "pacifist",
+      descriptionEN: "Pacifist — win, or survive 30 seconds without falling in.",
+      descriptionAR: "المسالم — افوز، أو اصمد ٣٠ ثانية بدون ما تطيح بالماي.",
       rewardCoins: 150,
       isCompleted: false,
     },
@@ -248,6 +268,23 @@ export interface BombState {
   spawnedCoins: Coin[];
 }
 
+/**
+ * Bumper Sumo state. The host BOARD owns the live physics (positions /
+ * velocities of each bumper), exactly like golf ball positions — those never
+ * travel through the server. The server tracks the authoritative game state:
+ * who's still on the slab, who splashed, the timer, and the winner.
+ */
+export interface BumperState {
+  /** epoch ms survival deadline */
+  endsAt: number;
+  /** players still on the slab (isAlive == alive.includes(id)) */
+  alive: string[];
+  /** players knocked into the water, in splash order */
+  eliminated: string[];
+  /** the last one standing, or null if several survive to the buzzer */
+  winnerId: string | null;
+}
+
 export interface PodiumState {
   /** player ids, best score first */
   ranking: string[];
@@ -267,6 +304,7 @@ export interface RoomState {
   auction: AuctionState | null;
   golf: GolfState | null;
   bomb: BombState | null;
+  bumper: BumperState | null;
   podium: PodiumState | null;
   /** monotonically increasing, lets clients drop stale snapshots */
   rev: number;
@@ -292,6 +330,8 @@ export type ClientMessage =
   | { t: "golf_finished"; order: string[] } // host board only
   | { t: "golf_progress"; turnId: string | null; sunk: string[] } // host board only
   | { t: "pass_bomb"; direction: "left" | "right" }
+  | { t: "update_joystick"; x: number; y: number } // bumper: stream normalized movement vector
+  | { t: "bumper_knockout"; playerId: string; byPlayerId: string | null } // host board: a player splashed
   | { t: "replay" }
   | { t: "leave" };
 
@@ -303,6 +343,7 @@ export type ServerMessage =
   | { t: "aim"; playerId: string; angle: number; power: number }
   | { t: "aim_clear"; playerId: string }
   | { t: "fire"; playerId: string; angle: number; power: number }
+  | { t: "joystick"; playerId: string; x: number; y: number } // bumper input relayed to the host board
   | { t: "error"; message: string };
 
 /**

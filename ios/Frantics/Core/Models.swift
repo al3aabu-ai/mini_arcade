@@ -3,18 +3,19 @@ import Foundation
 // Mirrors server/src/protocol.ts — keep both sides in sync.
 
 enum GamePhase: String {
-    case lobby, selection, auction, golf, bomb, podium
+    case lobby, selection, auction, golf, bomb, bumper, podium
 }
 
 /// A playable mini-game. The match `lineup` is an ordered list of these.
 enum GameType: String, Codable, CaseIterable {
-    case golf, bomb
+    case golf, bomb, bumper
 
     /// Big graphic for the picker cards and the TV lineup slots.
     var emoji: String {
         switch self {
         case .golf: return "🏌️"
         case .bomb: return "💣"
+        case .bumper: return "🤼"
         }
     }
     /// Localization keys (English source strings) for the card text.
@@ -22,12 +23,14 @@ enum GameType: String, Codable, CaseIterable {
         switch self {
         case .golf: return "Mini-Golf"
         case .bomb: return "Hot Potato Bomb"
+        case .bumper: return "Bumper Arena"
         }
     }
     var blurbKey: String {
         switch self {
         case .golf: return "Sink it in the fewest shots."
         case .bomb: return "Pass it fast — don't be holding it when it blows."
+        case .bumper: return "Shove rivals off the slab — last one floating wins."
         }
     }
     /// Theme accent hex for the card / slot.
@@ -35,6 +38,7 @@ enum GameType: String, Codable, CaseIterable {
         switch self {
         case .golf: return "#00F5D4"
         case .bomb: return "#FF3355"
+        case .bumper: return "#FB5607"
         }
     }
 }
@@ -143,6 +147,15 @@ struct BombState: Codable, Equatable {
     var jamUntilDate: Date? { jamUntil.map { Date(timeIntervalSince1970: $0 / 1000) } }
 }
 
+struct BumperState: Codable, Equatable {
+    let endsAt: Double
+    let alive: [String]
+    let eliminated: [String]
+    let winnerId: String?
+
+    var endsAtDate: Date { Date(timeIntervalSince1970: endsAt / 1000) }
+}
+
 struct PodiumState: Codable, Equatable {
     let ranking: [String]
     let replayVotes: [String]
@@ -162,6 +175,7 @@ struct RoomState: Codable, Equatable {
     let auction: AuctionState?
     let golf: GolfState?
     let bomb: BombState?
+    let bumper: BumperState?
     let podium: PodiumState?
     let rev: Int
 
@@ -197,6 +211,12 @@ struct FireMsg: Decodable {
     let playerId: String
     let angle: Double
     let power: Double
+}
+
+struct JoystickMsg: Decodable {
+    let playerId: String
+    let x: Double
+    let y: Double
 }
 
 struct ErrorMsg: Decodable { let message: String }

@@ -28,10 +28,12 @@ enum DemoData {
     ]
 
     static func state(phase: String, selection: SelectionState? = nil, auction: AuctionState? = nil,
-                      golf: GolfState? = nil, bomb: BombState? = nil, podium: PodiumState? = nil) -> RoomState {
+                      golf: GolfState? = nil, bomb: BombState? = nil, bumper: BumperState? = nil,
+                      podium: PodiumState? = nil) -> RoomState {
         RoomState(code: "FRNX", phase: phase, players: players,
-                  lineup: ["golf", "bomb", "golf"], currentLineupIndex: 0,
-                  selection: selection, auction: auction, golf: golf, bomb: bomb, podium: podium, rev: 1)
+                  lineup: ["golf", "bumper", "bomb"], currentLineupIndex: 0,
+                  selection: selection, auction: auction, golf: golf, bomb: bomb, bumper: bumper,
+                  podium: podium, rev: 1)
     }
 
     static var lobby: RoomState { state(phase: "lobby") }
@@ -80,6 +82,16 @@ enum DemoData {
         )
     }
 
+    static var bumper: RoomState {
+        state(
+            phase: "bumper",
+            bumper: BumperState(
+                endsAt: Date().addingTimeInterval(38).timeIntervalSince1970 * 1000,
+                alive: ["p1", "p2", "p4"], eliminated: ["p3"], winnerId: nil
+            )
+        )
+    }
+
     static var podium: RoomState {
         state(
             phase: "podium",
@@ -98,6 +110,7 @@ enum DemoData {
         case "board-auction", "phone-auction": return GameClient(demoState: auction, playerId: myId)
         case "board-golf", "phone-golf": return GameClient(demoState: golf, playerId: myId)
         case "board-bomb", "phone-bomb": return GameClient(demoState: bomb, playerId: myId)
+        case "board-bumper", "phone-bumper": return GameClient(demoState: bumper, playerId: myId)
         case "board-podium", "phone-podium": return GameClient(demoState: podium, playerId: myId)
         default: return GameClient(demoState: lobby, playerId: myId)
         }
@@ -124,6 +137,7 @@ struct DemoContainerView: View {
                         case "phone-auction": PhoneAuctionView()
                         case "phone-golf": PhoneGolfView()
                         case "phone-bomb": PhoneBombView()
+                        case "phone-bumper": PhoneBumperView()
                         case "phone-podium": PhonePodiumView()
                         default: PhoneLobbyView()
                         }
