@@ -6,7 +6,8 @@ struct GolfPlayerInfo {
     let name: String
     let avatar: String
     let colorHex: String
-    let anviled: Bool
+    /// Active game modifier id (e.g. "anvil", "golden_club"), or nil.
+    let modifier: String?
 }
 
 /// Guerilla Golf on the TV — one continuous low-poly fairway, played in
@@ -177,7 +178,7 @@ struct GolfBoardView: View {
                 name: player.name,
                 avatar: player.avatar,
                 colorHex: player.color,
-                anviled: golf.debuffs[player.id] == "anvil"
+                modifier: player.modifier
             )
         }
         let sceneController = GolfSceneController(
@@ -1145,13 +1146,15 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             tag.position = SCNVector3(tee.x, tee.y + tagHeight, tee.z)
             scene.rootNode.addChildNode(tag)
 
-            if info.anviled {
-                let anvilText = SCNText(string: "🪨", extrusionDepth: 0.05)
-                anvilText.font = UIFont.systemFont(ofSize: 0.5)
-                let anvil = SCNNode(geometry: anvilText)
-                anvil.constraints = [SCNBillboardConstraint()]
-                anvil.position = SCNVector3(0.4, 0.7, 0)
-                tag.addChildNode(anvil)
+            // Floating badge for an active golf modifier (🪨 anvil / 🏌️ golden club).
+            let badge = info.modifier == "anvil" ? "🪨" : info.modifier == "golden_club" ? "🏌️" : nil
+            if let badge {
+                let badgeText = SCNText(string: badge, extrusionDepth: 0.05)
+                badgeText.font = UIFont.systemFont(ofSize: 0.5)
+                let badgeNode = SCNNode(geometry: badgeText)
+                badgeNode.constraints = [SCNBillboardConstraint()]
+                badgeNode.position = SCNVector3(0.4, 0.7, 0)
+                tag.addChildNode(badgeNode)
             }
 
             balls[info.id] = Ball(info: info, node: node, tag: tag, trail: trail,
@@ -1218,7 +1221,9 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         ball.node.position = ball.node.presentation.position
 
         let p = min(1.0, max(0.0, power))
-        let factor: Float = ball.info.anviled ? 0.7 : 1.0 // the Heavy Anvil at work
+        // Auction modifiers: Heavy Anvil weakens (×0.7), Golden Club doubles (×2).
+        let factor: Float = ball.info.modifier == "anvil" ? 0.7
+            : ball.info.modifier == "golden_club" ? 2.0 : 1.0
         let dir = groundDirection(angle) // already flat (y = 0)
         let horizontal = Float(5.0 + 14.0 * p) * factor
 

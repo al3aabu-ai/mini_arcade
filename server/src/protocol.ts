@@ -137,34 +137,64 @@ export const SECRET_TASKS: Record<GameType, SecretTask[]> = {
   ],
 };
 
-export type Debuff = "anvil" | "jammed";
+/**
+ * An active per-player game modifier — the effect of a won auction item. A
+ * `sabotage` item lands one on a rival; an `advantage` item lands one on the
+ * buyer. PUBLIC (shown on the TV, read by the boards), cleared at game end.
+ */
+export type Modifier =
+  | "anvil"       // golf sabotage: shots launch 30% weaker
+  | "golden_club" // golf advantage: shots launch at double power
+  | "butter"      // bomb sabotage: PASS jams briefly on every catch
+  | "hazmat"      // bomb advantage: shrug off one explosion
+  | "flat_tire"   // bumper sabotage: push force halved
+  | "nitro";      // bumper advantage: +40% mass & shove impact
 
-export interface SabotageItem {
-  id: string;
-  name: string;
+export type AuctionItemType = "sabotage" | "advantage";
+
+export interface AuctionItem {
+  /** Also the `Modifier` id applied when this item is won. */
+  id: Modifier;
+  nameEN: string;
+  nameAR: string;
   emoji: string;
-  blurb: string;
-  appliesTo: "golf" | "bomb";
-  debuff: Debuff;
+  blurbEN: string;
+  blurbAR: string;
+  appliesTo: GameType;
+  type: AuctionItemType;
+  /** Listed value (coins), shown as guidance; the winner pays their own bid. */
+  cost: number;
 }
 
-export const SABOTAGE_ITEMS: SabotageItem[] = [
-  {
-    id: "anvil",
-    name: "The Heavy Anvil",
-    emoji: "🪨",
-    blurb: "Crush a rival! Their golf shots launch 30% weaker.",
-    appliesTo: "golf",
-    debuff: "anvil",
-  },
-  {
-    id: "butter",
-    name: "Butter Fingers",
-    emoji: "🧈",
-    blurb: "Grease a rival! Their PASS button jams for 2s every time they catch the bomb.",
-    appliesTo: "bomb",
-    debuff: "jammed",
-  },
+/** Two items per game — one sabotage, one self-advantage — both auctioned. */
+export const AUCTION_ITEMS: AuctionItem[] = [
+  // --- Golf ---
+  { id: "anvil", nameEN: "The Heavy Anvil", nameAR: "السندان الثقيل", emoji: "🪨",
+    blurbEN: "Crush a rival — their golf shots launch 30% weaker.",
+    blurbAR: "اسحق خصم — ضرباته في القولف تطلع أضعف ٣٠٪.",
+    appliesTo: "golf", type: "sabotage", cost: 200 },
+  { id: "golden_club", nameEN: "Golden Club", nameAR: "المضرب الذهبي", emoji: "🏌️",
+    blurbEN: "Your own golf shots launch at DOUBLE power.",
+    blurbAR: "ضرباتك في القولف تطلع بضعف القوة.",
+    appliesTo: "golf", type: "advantage", cost: 250 },
+  // --- Bomb ---
+  { id: "butter", nameEN: "Butter Fingers", nameAR: "أصابع الزبدة", emoji: "🧈",
+    blurbEN: "Grease a rival — their PASS jams for 2s on every catch.",
+    blurbAR: "زيّت خصم — زر التمرير يعلّق ثانيتين كل ما يمسك القنبلة.",
+    appliesTo: "bomb", type: "sabotage", cost: 200 },
+  { id: "hazmat", nameEN: "Hazmat Suit", nameAR: "بدلة الوقاية", emoji: "🧪",
+    blurbEN: "Shrug off ONE explosion — survive the first blast you hold.",
+    blurbAR: "اطلع سالم من أول انفجار يصيبك.",
+    appliesTo: "bomb", type: "advantage", cost: 250 },
+  // --- Bumper ---
+  { id: "flat_tire", nameEN: "Flat Tire", nameAR: "إطار مثقوب", emoji: "🛞",
+    blurbEN: "Sap a rival — their push force is halved.",
+    blurbAR: "اضعف خصم — قوة دفعه تنص.",
+    appliesTo: "bumper", type: "sabotage", cost: 200 },
+  { id: "nitro", nameEN: "Nitro Engine", nameAR: "محرك نيترو", emoji: "🔥",
+    blurbEN: "+40% mass & shove impact — bully everyone off the slab.",
+    blurbAR: "+٤٠٪ وزن وقوة دفع — كشّخهم بره الحلبة.",
+    appliesTo: "bumper", type: "advantage", cost: 250 },
 ];
 
 // --------------------------- snapshot shapes -------------------------------
@@ -184,7 +214,8 @@ export interface PlayerState {
   coins: number;
   connected: boolean;
   isHost: boolean;
-  debuff: Debuff | null;
+  /** Active buff/debuff for the upcoming mini-game (PUBLIC). Cleared at game end. */
+  modifier: Modifier | null;
   /**
    * This player's hidden objective for the current mini-game. PRIVATE — the
    * server only fills it in the owner's own snapshot; everyone else (and the TV)
@@ -204,15 +235,18 @@ export interface SelectionState {
 export type AuctionStage = "bidding" | "targeting" | "reveal";
 
 export interface AuctionState {
-  round: number; // 1 = before golf, 2 = before bomb
+  round: number; // 1-based position in the lineup
   stage: AuctionStage;
-  item: SabotageItem;
+  /** Exactly two lots for the upcoming game: one sabotage + one advantage. */
+  items: AuctionItem[];
   /** epoch ms when the current stage auto-resolves */
   endsAt: number;
   /** players whose bids are locked in (amounts stay secret) */
   lockedIn: string[];
   winnerId: string | null;
   winningBid: number | null;
+  /** which of the two lots the winner bid on (drives advantage vs sabotage). */
+  winningItemId: Modifier | null;
   targetId: string | null;
 }
 
@@ -229,8 +263,6 @@ export type GolfMap = "guerilla" | "tiki" | "runway";
 export interface GolfState {
   /** epoch ms deadline; the board shows the countdown from this */
   endsAt: number;
-  /** playerId -> debuff applying to this game */
-  debuffs: Record<string, Debuff>;
   /** whose shot it is right now (host board drives the rotation) */
   turnId: string | null;
   /** players already in the cup, in sink order */
@@ -322,7 +354,7 @@ export type ClientMessage =
   | { t: "register_coins"; coins: Coin[] } // host board → server: this golf round's coin layout
   | { t: "collect_coin"; coinId: string; playerId: string } // host board → server: a ball hit a coin
   | { t: "ball_reset"; playerId: string } // host board → server: a ball fell in water / out of bounds
-  | { t: "submit_bid"; amount: number }
+  | { t: "submit_bid"; amount: number; itemId: Modifier } // which lot the player is bidding on
   | { t: "choose_target"; targetId: string }
   | { t: "aim"; angle: number; power: number } // power 0..1, angle radians (0 = right, pi/2 = up)
   | { t: "aim_clear" }

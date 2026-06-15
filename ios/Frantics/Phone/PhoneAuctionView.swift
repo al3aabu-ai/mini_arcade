@@ -1,28 +1,26 @@
 import SwiftUI
 
-/// The Dirty Auction, from a player's seat: secretly bid points, and if you
-/// win, pick your victim.
+/// The Dirty Auction, from a player's seat: two lots are up — a self-advantage
+/// and a sabotage. Pick which one you want, secretly bid, and if you win an
+/// advantage it buffs you; if you win a sabotage you pick a victim.
 struct PhoneAuctionView: View {
     @EnvironmentObject var client: GameClient
     @ObservedObject private var loc = Localization.shared
     @State private var bid: Double = 0
     @State private var locked = false
+    @State private var selectedItemId: String?
 
     private var auction: AuctionState? { client.room?.auction }
     private var iWon: Bool { auction?.winnerId == client.playerId }
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 18) {
             if let auction {
                 switch auction.stage {
                 case "bidding":
                     bidding(auction)
                 case "targeting":
-                    if iWon {
-                        targetPicker(auction)
-                    } else {
-                        waitingForWinner(auction)
-                    }
+                    if iWon { targetPicker(auction) } else { waitingForWinner(auction) }
                 default:
                     reveal(auction)
                 }
@@ -33,6 +31,7 @@ struct PhoneAuctionView: View {
         .onChange(of: auction?.round) { _, _ in
             bid = 0
             locked = false
+            selectedItemId = nil
         }
     }
 
@@ -42,26 +41,10 @@ struct PhoneAuctionView: View {
     private func bidding(_ auction: AuctionState) -> some View {
         let maxBid = Double(max(0, client.me?.coins ?? 0)) // bids are paid from your private coin wallet
 
-        VStack(spacing: 6) {
-            Text(loc.tr("THE DIRTY AUCTION"))
-                .font(Theme.body(13))
-                .foregroundStyle(Theme.pink)
-                .kerning(2)
-            HStack(spacing: 12) {
-                Text(auction.item.emoji).font(.system(size: 44))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc.tr(auction.item.name))
-                        .font(Theme.title(20))
-                        .foregroundStyle(.white)
-                    Text(loc.tr(auction.item.blurb))
-                        .font(Theme.body(13))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-            }
-            .card()
-        }
-
-        CountdownLabel(endsAt: auction.endsAtDate)
+        Text(loc.tr("THE DIRTY AUCTION"))
+            .font(Theme.body(13))
+            .foregroundStyle(Theme.pink)
+            .kerning(2)
 
         if locked {
             VStack(spacing: 10) {
@@ -74,40 +57,85 @@ struct PhoneAuctionView: View {
                     .foregroundStyle(Theme.cyan)
             }
         } else {
-            VStack(spacing: 14) {
+            Text(loc.tr("Pick a lot, then bid"))
+                .font(Theme.body(13))
+                .foregroundStyle(.white.opacity(0.5))
+            ForEach(auction.items) { item in
+                lotCard(item)
+            }
+            CountdownLabel(endsAt: auction.endsAtDate, font: Theme.title(30))
+
+            VStack(spacing: 12) {
                 Text("\(Int(bid))")
-                    .font(Theme.title(58))
+                    .font(Theme.title(48))
                     .foregroundStyle(Theme.yellow)
                     .contentTransition(.numericText())
                     .animation(.snappy, value: Int(bid))
                 Slider(value: $bid, in: 0...max(1, maxBid), step: 10)
                     .tint(Theme.yellow)
-                    .disabled(maxBid <= 0)
+                    .disabled(maxBid <= 0 || selectedItemId == nil)
                 HStack {
-                    Text("0").font(Theme.body(13)).foregroundStyle(.white.opacity(0.4))
+                    Text("0").font(Theme.body(12)).foregroundStyle(.white.opacity(0.4))
                     Spacer()
-                    Text(loc.tr("all in: %@", "\(Int(maxBid))"))
-                        .font(Theme.body(13))
-                        .foregroundStyle(.white.opacity(0.4))
+                    Text(loc.tr("all in: %@", "\(Int(maxBid))")).font(Theme.body(12)).foregroundStyle(.white.opacity(0.4))
                 }
             }
             .card()
 
-            Button(loc.tr(bid > 0 ? "LOCK IN SECRET BID  🤫" : "BID NOTHING  🙅")) {
+            Button(loc.tr(canBid ? "LOCK IN SECRET BID  🤫" : "BID NOTHING  🙅")) {
                 locked = true
                 Haptics.thump()
-                client.submitBid(Int(bid))
+                client.submitBid(canBid ? Int(bid) : 0, itemId: selectedItemId ?? auction.items.first?.id ?? "")
             }
-            .buttonStyle(NeonButtonStyle(color: bid > 0 ? Theme.yellow : Theme.panelLight,
-                                         textColor: bid > 0 ? Theme.bg : .white))
+            .buttonStyle(NeonButtonStyle(color: canBid ? Theme.yellow : Theme.panelLight,
+                                         textColor: canBid ? Theme.bg : .white))
         }
     }
 
-    // MARK: targeting
+    private var canBid: Bool { bid > 0 && selectedItemId != nil }
+
+    private func lotCard(_ item: AuctionItem) -> some View {
+        let selected = selectedItemId == item.id
+        let accent = item.isAdvantage ? Theme.cyan : Theme.red
+        return Button {
+            selectedItemId = item.id
+            Haptics.tick()
+        } label: {
+            HStack(spacing: 12) {
+                Text(item.emoji).font(.system(size: 40))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.isAdvantage ? loc.tr("Self-Advantage") : loc.tr("Sabotage"))
+                        .font(Theme.body(11))
+                        .foregroundStyle(accent)
+                        .kerning(1)
+                    Text(item.name(arabic: loc.isArabic))
+                        .font(Theme.title(18))
+                        .foregroundStyle(.white)
+                    Text(item.blurb(arabic: loc.isArabic))
+                        .font(Theme.body(12))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(accent) }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(selected ? accent.opacity(0.18) : Theme.panel)
+                    .overlay(RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(selected ? accent : .white.opacity(0.08), lineWidth: 2))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: targeting (winner of a sabotage lot)
 
     @ViewBuilder
     private func targetPicker(_ auction: AuctionState) -> some View {
-        Text(loc.tr("YOU WON %@", auction.item.emoji))
+        Text(loc.tr("YOU WON %@", auction.wonItem?.emoji ?? "🎁"))
             .font(Theme.title(28))
             .foregroundStyle(Theme.yellow)
             .neonGlow(Theme.yellow)
@@ -125,22 +153,14 @@ struct PhoneAuctionView: View {
                 } label: {
                     HStack {
                         Text(victim.avatar).font(.system(size: 28))
-                        Text(victim.name)
-                            .font(Theme.title(20))
-                            .foregroundStyle(.white)
+                        Text(victim.name).font(Theme.title(20)).foregroundStyle(.white)
                         Spacer()
                         Text("🎯")
                     }
                     .padding(.horizontal, 18)
                     .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(hex: victim.color).opacity(0.22))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(Color(hex: victim.color).opacity(0.7), lineWidth: 1.5)
-                    )
+                    .background(RoundedRectangle(cornerRadius: 16).fill(Color(hex: victim.color).opacity(0.22)))
+                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(hex: victim.color).opacity(0.7), lineWidth: 1.5))
                 }
             }
         }
@@ -150,7 +170,7 @@ struct PhoneAuctionView: View {
     private func waitingForWinner(_ auction: AuctionState) -> some View {
         let winner = client.room?.player(auction.winnerId)
         Text(winner?.avatar ?? "😈").font(.system(size: 64))
-        Text(loc.tr("%@ won the %@", winner?.name ?? loc.tr("Someone"), loc.tr(auction.item.name)))
+        Text(loc.tr("%@ won the %@", winner?.name ?? loc.tr("Someone"), auction.wonItem?.name(arabic: loc.isArabic) ?? ""))
             .font(Theme.title(22))
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
@@ -163,32 +183,33 @@ struct PhoneAuctionView: View {
 
     @ViewBuilder
     private func reveal(_ auction: AuctionState) -> some View {
-        if let targetId = auction.targetId {
+        let winner = client.room?.player(auction.winnerId)
+        if let item = auction.wonItem, item.isAdvantage, let winner {
+            // Self-advantage: no victim, the winner buffed themselves.
+            Text(item.emoji).font(.system(size: 80))
+            if winner.id == client.playerId {
+                Text(loc.tr("YOU POWERED UP!")).font(Theme.title(34)).foregroundStyle(Theme.cyan).neonGlow(Theme.cyan)
+            } else {
+                Text(loc.tr("%@ powered up", winner.name)).font(Theme.title(26)).foregroundStyle(.white)
+            }
+            Text(item.name(arabic: loc.isArabic)).font(Theme.body(16)).foregroundStyle(.white.opacity(0.6))
+        } else if let targetId = auction.targetId, let item = auction.wonItem {
             let target = client.room?.player(targetId)
-            let winner = client.room?.player(auction.winnerId)
-            Text(auction.item.emoji).font(.system(size: 80))
+            Text(item.emoji).font(.system(size: 80))
             if targetId == client.playerId {
-                Text(loc.tr("IT'S YOU."))
-                    .font(Theme.title(36))
-                    .foregroundStyle(Theme.red)
-                    .neonGlow(Theme.red)
-                Text(loc.tr("%@ hit you with %@", winner?.name ?? loc.tr("A rival"), loc.tr(auction.item.name)))
-                    .font(Theme.body(16))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .multilineTextAlignment(.center)
+                Text(loc.tr("IT'S YOU.")).font(Theme.title(36)).foregroundStyle(Theme.red).neonGlow(Theme.red)
+                Text(loc.tr("%@ hit you with %@", winner?.name ?? loc.tr("A rival"), item.name(arabic: loc.isArabic)))
+                    .font(Theme.body(16)).foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center)
             } else {
                 Text(loc.tr("%@ got crushed", target?.name ?? loc.tr("Someone")))
-                    .font(Theme.title(26))
-                    .foregroundStyle(.white)
+                    .font(Theme.title(26)).foregroundStyle(.white)
                 Text(loc.tr("courtesy of %@", winner?.name ?? loc.tr("a rival")))
-                    .font(Theme.body(15))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .font(Theme.body(15)).foregroundStyle(.white.opacity(0.55))
             }
         } else {
             Text("🦗").font(.system(size: 70))
-            Text(loc.tr("No bids. The item rusts away."))
-                .font(Theme.title(20))
-                .foregroundStyle(.white.opacity(0.7))
+            Text(loc.tr("No bids. The lots rust away."))
+                .font(Theme.title(20)).foregroundStyle(.white.opacity(0.7))
         }
     }
 }

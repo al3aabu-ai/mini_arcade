@@ -84,32 +84,45 @@ struct PlayerState: Codable, Identifiable, Equatable, Hashable {
     let coins: Int
     let connected: Bool
     let isHost: Bool
-    let debuff: String?
+    /// Active buff/debuff for the upcoming game (PUBLIC). Effect id, or nil.
+    let modifier: String?
     /// This player's hidden objective — PRIVATE, only present in their own
     /// snapshot (null for everyone else and on the TV).
     let secretTask: SecretTask?
 }
 
-struct SabotageItem: Codable, Equatable {
-    let id: String
-    let name: String
+/// An auction lot — either a sabotage (lands on a rival) or a self-advantage.
+/// Bilingual so the phone shows the right language for the user's setting.
+struct AuctionItem: Codable, Equatable, Identifiable {
+    let id: String          // also the Modifier effect id
+    let nameEN: String
+    let nameAR: String
     let emoji: String
-    let blurb: String
+    let blurbEN: String
+    let blurbAR: String
     let appliesTo: String
-    let debuff: String
+    let type: String        // "sabotage" | "advantage"
+    let cost: Int
+
+    func name(arabic: Bool) -> String { arabic ? nameAR : nameEN }
+    func blurb(arabic: Bool) -> String { arabic ? blurbAR : blurbEN }
+    var isAdvantage: Bool { type == "advantage" }
 }
 
 struct AuctionState: Codable, Equatable {
     let round: Int
     let stage: String // bidding | targeting | reveal
-    let item: SabotageItem
+    let items: [AuctionItem] // the two lots (sabotage + advantage)
     let endsAt: Double // epoch ms
     let lockedIn: [String]
     let winnerId: String?
     let winningBid: Int?
+    let winningItemId: String?
     let targetId: String?
 
     var endsAtDate: Date { Date(timeIntervalSince1970: endsAt / 1000) }
+    /// The lot the winner claimed (once resolved).
+    var wonItem: AuctionItem? { items.first { $0.id == winningItemId } }
 }
 
 struct GolfResults: Codable, Equatable {
@@ -119,7 +132,6 @@ struct GolfResults: Codable, Equatable {
 
 struct GolfState: Codable, Equatable {
     let endsAt: Double
-    let debuffs: [String: String]
     let turnId: String?
     let sunk: [String]
     let results: GolfResults?

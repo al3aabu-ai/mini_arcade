@@ -323,7 +323,7 @@ final class GameClient: NSObject, ObservableObject {
     func previewLineup(_ lineup: [String]) { send(["t": "preview_lineup", "lineup": lineup]) }
     /// Host commits the chosen games (must be exactly the required count) → starts.
     func selectLineup(_ lineup: [String]) { send(["t": "select_lineup", "lineup": lineup]) }
-    func submitBid(_ amount: Int) { send(["t": "submit_bid", "amount": amount]) }
+    func submitBid(_ amount: Int, itemId: String) { send(["t": "submit_bid", "amount": amount, "itemId": itemId]) }
     func chooseTarget(_ targetId: String) { send(["t": "choose_target", "targetId": targetId]) }
     func sendAim(angle: Double, power: Double) { send(["t": "aim", "angle": angle, "power": power]) }
     func sendAimClear() { send(["t": "aim_clear"]) }

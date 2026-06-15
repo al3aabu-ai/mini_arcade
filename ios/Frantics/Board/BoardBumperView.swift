@@ -40,7 +40,7 @@ struct BoardBumperView: View {
     private func build() {
         guard controller == nil, let room = client.room else { return }
         let infos = room.players.map {
-            GolfPlayerInfo(id: $0.id, name: $0.name, avatar: $0.avatar, colorHex: $0.color, anviled: false)
+            GolfPlayerInfo(id: $0.id, name: $0.name, avatar: $0.avatar, colorHex: $0.color, modifier: $0.modifier)
         }
         let c = BumperSceneController(players: infos) { playerId, byPlayerId in
             client.reportBumperKnockout(playerId: playerId, byPlayerId: byPlayerId)
@@ -103,6 +103,8 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
     private var joystick: [String: SCNVector3] = [:]
     private var lastHitBy: [String: String] = [:]
     private var eliminated: Set<String> = []
+    /// Auction modifier per player: nitro shoves harder, flat tire shoves weaker.
+    private var forceScale: [String: Float] = [:]
 
     private let pendingLock = NSLock()
     private var pending: [(BumperSceneController) -> Void] = []
@@ -215,8 +217,13 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
             node.name = info.id
             node.position = pos
 
+            // Auction modifiers: Nitro = +40% mass & shove force; Flat Tire = half force.
+            let isNitro = info.modifier == "nitro"
+            let isFlat = info.modifier == "flat_tire"
+            forceScale[info.id] = isNitro ? 1.4 : isFlat ? 0.5 : 1.0
+
             let body = SCNPhysicsBody(type: .dynamic, shape: SCNPhysicsShape(geometry: sphere, options: nil))
-            body.mass = 4
+            body.mass = isNitro ? 5.6 : 4    // heavier = more impact when it connects
             body.restitution = 0.75          // bouncy bumpers
             body.friction = 0.4
             body.damping = 0.7               // so they coast to a stop when released
@@ -261,9 +268,11 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
 
         let force: Float = 34
         for (id, node) in bumpers where !eliminated.contains(id) {
-            // Continuous thrust from the latest joystick vector.
+            // Continuous thrust from the latest joystick vector, scaled by any
+            // active modifier (nitro ×1.4 / flat tire ×0.5).
             if let dir = joystick[id], (dir.x != 0 || dir.z != 0) {
-                node.physicsBody?.applyForce(SCNVector3(dir.x * force, 0, dir.z * force), asImpulse: false)
+                let f = force * (forceScale[id] ?? 1.0)
+                node.physicsBody?.applyForce(SCNVector3(dir.x * f, 0, dir.z * f), asImpulse: false)
             }
             // Knockout: shoved off the slab and falling into the water.
             let p = node.presentation.position

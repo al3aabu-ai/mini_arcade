@@ -18,7 +18,7 @@ struct BoardAuctionView: View {
                     .neonGlow(Theme.pink)
                     .padding(.top, 30)
 
-                itemCard(auction)
+                twoLots(auction)
 
                 switch auction.stage {
                 case "bidding": bidding(auction)
@@ -41,30 +41,31 @@ struct BoardAuctionView: View {
         }
     }
 
-    private func itemCard(_ auction: AuctionState) -> some View {
-        HStack(spacing: 22) {
-            Text(auction.item.emoji)
-                .font(.system(size: 84))
-                .neonGlow(Theme.yellow, radius: 16)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(loc.tr(auction.item.name))
-                    .font(Theme.title(38))
-                    .foregroundStyle(.white)
-                Text(loc.tr(auction.item.blurb))
-                    .font(Theme.body(20))
-                    .foregroundStyle(.white.opacity(0.6))
+    /// Both lots side by side — a self-advantage and a sabotage. The won lot
+    /// (once resolved) gets a bright ring.
+    private func twoLots(_ auction: AuctionState) -> some View {
+        HStack(spacing: 20) {
+            ForEach(auction.items) { item in
+                let accent = item.isAdvantage ? Theme.cyan : Theme.red
+                let won = auction.winningItemId == item.id
+                VStack(spacing: 8) {
+                    Text(item.isAdvantage ? loc.tr("Self-Advantage") : loc.tr("Sabotage"))
+                        .font(Theme.body(16)).foregroundStyle(accent).kerning(1)
+                    Text(item.emoji).font(.system(size: 64)).neonGlow(accent, radius: won ? 20 : 8)
+                    Text(item.name(arabic: loc.isArabic)).font(Theme.title(26)).foregroundStyle(.white)
+                    Text(item.blurb(arabic: loc.isArabic))
+                        .font(Theme.body(15)).foregroundStyle(.white.opacity(0.55))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(width: 330)
+                .padding(.vertical, 18).padding(.horizontal, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 24).fill(Theme.panel)
+                        .overlay(RoundedRectangle(cornerRadius: 24)
+                            .strokeBorder(won ? accent : accent.opacity(0.3), lineWidth: won ? 3 : 1.5))
+                )
             }
         }
-        .padding(.horizontal, 40)
-        .padding(.vertical, 22)
-        .background(
-            RoundedRectangle(cornerRadius: 28)
-                .fill(Theme.panel)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28)
-                        .strokeBorder(Theme.yellow.opacity(0.5), lineWidth: 2)
-                )
-        )
     }
 
     @ViewBuilder
@@ -107,11 +108,25 @@ struct BoardAuctionView: View {
 
     @ViewBuilder
     private func reveal(_ auction: AuctionState) -> some View {
-        if let target = room.player(auction.targetId) {
-            let winner = room.player(auction.winnerId)
+        let winner = room.player(auction.winnerId)
+        if let item = auction.wonItem, item.isAdvantage, let winner {
+            // Self-advantage: the winner buffs themselves — a triumphant glow-up.
+            VStack(spacing: 10) {
+                Text(item.emoji)
+                    .font(.system(size: 90))
+                    .scaleEffect(crushDrop ? 1.1 : 0.5)
+                    .neonGlow(Theme.cyan, radius: 22)
+                AvatarChip(player: winner, size: 120)
+                Text(loc.tr("%@ powered up!", winner.name))
+                    .font(Theme.title(34))
+                    .foregroundStyle(Theme.cyan)
+                    .neonGlow(Theme.cyan)
+                    .padding(.top, 8)
+            }
+        } else if let target = room.player(auction.targetId), let item = auction.wonItem {
             VStack(spacing: 10) {
                 // The sabotage item slams down onto the victim's avatar.
-                Text(auction.item.emoji)
+                Text(item.emoji)
                     .font(.system(size: 90))
                     .offset(y: crushDrop ? 36 : -200)
                     .opacity(crushDrop ? 1 : 0.4)

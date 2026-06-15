@@ -18,13 +18,13 @@ enum DemoData {
     )
     static let players: [PlayerState] = [
         .init(id: "p1", name: "Maya", avatar: "🦊", color: "#FF2E88", trophies: 2, coins: 450,
-              connected: true, isHost: true, debuff: nil, secretTask: nil),
+              connected: true, isHost: true, modifier: nil, secretTask: nil),
         .init(id: "p2", name: "Omar", avatar: "🐸", color: "#00F5D4", trophies: 3, coins: 600,
-              connected: true, isHost: false, debuff: nil, secretTask: demoTask),
+              connected: true, isHost: false, modifier: nil, secretTask: demoTask),
         .init(id: "p3", name: "Lina", avatar: "🦄", color: "#9B5DE5", trophies: 1, coins: 700,
-              connected: true, isHost: false, debuff: "anvil", secretTask: nil),
+              connected: true, isHost: false, modifier: "anvil", secretTask: nil),
         .init(id: "p4", name: "Ziad", avatar: "🐼", color: "#FEE440", trophies: 1, coins: 300,
-              connected: true, isHost: false, debuff: nil, secretTask: nil),
+              connected: true, isHost: false, modifier: nil, secretTask: nil),
     ]
 
     static func state(phase: String, selection: SelectionState? = nil, auction: AuctionState? = nil,
@@ -47,11 +47,16 @@ enum DemoData {
             phase: "auction",
             auction: AuctionState(
                 round: 1, stage: "bidding",
-                item: SabotageItem(id: "anvil", name: "The Heavy Anvil", emoji: "🪨",
-                                   blurb: "Crush a rival! Their golf shots launch 30% weaker.",
-                                   appliesTo: "golf", debuff: "anvil"),
+                items: [
+                    AuctionItem(id: "anvil", nameEN: "The Heavy Anvil", nameAR: "السندان الثقيل",
+                                emoji: "🪨", blurbEN: "Their golf shots launch 30% weaker.",
+                                blurbAR: "ضرباته تطلع أضعف ٣٠٪.", appliesTo: "golf", type: "sabotage", cost: 200),
+                    AuctionItem(id: "golden_club", nameEN: "Golden Club", nameAR: "المضرب الذهبي",
+                                emoji: "🏌️", blurbEN: "Your shots launch at DOUBLE power.",
+                                blurbAR: "ضرباتك بضعف القوة.", appliesTo: "golf", type: "advantage", cost: 250),
+                ],
                 endsAt: Date().addingTimeInterval(12).timeIntervalSince1970 * 1000,
-                lockedIn: ["p1", "p3"], winnerId: nil, winningBid: nil, targetId: nil
+                lockedIn: ["p1", "p3"], winnerId: nil, winningBid: nil, winningItemId: nil, targetId: nil
             )
         )
     }
@@ -61,7 +66,7 @@ enum DemoData {
             phase: "golf",
             golf: GolfState(
                 endsAt: Date().addingTimeInterval(140).timeIntervalSince1970 * 1000,
-                debuffs: ["p3": "anvil"], turnId: "p2", sunk: [], results: nil,
+                turnId: "p2", sunk: [], results: nil,
                 round: 1, map: "guerilla", strokes: ["p1": 2, "p2": 1, "p3": 3, "p4": 0],
                 spawnedCoins: []
             )

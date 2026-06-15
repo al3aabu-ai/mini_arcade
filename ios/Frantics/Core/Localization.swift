@@ -190,6 +190,17 @@ final class Localization: ObservableObject {
         "You survived!": "نجوت!",
         "Splashed! Spectating…": "طحت بالماي! تتفرّج…",
 
+        // Auction items (sabotage vs self-advantage)
+        "Self-Advantage": "ميزة خاصة",
+        "Sabotage": "تخريب",
+        "Pick a lot, then bid": "اختر غرض وزايد",
+        "YOU POWERED UP!": "تقوّيت!",
+        "%@ powered up": "%@ تقوّى",
+        "%@ powered up!": "%@ تقوّى!",
+        "No bids. The lots rust away.": "ما فيه مزايدات. الأغراض راحت.",
+        "%@ %@ shrugged it off!": "%@ %@ طنّشها!",
+        "GOLDEN CLUB — your shots launch at DOUBLE power": "المضرب الذهبي — ضرباتك بضعف القوة",
+
         // Bomb board
         "💣 THE BILLIONAIRE'S BOMB": "💣 قنبلة المليونير",
         "Hold it to earn. Pass it to survive. Last two standing bank everything.":

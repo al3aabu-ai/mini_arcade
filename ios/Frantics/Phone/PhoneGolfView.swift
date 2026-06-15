@@ -15,7 +15,8 @@ struct PhoneGolfView: View {
     private let aimInterval: TimeInterval = 1.0 / 30.0
 
     private var golf: GolfState? { client.room?.golf }
-    private var anviled: Bool { golf?.debuffs[client.playerId] == "anvil" }
+    private var anviled: Bool { client.me?.modifier == "anvil" }
+    private var goldenClub: Bool { client.me?.modifier == "golden_club" }
     private var myTurn: Bool { golf?.turnId == client.playerId }
 
     private var finishedPlace: Int? {
@@ -84,6 +85,13 @@ struct PhoneGolfView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Capsule().fill(Theme.yellow))
+            } else if goldenClub {
+                Label(loc.tr("GOLDEN CLUB — your shots launch at DOUBLE power"), systemImage: "bolt.fill")
+                    .font(Theme.body(13))
+                    .foregroundStyle(Theme.bg)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Theme.cyan))
             }
             if myTurn, let l = launch {
                 Text(loc.tr("POWER %@%%", "\(Int(l.power * 100))"))

@@ -105,7 +105,7 @@ export function handleClientMessage(
             room.reportBallReset(playerId, String(msg.playerId));
             break;
           case "submit_bid":
-            room.submitBid(playerId, Number(msg.amount));
+            room.submitBid(playerId, Number(msg.amount), msg.itemId);
             break;
           case "choose_target":
             room.chooseTarget(playerId, String(msg.targetId));

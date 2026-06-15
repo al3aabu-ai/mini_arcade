@@ -43,7 +43,7 @@ Golf is a **three-round segment**, each round a different course, played turn-ba
 - This is regression-tested in `server/scripts/smoke.ts` (R1→R2→R3 transitions, stroke carry-over, tie-break, final awards). Run `cd server && npm run smoke`.
 
 ### Shot mechanics — STRICTLY HORIZONTAL
-- In `applyFire` (`Golf3DBoard.swift`) the launch impulse's **Y-component is locked to 0** and any residual vertical velocity is zeroed, so the ball never lifts/jumps — it stays flush and glued to the slab. Power scales only the horizontal magnitude (anvil debuff ×0.7). No squash `SCNAction` (it fought the solver).
+- In `applyFire` (`Golf3DBoard.swift`) the launch impulse's **Y-component is locked to 0** and any residual vertical velocity is zeroed, so the ball never lifts/jumps — it stays flush and glued to the slab. Power scales only the horizontal magnitude, times the auction modifier factor (`anvil` ×0.7, `golden_club` ×2.0 — see §8). No squash `SCNAction` (it fought the solver).
 
 ### Camera follow — ELEVATED third-person, pitched DOWN the fairway
 - `GolfSceneController.updateFollowCamera()` (every frame) **smoothly lerps** the camera toward `activeBall + cameraFollowOffset` and the look-target toward `activeBall + cameraLookOffset` (factors 0.06 / 0.10) — a damped chase cam, no hard cuts.
@@ -307,9 +307,46 @@ slab. The first **real-time, continuous-input** game (golf/bomb are turn/tap).
 `aggressor` (shoved someone off → `taskBumperAggressor` in `bumperKnockout`) and
 `pacifist` (`taskBumperSurvived` = alive at the end AND (won OR survived ≥30s)).
 
-### No bumper-specific sabotage yet
-The pre-game auction has no `appliesTo: "bumper"` item, so it falls back to the
-anvil (harmless in bumper). Add a bumper sabotage item to `SABOTAGE_ITEMS` later.
+---
+
+## 8. The Dirty Auction — items, buffs & debuffs
+
+The pre-game intermission auctions TWO lots for the upcoming game — one
+**sabotage** and one **self-advantage** — and applies the won effect as a
+player **modifier**.
+
+### Items + modifiers (`protocol.ts`)
+- `AUCTION_ITEMS: AuctionItem[]` — `{id, nameEN, nameAR, emoji, blurbEN, blurbAR,
+  appliesTo: GameType, type: "sabotage"|"advantage", cost}`. The `id` IS the
+  `Modifier` effect id. Two per game:
+  | game | sabotage | advantage |
+  |------|----------|-----------|
+  | golf | `anvil` (shots ×0.7) | `golden_club` (shots ×2) |
+  | bomb | `butter` (PASS jams 2s) | `hazmat` (shrug off one blast) |
+  | bumper | `flat_tire` (force ×0.5) | `nitro` (+40% mass & force) |
+- `PlayerState.modifier: Modifier | null` — PUBLIC (the boards read it to apply
+  effects). Replaces the old single `debuff`. Cleared at each game's finish.
+
+### Flow (`room.ts`)
+- `startAuction(forGame)` puts up `AUCTION_ITEMS.filter(appliesTo === forGame)`
+  (exactly 2) as `auction.items`. Players **bid on a specific lot**:
+  `submit_bid {amount, itemId}` → `Player.bid` + `Player.bidItemId`.
+- `resolveAuction`: highest bid wins; `winningItemId = winner.bidItemId`.
+  - **advantage** → applied straight to the winner (`winner.modifier = id`),
+    skip targeting, go to reveal.
+  - **sabotage** → `stage = "targeting"`; the winner picks a rival; `applyTarget`
+    sets `target.modifier = winningItemId`.
+- `cost` is shown as guidance; the winner still pays their actual bid (coins).
+
+### Applying effects
+- Golf: `Golf3DBoard` `applyFire` reads `GolfPlayerInfo.modifier` (built from
+  `player.modifier`). Bomb: `setBombHolder` jams on `modifier === "butter"`;
+  `explodeBomb` consumes `hazmat` to survive (the board shows "shrugged it off"
+  since the victim stays in `alive`). Bumper: `BumperSceneController` scales
+  force (`flat_tire` ×0.5 / `nitro` ×1.4) and bumps mass for `nitro`.
+- UI: `PhoneAuctionView` shows both lots (tap to select, then bid);
+  `BoardAuctionView` shows both with Self-Advantage / Sabotage labels and an
+  advantage-vs-crush reveal.
 
 ---
 

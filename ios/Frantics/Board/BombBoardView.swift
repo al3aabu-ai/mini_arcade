@@ -169,17 +169,26 @@ struct BombBoardView: View {
     @ViewBuilder
     private func explosion(_ bomb: BombState) -> some View {
         let victim = room.player(bomb.lastExplodedId)
+        // Hazmat save: the "victim" is still alive — they shrugged the blast off.
+        let saved = bomb.lastExplodedId != nil && bomb.alive.contains(bomb.lastExplodedId!)
         VStack(spacing: 10) {
-            Text("💥")
+            Text(saved ? "🧪" : "💥")
                 .font(.system(size: 160))
                 .transition(.scale(scale: 0.2).combined(with: .opacity))
-            Text(loc.tr("%@ %@ IS OUT", victim?.avatar ?? "", victim?.name ?? loc.tr("Someone")))
-                .font(Theme.title(40))
-                .foregroundStyle(Theme.red)
-                .neonGlow(Theme.red)
+            if saved {
+                Text(loc.tr("%@ %@ shrugged it off!", victim?.avatar ?? "", victim?.name ?? loc.tr("Someone")))
+                    .font(Theme.title(38))
+                    .foregroundStyle(Theme.cyan)
+                    .neonGlow(Theme.cyan)
+            } else {
+                Text(loc.tr("%@ %@ IS OUT", victim?.avatar ?? "", victim?.name ?? loc.tr("Someone")))
+                    .font(Theme.title(40))
+                    .foregroundStyle(Theme.red)
+                    .neonGlow(Theme.red)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.red.opacity(0.12))
+        .background((saved ? Theme.cyan : Theme.red).opacity(0.12))
     }
 
     @ViewBuilder

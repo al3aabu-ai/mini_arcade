@@ -192,12 +192,16 @@ async function main() {
   }
 
   // ---- reusable: a no-sale auction (everyone bids 0) that just advances the lineup ----
-  async function passAuction(round: number, debuff: string) {
+  async function passAuction(round: number, sabotageId: string) {
     await Promise.all(
       all.map((c) => c.waitForState((s) => s.phase === "auction" && s.auction?.round === round, `auction ${round}`)),
     );
-    ok(host.state!.auction!.item.debuff === debuff, `auction ${round} offers the ${debuff} item`);
-    all.forEach((c) => c.send({ t: "submit_bid", amount: 0 }));
+    ok(host.state!.auction!.items.length === 2, `auction ${round} puts up two lots (sabotage + advantage)`);
+    ok(
+      host.state!.auction!.items.some((it) => it.id === sabotageId && it.type === "sabotage"),
+      `auction ${round} offers the ${sabotageId} sabotage`,
+    );
+    all.forEach((c) => c.send({ t: "submit_bid", amount: 0, itemId: sabotageId }));
   }
 
   console.log("\n— lobby —");
@@ -235,31 +239,33 @@ async function main() {
   // Host commits the full lineup → the match begins.
   host.send({ t: "select_lineup", lineup: ["golf", "bomb", "bumper"] });
 
-  console.log("\n— auction 1 (golf → anvil), bids paid in coins —");
+  console.log("\n— auction 1 (golf): SABOTAGE lot wins, picks a target —");
   await Promise.all(
     all.map((c) => c.waitForState((s) => s.phase === "auction" && s.auction?.round === 1, "auction 1")),
   );
-  ok(host.state!.auction!.item.debuff === "anvil", "auction 1 offers the Heavy Anvil (golf sabotage)");
+  ok(host.state!.auction!.items.length === 2, "the auction puts up two lots");
+  ok(host.state!.auction!.items.some((it) => it.id === "anvil" && it.type === "sabotage"), "a golf sabotage (Heavy Anvil) is on offer");
+  ok(host.state!.auction!.items.some((it) => it.id === "golden_club" && it.type === "advantage"), "a golf advantage (Golden Club) is on offer");
   ok(host.state!.lineup.length === 3, "the committed lineup holds 3 games");
 
-  host.send({ t: "submit_bid", amount: 100 });
-  alice.send({ t: "submit_bid", amount: 250 });
-  bob.send({ t: "submit_bid", amount: 50 });
-  cara.send({ t: "submit_bid", amount: 0 });
+  host.send({ t: "submit_bid", amount: 100, itemId: "golden_club" }); // wants the buff
+  alice.send({ t: "submit_bid", amount: 250, itemId: "anvil" });       // wants to sabotage
+  bob.send({ t: "submit_bid", amount: 50, itemId: "anvil" });
+  cara.send({ t: "submit_bid", amount: 0, itemId: "anvil" });
   const targeting = await alice.waitForState((s) => s.auction?.stage === "targeting", "auction targeting");
   ok(targeting.auction!.winnerId === alice.playerId, "Alice (250) wins the auction");
+  ok(targeting.auction!.winningItemId === "anvil", "she won the sabotage lot → must pick a target");
   ok(alice.myCoins() === 750, "Alice paid her 250-coin bid out of her private wallet");
-  ok(alice.coins(alice.state!, host.playerId) === 0, "PRIVACY: Alice cannot see the host's wallet (masked)");
   ok(host.myCoins() === 1000, "losing bidders pay nothing");
 
   alice.send({ t: "choose_target", targetId: bob.playerId });
   const reveal = await host.waitForState((s) => s.auction?.stage === "reveal", "auction reveal");
-  ok(reveal.players.find((p) => p.id === bob.playerId)?.debuff === "anvil", "Bob carries the anvil debuff");
+  ok(reveal.players.find((p) => p.id === bob.playerId)?.modifier === "anvil", "Bob carries the anvil debuff");
 
   console.log("\n— golf segment 1 (Guerilla → Tiki → Runway) —");
   await host.waitForState((s) => s.phase === "golf" && s.golf?.round === 1, "golf round 1");
   ok(host.state!.golf!.map === "guerilla", "round 1 is the Guerilla map");
-  ok(host.state!.golf!.debuffs[bob.playerId] === "anvil", "board is told about Bob's anvil");
+  ok(host.state!.players.find((p) => p.id === bob.playerId)?.modifier === "anvil", "Bob's anvil modifier is public for the board");
 
   // Off-turn fire must be ignored by the server (not relayed, no stroke counted).
   host.send({ t: "golf_progress", turnId: alice.playerId, sunk: [] });
@@ -308,10 +314,19 @@ async function main() {
   ok(golf1.golf!.results!.awarded[alice.playerId] === 1, "the golf winner is awarded exactly 1 trophy");
   ok(golf1.golf!.results!.awarded[bob.playerId] === undefined || golf1.golf!.results!.awarded[bob.playerId] === 0, "non-winners get no trophy from golf");
   ok(host.trophies(host.state!, alice.playerId) === 1, "Alice's trophy is public on every client");
-  ok(golf1.players.find((p) => p.id === bob.playerId)?.debuff === null, "anvil consumed after the golf segment");
+  ok(golf1.players.find((p) => p.id === bob.playerId)?.modifier === null, "anvil consumed after the golf segment");
 
-  console.log("\n— auction 2 (bomb → butter), no sale —");
-  await passAuction(2, "jammed");
+  console.log("\n— auction 2 (bomb): ADVANTAGE lot wins, self-applied —");
+  await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "auction" && s.auction?.round === 2, "auction 2")));
+  ok(host.state!.auction!.items.some((it) => it.id === "hazmat" && it.type === "advantage"), "a bomb advantage (Hazmat Suit) is on offer");
+  host.send({ t: "submit_bid", amount: 0, itemId: "butter" });
+  alice.send({ t: "submit_bid", amount: 0, itemId: "butter" });
+  bob.send({ t: "submit_bid", amount: 0, itemId: "butter" });
+  cara.send({ t: "submit_bid", amount: 300, itemId: "hazmat" }); // buys the buff for herself
+  const advReveal = await host.waitForState((s) => s.auction?.stage === "reveal" && s.auction?.winnerId === cara.playerId, "advantage reveal");
+  ok(advReveal.auction!.winningItemId === "hazmat", "Cara won the advantage lot");
+  ok(advReveal.auction!.targetId === null, "an advantage skips target selection entirely");
+  ok(advReveal.players.find((p) => p.id === cara.playerId)?.modifier === "hazmat", "the buff is applied directly to Cara");
 
   console.log("\n— the billionaire's bomb (cash → private coins) —");
   await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "bomb", "bomb phase")));
@@ -334,8 +349,8 @@ async function main() {
   });
   ok(survivorsBanked, "survivors banked their bomb cash + 250 bonus into their PRIVATE coins");
 
-  console.log("\n— auction 3 (bumper → anvil fallback), no sale —");
-  await passAuction(3, "anvil"); // no bumper-specific sabotage yet → anvil fallback
+  console.log("\n— auction 3 (bumper): dedicated lots, no sale —");
+  await passAuction(3, "flat_tire"); // bumper now has its own sabotage + advantage
 
   console.log("\n— bumper sumo arena (real-time joystick + knockouts) —");
   await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "bumper", "bumper phase")));

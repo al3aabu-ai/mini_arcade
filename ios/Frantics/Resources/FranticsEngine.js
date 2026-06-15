@@ -96,22 +96,75 @@
       }
     ]
   };
-  var SABOTAGE_ITEMS = [
+  var AUCTION_ITEMS = [
+    // --- Golf ---
     {
       id: "anvil",
-      name: "The Heavy Anvil",
+      nameEN: "The Heavy Anvil",
+      nameAR: "\u0627\u0644\u0633\u0646\u062F\u0627\u0646 \u0627\u0644\u062B\u0642\u064A\u0644",
       emoji: "\u{1FAA8}",
-      blurb: "Crush a rival! Their golf shots launch 30% weaker.",
+      blurbEN: "Crush a rival \u2014 their golf shots launch 30% weaker.",
+      blurbAR: "\u0627\u0633\u062D\u0642 \u062E\u0635\u0645 \u2014 \u0636\u0631\u0628\u0627\u062A\u0647 \u0641\u064A \u0627\u0644\u0642\u0648\u0644\u0641 \u062A\u0637\u0644\u0639 \u0623\u0636\u0639\u0641 \u0663\u0660\u066A.",
       appliesTo: "golf",
-      debuff: "anvil"
+      type: "sabotage",
+      cost: 200
     },
     {
+      id: "golden_club",
+      nameEN: "Golden Club",
+      nameAR: "\u0627\u0644\u0645\u0636\u0631\u0628 \u0627\u0644\u0630\u0647\u0628\u064A",
+      emoji: "\u{1F3CC}\uFE0F",
+      blurbEN: "Your own golf shots launch at DOUBLE power.",
+      blurbAR: "\u0636\u0631\u0628\u0627\u062A\u0643 \u0641\u064A \u0627\u0644\u0642\u0648\u0644\u0641 \u062A\u0637\u0644\u0639 \u0628\u0636\u0639\u0641 \u0627\u0644\u0642\u0648\u0629.",
+      appliesTo: "golf",
+      type: "advantage",
+      cost: 250
+    },
+    // --- Bomb ---
+    {
       id: "butter",
-      name: "Butter Fingers",
+      nameEN: "Butter Fingers",
+      nameAR: "\u0623\u0635\u0627\u0628\u0639 \u0627\u0644\u0632\u0628\u062F\u0629",
       emoji: "\u{1F9C8}",
-      blurb: "Grease a rival! Their PASS button jams for 2s every time they catch the bomb.",
+      blurbEN: "Grease a rival \u2014 their PASS jams for 2s on every catch.",
+      blurbAR: "\u0632\u064A\u0651\u062A \u062E\u0635\u0645 \u2014 \u0632\u0631 \u0627\u0644\u062A\u0645\u0631\u064A\u0631 \u064A\u0639\u0644\u0651\u0642 \u062B\u0627\u0646\u064A\u062A\u064A\u0646 \u0643\u0644 \u0645\u0627 \u064A\u0645\u0633\u0643 \u0627\u0644\u0642\u0646\u0628\u0644\u0629.",
       appliesTo: "bomb",
-      debuff: "jammed"
+      type: "sabotage",
+      cost: 200
+    },
+    {
+      id: "hazmat",
+      nameEN: "Hazmat Suit",
+      nameAR: "\u0628\u062F\u0644\u0629 \u0627\u0644\u0648\u0642\u0627\u064A\u0629",
+      emoji: "\u{1F9EA}",
+      blurbEN: "Shrug off ONE explosion \u2014 survive the first blast you hold.",
+      blurbAR: "\u0627\u0637\u0644\u0639 \u0633\u0627\u0644\u0645 \u0645\u0646 \u0623\u0648\u0644 \u0627\u0646\u0641\u062C\u0627\u0631 \u064A\u0635\u064A\u0628\u0643.",
+      appliesTo: "bomb",
+      type: "advantage",
+      cost: 250
+    },
+    // --- Bumper ---
+    {
+      id: "flat_tire",
+      nameEN: "Flat Tire",
+      nameAR: "\u0625\u0637\u0627\u0631 \u0645\u062B\u0642\u0648\u0628",
+      emoji: "\u{1F6DE}",
+      blurbEN: "Sap a rival \u2014 their push force is halved.",
+      blurbAR: "\u0627\u0636\u0639\u0641 \u062E\u0635\u0645 \u2014 \u0642\u0648\u0629 \u062F\u0641\u0639\u0647 \u062A\u0646\u0635.",
+      appliesTo: "bumper",
+      type: "sabotage",
+      cost: 200
+    },
+    {
+      id: "nitro",
+      nameEN: "Nitro Engine",
+      nameAR: "\u0645\u062D\u0631\u0643 \u0646\u064A\u062A\u0631\u0648",
+      emoji: "\u{1F525}",
+      blurbEN: "+40% mass & shove impact \u2014 bully everyone off the slab.",
+      blurbAR: "+\u0664\u0660\u066A \u0648\u0632\u0646 \u0648\u0642\u0648\u0629 \u062F\u0641\u0639 \u2014 \u0643\u0634\u0651\u062E\u0647\u0645 \u0628\u0631\u0647 \u0627\u0644\u062D\u0644\u0628\u0629.",
+      appliesTo: "bumper",
+      type: "advantage",
+      cost: 250
     }
   ];
   function parseClientMessage(raw) {
@@ -174,9 +227,10 @@
         trophies: 0,
         coins: CONST.START_COINS,
         isHost: opts.isHost,
-        debuff: null,
+        modifier: null,
         ws: opts.ws,
         bid: null,
+        bidItemId: null,
         bidLockedAt: 0,
         secretTask: null,
         taskMaxPower: false,
@@ -276,7 +330,8 @@
         // mask everyone else's wallet
         connected: !!p.ws,
         isHost: p.isHost,
-        debuff: p.debuff,
+        modifier: p.modifier,
+        // public buff/debuff (the boards read it to apply effects)
         // PRIVACY: a secret task only ever reaches its own owner (never the TV).
         secretTask: p.id === viewerId ? p.secretTask : null
       }));
@@ -289,11 +344,12 @@
         auction = {
           round: this.auction.round,
           stage: this.auction.stage,
-          item: this.auction.item,
+          items: this.auction.items,
           endsAt: this.auction.endsAt,
           lockedIn: this.players.filter((p) => p.bid !== null).map((p) => p.id),
           winnerId: this.auction.winnerId,
           winningBid: this.auction.winningBid,
+          winningItemId: this.auction.winningItemId,
           targetId: this.auction.targetId
         };
       }
@@ -305,7 +361,6 @@
         }
         golf = {
           endsAt: this.golf.endsAt,
-          debuffs: this.golf.debuffs,
           turnId: this.golf.turnId,
           sunk: this.golf.sunk,
           results: this.golf.results,
@@ -467,36 +522,39 @@
     }
     // ------------------------------ auction ----------------------------------
     startAuction(forGame) {
-      var _a;
       this.newGen();
       this.phase = "auction";
       this.clearSecretTasks();
       for (const p of this.players) {
         p.bid = null;
+        p.bidItemId = null;
         p.bidLockedAt = 0;
       }
-      const item = (_a = SABOTAGE_ITEMS.find((s) => s.appliesTo === forGame)) != null ? _a : SABOTAGE_ITEMS[0];
+      const items = AUCTION_ITEMS.filter((it) => it.appliesTo === forGame);
       this.auction = {
         round: this.lineupIndex + 1,
         // 1-based position in the lineup, for display
         stage: "bidding",
-        item,
+        items,
         endsAt: Date.now() + CONST.AUCTION_BID_MS,
         winnerId: null,
         winningBid: null,
+        winningItemId: null,
         targetId: null,
         forGame
       };
       this.after(CONST.AUCTION_BID_MS, () => this.resolveAuction());
       this.broadcast();
     }
-    submitBid(playerId, amount) {
+    submitBid(playerId, amount, itemId) {
       if (this.phase !== "auction" || !this.auction || this.auction.stage !== "bidding") return;
       const p = this.players.find((x) => x.id === playerId);
       if (!p) return;
       if (p.bid !== null) return this.sendError(playerId, "Bid already locked in");
       const clamped = Math.max(0, Math.min(p.coins, Math.floor(amount)));
+      const validItem = this.auction.items.some((it) => it.id === itemId);
       p.bid = clamped;
+      p.bidItemId = clamped > 0 && validItem ? itemId : null;
       p.bidLockedAt = Date.now();
       this.touch();
       if (this.players.every((x) => x.bid !== null || !x.ws)) {
@@ -510,10 +568,11 @@
       if (!this.auction || this.auction.stage !== "bidding") return;
       const bidders = this.players.filter((p) => {
         var _a2;
-        return ((_a2 = p.bid) != null ? _a2 : 0) > 0;
+        return ((_a2 = p.bid) != null ? _a2 : 0) > 0 && p.bidItemId !== null;
       }).sort((a, b) => b.bid - a.bid || a.bidLockedAt - b.bidLockedAt);
       const winner = (_a = bidders[0]) != null ? _a : null;
-      if (!winner) {
+      const item = winner ? this.auction.items.find((it) => it.id === winner.bidItemId) : void 0;
+      if (!winner || !item) {
         this.auction.stage = "reveal";
         this.auction.endsAt = Date.now() + CONST.AUCTION_REVEAL_MS;
         this.after(CONST.AUCTION_REVEAL_MS, () => this.afterAuction());
@@ -523,6 +582,15 @@
       winner.coins -= winner.bid;
       this.auction.winnerId = winner.id;
       this.auction.winningBid = winner.bid;
+      this.auction.winningItemId = item.id;
+      if (item.type === "advantage") {
+        winner.modifier = item.id;
+        this.auction.stage = "reveal";
+        this.auction.endsAt = Date.now() + CONST.AUCTION_REVEAL_MS;
+        this.after(CONST.AUCTION_REVEAL_MS, () => this.afterAuction());
+        this.broadcast();
+        return;
+      }
       this.auction.stage = "targeting";
       this.auction.endsAt = Date.now() + CONST.AUCTION_TARGET_MS;
       this.after(CONST.AUCTION_TARGET_MS, () => {
@@ -544,9 +612,9 @@
       this.applyTarget(playerId, targetId);
     }
     applyTarget(_winnerId, targetId) {
-      if (!this.auction || this.auction.stage !== "targeting") return;
+      if (!this.auction || this.auction.stage !== "targeting" || !this.auction.winningItemId) return;
       const target = this.players.find((p) => p.id === targetId);
-      if (target) target.debuff = this.auction.item.debuff;
+      if (target) target.modifier = this.auction.winningItemId;
       this.auction.targetId = targetId;
       this.auction.stage = "reveal";
       this.auction.endsAt = Date.now() + CONST.AUCTION_REVEAL_MS;
@@ -568,17 +636,14 @@
       var _a;
       this.newGen();
       this.phase = "golf";
-      const debuffs = {};
       const prior = {};
       const round0 = {};
       for (const p of this.players) {
-        if (p.debuff === "anvil") debuffs[p.id] = "anvil";
         prior[p.id] = (_a = priorStrokes[p.id]) != null ? _a : 0;
         round0[p.id] = 0;
       }
       this.golf = {
         endsAt: Date.now() + CONST.GOLF_TIME_LIMIT_MS,
-        debuffs,
         turnId: null,
         sunk: [],
         results: null,
@@ -670,7 +735,7 @@
           const winner = this.players.find((x) => x.id === winnerId);
           if (winner) winner.trophies += CONST.TROPHY;
         }
-        for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
+        for (const p of this.players) p.modifier = null;
         for (const p of this.players) this.evaluateSecretTask(p);
         golf.results = { order: ranking, awarded };
         this.newGen();
@@ -840,7 +905,7 @@
       bomb.holderSince = now;
       bomb.multiplier = 1;
       const holder = this.players.find((p) => p.id === playerId);
-      bomb.jamUntil = (holder == null ? void 0 : holder.debuff) === "jammed" ? now + CONST.BOMB_JAM_MS : null;
+      bomb.jamUntil = (holder == null ? void 0 : holder.modifier) === "butter" ? now + CONST.BOMB_JAM_MS : null;
     }
     passBomb(playerId, direction) {
       const bomb = this.bomb;
@@ -875,14 +940,19 @@
         const v = this.players.find((p) => p.id === victim);
         if (v) v.taskBombHoldMs += Date.now() - bomb.holderSince;
       }
-      bomb.stage = "exploded";
-      bomb.lastExplodedId = victim;
-      bomb.earnings[victim] = 0;
-      bomb.alive = bomb.alive.filter((id) => id !== victim);
-      bomb.eliminated.push(victim);
+      const victimP = this.players.find((p) => p.id === victim);
       bomb.holderId = null;
       bomb.holderSince = null;
       bomb.jamUntil = null;
+      bomb.stage = "exploded";
+      bomb.lastExplodedId = victim;
+      if ((victimP == null ? void 0 : victimP.modifier) === "hazmat") {
+        victimP.modifier = null;
+      } else {
+        bomb.earnings[victim] = 0;
+        bomb.alive = bomb.alive.filter((id) => id !== victim);
+        bomb.eliminated.push(victim);
+      }
       this.broadcast();
       this.after(CONST.BOMB_ROUND_BREAK_MS, () => {
         if (bomb.alive.length <= 2) this.finishBomb();
@@ -908,7 +978,7 @@
           p.trophies += CONST.TROPHY;
           p.coins += CONST.BOMB_SURVIVOR_BONUS;
         }
-        if (p.debuff === "jammed") p.debuff = null;
+        p.modifier = null;
         this.evaluateSecretTask(p);
       }
       this.broadcast();
@@ -968,6 +1038,7 @@
         if (survived) p.trophies += CONST.TROPHY;
         p.taskBumperSurvived = survived && (bumper.winnerId === p.id || elapsed >= CONST.BUMPER_PACIFIST_MS);
         this.evaluateSecretTask(p);
+        p.modifier = null;
       }
       this.broadcast();
       this.lineupIndex += 1;
@@ -992,7 +1063,7 @@
         for (const p of this.players) {
           p.trophies = 0;
           p.coins = CONST.START_COINS;
-          p.debuff = null;
+          p.modifier = null;
         }
         this.golf = null;
         this.bomb = null;
@@ -1126,7 +1197,7 @@
               room.reportBallReset(playerId, String(msg.playerId));
               break;
             case "submit_bid":
-              room.submitBid(playerId, Number(msg.amount));
+              room.submitBid(playerId, Number(msg.amount), msg.itemId);
               break;
             case "choose_target":
               room.chooseTarget(playerId, String(msg.targetId));

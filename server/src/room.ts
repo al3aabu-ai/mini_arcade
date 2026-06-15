@@ -1,22 +1,22 @@
 import { randomUUID } from "./ids.js";
 import {
   CONST,
-  SABOTAGE_ITEMS,
+  AUCTION_ITEMS,
   SECRET_TASKS,
+  type AuctionItem,
   type AuctionStage,
   type AuctionState,
   type BombState,
   type BumperState,
   type Coin,
-  type Debuff,
   type GameType,
+  type Modifier,
   type GolfMap,
   type GolfState,
   type Phase,
   type PlayerState,
   type PodiumState,
   type RoomState,
-  type SabotageItem,
   type SecretTask,
   type SelectionState,
   type ServerMessage,
@@ -34,10 +34,13 @@ interface Player {
   /** private spendable wallet (masked from everyone else) */
   coins: number;
   isHost: boolean;
-  debuff: Debuff | null;
+  /** active buff/debuff for the upcoming game (public), cleared at game end */
+  modifier: Modifier | null;
   ws: Socket | null;
   /** secret current-auction bid; null = not locked in yet */
   bid: number | null;
+  /** which auction lot this bid is for (sabotage vs advantage) */
+  bidItemId: Modifier | null;
   bidLockedAt: number;
   /** this player's hidden objective for the current mini-game (private) */
   secretTask: SecretTask | null;
@@ -54,10 +57,11 @@ interface Player {
 interface AuctionInternal {
   round: number;
   stage: AuctionStage;
-  item: SabotageItem;
+  items: AuctionItem[]; // the two lots (sabotage + advantage) for forGame
   endsAt: number;
   winnerId: string | null;
   winningBid: number | null;
+  winningItemId: Modifier | null;
   targetId: string | null;
   /** which mini-game this intermission precedes — launched when the auction ends */
   forGame: GameType;
@@ -65,7 +69,6 @@ interface AuctionInternal {
 
 interface GolfInternal {
   endsAt: number;
-  debuffs: Record<string, Debuff>;
   turnId: string | null;
   sunk: string[];
   results: { order: string[]; awarded: Record<string, number> } | null;
@@ -146,9 +149,10 @@ export class Room {
       trophies: 0,
       coins: CONST.START_COINS,
       isHost: opts.isHost,
-      debuff: null,
+      modifier: null,
       ws: opts.ws,
       bid: null,
+      bidItemId: null,
       bidLockedAt: 0,
       secretTask: null,
       taskMaxPower: false,
@@ -262,7 +266,7 @@ export class Room {
       coins: p.id === viewerId ? p.coins : 0, // mask everyone else's wallet
       connected: !!p.ws,
       isHost: p.isHost,
-      debuff: p.debuff,
+      modifier: p.modifier, // public buff/debuff (the boards read it to apply effects)
       // PRIVACY: a secret task only ever reaches its own owner (never the TV).
       secretTask: p.id === viewerId ? p.secretTask : null,
     }));
@@ -275,11 +279,12 @@ export class Room {
       auction = {
         round: this.auction.round,
         stage: this.auction.stage,
-        item: this.auction.item,
+        items: this.auction.items,
         endsAt: this.auction.endsAt,
         lockedIn: this.players.filter((p) => p.bid !== null).map((p) => p.id),
         winnerId: this.auction.winnerId,
         winningBid: this.auction.winningBid,
+        winningItemId: this.auction.winningItemId,
         targetId: this.auction.targetId,
       };
     }
@@ -291,7 +296,6 @@ export class Room {
       }
       golf = {
         endsAt: this.golf.endsAt,
-        debuffs: this.golf.debuffs,
         turnId: this.golf.turnId,
         sunk: this.golf.sunk,
         results: this.golf.results,
@@ -479,17 +483,19 @@ export class Room {
     this.clearSecretTasks();
     for (const p of this.players) {
       p.bid = null;
+      p.bidItemId = null;
       p.bidLockedAt = 0;
     }
-    // The sabotage on offer is the one that bites the game it precedes.
-    const item = SABOTAGE_ITEMS.find((s) => s.appliesTo === forGame) ?? SABOTAGE_ITEMS[0];
+    // Put up both lots for the upcoming game — one sabotage, one self-advantage.
+    const items = AUCTION_ITEMS.filter((it) => it.appliesTo === forGame);
     this.auction = {
       round: this.lineupIndex + 1, // 1-based position in the lineup, for display
       stage: "bidding",
-      item,
+      items,
       endsAt: Date.now() + CONST.AUCTION_BID_MS,
       winnerId: null,
       winningBid: null,
+      winningItemId: null,
       targetId: null,
       forGame,
     };
@@ -497,14 +503,16 @@ export class Room {
     this.broadcast();
   }
 
-  submitBid(playerId: string, amount: number) {
+  submitBid(playerId: string, amount: number, itemId: Modifier) {
     if (this.phase !== "auction" || !this.auction || this.auction.stage !== "bidding") return;
     const p = this.players.find((x) => x.id === playerId);
     if (!p) return;
     if (p.bid !== null) return this.sendError(playerId, "Bid already locked in");
-    // Bids are paid from the private coin wallet — you can't bid what you don't have.
+    // You bid on a specific lot; a zero bid just sits this auction out.
     const clamped = Math.max(0, Math.min(p.coins, Math.floor(amount)));
+    const validItem = this.auction.items.some((it) => it.id === itemId);
     p.bid = clamped;
+    p.bidItemId = clamped > 0 && validItem ? itemId : null;
     p.bidLockedAt = Date.now();
     this.touch();
     if (this.players.every((x) => x.bid !== null || !x.ws)) {
@@ -517,11 +525,12 @@ export class Room {
   private resolveAuction() {
     if (!this.auction || this.auction.stage !== "bidding") return;
     const bidders = this.players
-      .filter((p) => (p.bid ?? 0) > 0)
+      .filter((p) => (p.bid ?? 0) > 0 && p.bidItemId !== null)
       .sort((a, b) => (b.bid! - a.bid!) || (a.bidLockedAt - b.bidLockedAt));
     const winner = bidders[0] ?? null;
-    if (!winner) {
-      // Nobody wanted it — short reveal of the unsold item, then move on.
+    const item = winner ? this.auction.items.find((it) => it.id === winner.bidItemId) : undefined;
+    if (!winner || !item) {
+      // Nobody wanted anything — short reveal of the unsold lots, then move on.
       this.auction.stage = "reveal";
       this.auction.endsAt = Date.now() + CONST.AUCTION_REVEAL_MS;
       this.after(CONST.AUCTION_REVEAL_MS, () => this.afterAuction());
@@ -531,11 +540,23 @@ export class Room {
     winner.coins -= winner.bid!;
     this.auction.winnerId = winner.id;
     this.auction.winningBid = winner.bid!;
+    this.auction.winningItemId = item.id;
+
+    if (item.type === "advantage") {
+      // Self-buff: applied straight to the winner, no target needed.
+      winner.modifier = item.id;
+      this.auction.stage = "reveal";
+      this.auction.endsAt = Date.now() + CONST.AUCTION_REVEAL_MS;
+      this.after(CONST.AUCTION_REVEAL_MS, () => this.afterAuction());
+      this.broadcast();
+      return;
+    }
+
+    // Sabotage: the winner picks a rival to receive the debuff.
     this.auction.stage = "targeting";
     this.auction.endsAt = Date.now() + CONST.AUCTION_TARGET_MS;
     this.after(CONST.AUCTION_TARGET_MS, () => {
       if (this.auction?.stage !== "targeting") return; // already chosen
-      // Winner dawdled — pick a victim for them.
       const others = this.players.filter((p) => p.id !== winner.id);
       const target = others[Math.floor(Math.random() * others.length)];
       if (target) this.applyTarget(winner.id, target.id);
@@ -554,9 +575,9 @@ export class Room {
   }
 
   private applyTarget(_winnerId: string, targetId: string) {
-    if (!this.auction || this.auction.stage !== "targeting") return;
+    if (!this.auction || this.auction.stage !== "targeting" || !this.auction.winningItemId) return;
     const target = this.players.find((p) => p.id === targetId);
-    if (target) target.debuff = this.auction.item.debuff;
+    if (target) target.modifier = this.auction.winningItemId; // the won sabotage effect
     this.auction.targetId = targetId;
     this.auction.stage = "reveal";
     this.auction.endsAt = Date.now() + CONST.AUCTION_REVEAL_MS;
@@ -580,17 +601,14 @@ export class Room {
   private startGolf(round: number, priorStrokes: Record<string, number> = {}) {
     this.newGen();
     this.phase = "golf";
-    const debuffs: Record<string, Debuff> = {};
     const prior: Record<string, number> = {};
     const round0: Record<string, number> = {};
     for (const p of this.players) {
-      if (p.debuff === "anvil") debuffs[p.id] = "anvil";
       prior[p.id] = priorStrokes[p.id] ?? 0;
       round0[p.id] = 0;
     }
     this.golf = {
       endsAt: Date.now() + CONST.GOLF_TIME_LIMIT_MS,
-      debuffs,
       turnId: null,
       sunk: [],
       results: null,
@@ -703,8 +721,8 @@ export class Room {
         const winner = this.players.find((x) => x.id === winnerId);
         if (winner) winner.trophies += CONST.TROPHY;
       }
-      // The anvil is consumed once the golf segment ends.
-      for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
+      // Golf modifiers (anvil / golden club) are consumed once the segment ends.
+      for (const p of this.players) p.modifier = null;
       // Settle secret tasks against this segment's telemetry (quiet coin payouts).
       for (const p of this.players) this.evaluateSecretTask(p);
       golf.results = { order: ranking, awarded };
@@ -883,7 +901,7 @@ export class Room {
     bomb.holderSince = now;
     bomb.multiplier = 1;
     const holder = this.players.find((p) => p.id === playerId);
-    bomb.jamUntil = holder?.debuff === "jammed" ? now + CONST.BOMB_JAM_MS : null;
+    bomb.jamUntil = holder?.modifier === "butter" ? now + CONST.BOMB_JAM_MS : null;
   }
 
   passBomb(playerId: string, direction: "left" | "right") {
@@ -925,14 +943,21 @@ export class Room {
       const v = this.players.find((p) => p.id === victim);
       if (v) v.taskBombHoldMs += Date.now() - bomb.holderSince;
     }
-    bomb.stage = "exploded";
-    bomb.lastExplodedId = victim;
-    bomb.earnings[victim] = 0; // greed punished: accrued cash burns with you
-    bomb.alive = bomb.alive.filter((id) => id !== victim);
-    bomb.eliminated.push(victim);
+    const victimP = this.players.find((p) => p.id === victim);
     bomb.holderId = null;
     bomb.holderSince = null;
     bomb.jamUntil = null;
+    bomb.stage = "exploded";
+    bomb.lastExplodedId = victim;
+    // Hazmat advantage: shrug off this ONE blast and stay in (modifier consumed).
+    // The victim stays in `alive`, so the board shows "saved!" instead of "OUT".
+    if (victimP?.modifier === "hazmat") {
+      victimP.modifier = null;
+    } else {
+      bomb.earnings[victim] = 0; // greed punished: accrued cash burns with you
+      bomb.alive = bomb.alive.filter((id) => id !== victim);
+      bomb.eliminated.push(victim);
+    }
     this.broadcast();
     this.after(CONST.BOMB_ROUND_BREAK_MS, () => {
       if (bomb.alive.length <= 2) this.finishBomb();
@@ -960,7 +985,7 @@ export class Room {
         p.trophies += CONST.TROPHY;           // surviving the bomb is a win
         p.coins += CONST.BOMB_SURVIVOR_BONUS; // plus a cash survival bonus
       }
-      if (p.debuff === "jammed") p.debuff = null;
+      p.modifier = null; // bomb modifiers (butter / hazmat) are consumed at game end
       this.evaluateSecretTask(p); // settle the hidden objective (quiet coin payout)
     }
     this.broadcast();
@@ -1029,6 +1054,7 @@ export class Room {
       p.taskBumperSurvived =
         survived && (bumper.winnerId === p.id || elapsed >= CONST.BUMPER_PACIFIST_MS);
       this.evaluateSecretTask(p);
+      p.modifier = null; // bumper modifiers (flat tire / nitro) are consumed at game end
     }
     this.broadcast();
     this.lineupIndex += 1;
@@ -1057,7 +1083,7 @@ export class Room {
       for (const p of this.players) {
         p.trophies = 0;
         p.coins = CONST.START_COINS;
-        p.debuff = null;
+        p.modifier = null;
       }
       this.golf = null;
       this.bomb = null;
