@@ -207,6 +207,9 @@ struct GolfBoardView: View {
             },
             onCollectCoin: { coinId, playerId in
                 client.collectCoin(coinId: coinId, playerId: playerId)
+            },
+            onBallReset: { playerId in
+                client.reportBallReset(playerId: playerId)
             }
         )
         client.onAim = { [weak sceneController] id, angle, power in
@@ -477,6 +480,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
     /// pickup (coinId, collecting playerId) so the server credits the wallet.
     private let onRegisterCoins: ([GolfCoinSpawn]) -> Void
     private let onCollectCoin: (String, String) -> Void
+    /// Report a ball that fell in water / out of bounds (fails the Safe Play task).
+    private let onBallReset: (String) -> Void
     /// Live coin nodes by id (render-thread-only, like `balls`).
     private var coins: [String: SCNNode] = [:]
 
@@ -549,7 +554,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         onProgress: @escaping (String?, [String]) -> Void,
         onFinished: @escaping ([String]) -> Void,
         onRegisterCoins: @escaping ([GolfCoinSpawn]) -> Void = { _ in },
-        onCollectCoin: @escaping (String, String) -> Void = { _, _ in }
+        onCollectCoin: @escaping (String, String) -> Void = { _, _ in },
+        onBallReset: @escaping (String) -> Void = { _ in }
     ) {
         self.players = players
         self.endsAt = endsAt
@@ -560,6 +566,7 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
         self.onFinished = onFinished
         self.onRegisterCoins = onRegisterCoins
         self.onCollectCoin = onCollectCoin
+        self.onBallReset = onBallReset
         self.turnQueue = players.map(\.id)
         self.ballIds = Set(players.map(\.id)) // NEW: physics-thread-safe id lookup
         super.init()
@@ -1362,6 +1369,8 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
             if (p.y < outOfBoundsY || inWater), !ball.respawning {
                 ball.respawning = true
                 balls[id] = ball
+                // Tell the server this player reset — it fails their "Safe Play" task.
+                DispatchQueue.main.async { [onBallReset] in onBallReset(id) }
                 ball.node.runAction(.sequence([
                     .fadeOpacity(to: 0, duration: 0.1),
                     .wait(duration: 0.8),

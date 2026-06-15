@@ -8,15 +8,23 @@ import SwiftUI
 enum DemoData {
     // p2 ("Omar") is the demo's local viewer, so his coins are the real wallet;
     // in a live game every other coins value would arrive masked to 0.
+    // p2 ("Omar") is the demo viewer, so he carries a sample secret task; the
+    // others are nil (a real client only ever sees its own).
+    private static let demoTask = SecretTask(
+        id: "greedy_golfer",
+        descriptionEN: "Greedy Golfer — grab at least 2 coins this game.",
+        descriptionAR: "طمّاع الذهب — لِم ٢ عملات على الأقل في هاللعبة.",
+        rewardCoins: 150, isCompleted: false
+    )
     static let players: [PlayerState] = [
         .init(id: "p1", name: "Maya", avatar: "🦊", color: "#FF2E88", trophies: 2, coins: 450,
-              connected: true, isHost: true, debuff: nil),
+              connected: true, isHost: true, debuff: nil, secretTask: nil),
         .init(id: "p2", name: "Omar", avatar: "🐸", color: "#00F5D4", trophies: 3, coins: 600,
-              connected: true, isHost: false, debuff: nil),
+              connected: true, isHost: false, debuff: nil, secretTask: demoTask),
         .init(id: "p3", name: "Lina", avatar: "🦄", color: "#9B5DE5", trophies: 1, coins: 700,
-              connected: true, isHost: false, debuff: "anvil"),
+              connected: true, isHost: false, debuff: "anvil", secretTask: nil),
         .init(id: "p4", name: "Ziad", avatar: "🐼", color: "#FEE440", trophies: 1, coins: 300,
-              connected: true, isHost: false, debuff: nil),
+              connected: true, isHost: false, debuff: nil, secretTask: nil),
     ]
 
     static func state(phase: String, selection: SelectionState? = nil, auction: AuctionState? = nil,

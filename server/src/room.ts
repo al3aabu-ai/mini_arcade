@@ -2,6 +2,7 @@ import { randomUUID } from "./ids.js";
 import {
   CONST,
   SABOTAGE_ITEMS,
+  SECRET_TASKS,
   type AuctionStage,
   type AuctionState,
   type BombState,
@@ -15,6 +16,7 @@ import {
   type PodiumState,
   type RoomState,
   type SabotageItem,
+  type SecretTask,
   type SelectionState,
   type ServerMessage,
   type Socket,
@@ -36,6 +38,14 @@ interface Player {
   /** secret current-auction bid; null = not locked in yet */
   bid: number | null;
   bidLockedAt: number;
+  /** this player's hidden objective for the current mini-game (private) */
+  secretTask: SecretTask | null;
+  // Secret-task telemetry, reset at each mini-game start:
+  taskMaxPower: boolean;      // golf: took a full-power shot
+  taskCoins: number;          // golf: coins grabbed this game
+  taskReset: boolean;         // golf: fell in water / reset this game
+  taskBombHoldMs: number;     // bomb: cumulative time holding the bomb
+  taskBombHotPotato: boolean; // bomb: passed within 1s of receiving at least once
 }
 
 interface AuctionInternal {
@@ -77,6 +87,8 @@ interface BombInternal {
   lastExplodedId: string | null;
   survivors: string[] | null;
   spawnedCoins: Coin[];
+  /** epoch ms the current holder picked up the bomb (for hold-time telemetry) */
+  holderSince: number | null;
 }
 
 export class Room {
@@ -126,6 +138,12 @@ export class Room {
       ws: opts.ws,
       bid: null,
       bidLockedAt: 0,
+      secretTask: null,
+      taskMaxPower: false,
+      taskCoins: 0,
+      taskReset: false,
+      taskBombHoldMs: 0,
+      taskBombHotPotato: false,
     };
     this.players.push(player);
     this.touch();
@@ -231,6 +249,8 @@ export class Room {
       connected: !!p.ws,
       isHost: p.isHost,
       debuff: p.debuff,
+      // PRIVACY: a secret task only ever reaches its own owner (never the TV).
+      secretTask: p.id === viewerId ? p.secretTask : null,
     }));
     let selection: SelectionState | null = null;
     if (this.phase === "selection" && this.selection) {
@@ -366,6 +386,7 @@ export class Room {
     this.selection = { picks: [] };
     this.lineup = [];
     this.lineupIndex = 0;
+    this.clearSecretTasks();
     this.broadcast();
   }
 
@@ -428,6 +449,9 @@ export class Room {
   private startAuction(forGame: GameType) {
     this.newGen();
     this.phase = "auction";
+    // The previous game's task result has had its on-phone moment — wipe it so
+    // the intermission and the next game start clean.
+    this.clearSecretTasks();
     for (const p of this.players) {
       p.bid = null;
       p.bidLockedAt = 0;
@@ -551,6 +575,9 @@ export class Room {
       roundStrokes: round0,
       spawnedCoins: [], // the host board registers this round's layout once it builds
     };
+    // A golf "mini-game" is the whole 3-round segment — assign tasks once, at the
+    // start, and let telemetry accumulate across the rounds.
+    if (round === 1) this.assignSecretTasks("golf");
     // Backstop: if the host board never reports (e.g. host died), finish with no finishers.
     this.after(CONST.GOLF_TIME_LIMIT_MS + 5000, () => this.finishGolf([]));
     this.broadcast();
@@ -580,6 +607,11 @@ export class Room {
     if (this.golf && this.golf.turnId === playerId) {
       this.golf.roundStrokes[playerId] = (this.golf.roundStrokes[playerId] ?? 0) + 1;
       strokeCounted = true;
+      // Secret-task telemetry: a near-max-power shot satisfies "The Long Shot".
+      if (power >= 0.95) {
+        const shooter = this.players.find((p) => p.id === playerId);
+        if (shooter) shooter.taskMaxPower = true;
+      }
     }
     this.touch();
     this.sendToHost({
@@ -648,6 +680,8 @@ export class Room {
       }
       // The anvil is consumed once the golf segment ends.
       for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
+      // Settle secret tasks against this segment's telemetry (quiet coin payouts).
+      for (const p of this.players) this.evaluateSecretTask(p);
       golf.results = { order: ranking, awarded };
       this.newGen();
       this.lineupIndex += 1; // this golf segment is done — on to the next game
@@ -692,9 +726,59 @@ export class Room {
     if (idx === -1) return; // already collected or unknown
     this.golf.spawnedCoins.splice(idx, 1);
     const collector = this.players.find((p) => p.id === collectorId);
-    if (collector) collector.coins += CONST.COIN_VALUE;
+    if (collector) {
+      collector.coins += CONST.COIN_VALUE;
+      collector.taskCoins += 1; // telemetry for "Greedy Golfer"
+    }
     this.touch();
     this.broadcast();
+  }
+
+  // --------------------------- secret tasks --------------------------------
+
+  /** Assign each player ONE random hidden objective and reset its telemetry. */
+  private assignSecretTasks(game: GameType) {
+    const pool = SECRET_TASKS[game];
+    for (const p of this.players) {
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      p.secretTask = { ...pick, isCompleted: false }; // per-player copy
+      p.taskMaxPower = false;
+      p.taskCoins = 0;
+      p.taskReset = false;
+      p.taskBombHoldMs = 0;
+      p.taskBombHotPotato = false;
+    }
+  }
+
+  /** Drop the current tasks (between games / on a fresh match). */
+  private clearSecretTasks() {
+    for (const p of this.players) p.secretTask = null;
+  }
+
+  /** Host board reports a ball fell in water / out of bounds (fails Safe Play). */
+  reportBallReset(reporterId: string, playerId: string) {
+    const reporter = this.players.find((p) => p.id === reporterId);
+    if (!reporter?.isHost || this.phase !== "golf") return;
+    const p = this.players.find((x) => x.id === playerId);
+    if (p) p.taskReset = true; // telemetry only — no snapshot change to broadcast
+  }
+
+  /** Check one player's task against the game's telemetry and pay out if met. */
+  private evaluateSecretTask(p: Player) {
+    const task = p.secretTask;
+    if (!task || task.isCompleted) return;
+    let done = false;
+    switch (task.id) {
+      case "long_shot": done = p.taskMaxPower; break;
+      case "greedy_golfer": done = p.taskCoins >= 2; break;
+      case "safe_play": done = !p.taskReset; break;
+      case "hot_potato": done = p.taskBombHotPotato; break;
+      case "survivor": done = p.taskBombHoldMs <= 5000; break;
+    }
+    if (done) {
+      task.isCompleted = true;
+      p.coins += task.rewardCoins; // quiet credit to the private wallet
+    }
   }
 
   /** Scatter 2–3 coins around the 2-D bomb arena (fractional screen coords). */
@@ -728,7 +812,9 @@ export class Room {
       lastExplodedId: null,
       survivors: null,
       spawnedCoins: this.generateBombCoins(),
+      holderSince: null,
     };
+    this.assignSecretTasks("bomb");
     this.startBombRound();
   }
 
@@ -758,10 +844,17 @@ export class Room {
   private setBombHolder(playerId: string) {
     const bomb = this.bomb;
     if (!bomb) return;
+    const now = Date.now();
+    // Bank the outgoing holder's elapsed time (hold-time telemetry for "Survivor").
+    if (bomb.holderId && bomb.holderSince != null) {
+      const prev = this.players.find((p) => p.id === bomb.holderId);
+      if (prev) prev.taskBombHoldMs += now - bomb.holderSince;
+    }
     bomb.holderId = playerId;
+    bomb.holderSince = now;
     bomb.multiplier = 1;
     const holder = this.players.find((p) => p.id === playerId);
-    bomb.jamUntil = holder?.debuff === "jammed" ? Date.now() + CONST.BOMB_JAM_MS : null;
+    bomb.jamUntil = holder?.debuff === "jammed" ? now + CONST.BOMB_JAM_MS : null;
   }
 
   passBomb(playerId: string, direction: "left" | "right") {
@@ -775,7 +868,12 @@ export class Room {
     const step = direction === "left" ? -1 : 1;
     const next = bomb.alive[(idx + step + bomb.alive.length) % bomb.alive.length];
     if (next === playerId) return; // alone in the circle, nowhere to pass
-    this.setBombHolder(next);
+    // "Hot Potato": passing within 1s of receiving completes that secret task.
+    if (bomb.holderSince != null && Date.now() - bomb.holderSince <= 1000) {
+      const passer = this.players.find((p) => p.id === playerId);
+      if (passer) passer.taskBombHotPotato = true;
+    }
+    this.setBombHolder(next); // also banks playerId's hold time
     // Pick-up-while-passing: the passer snatches one loose coin, if any remain.
     // (The bomb is a 2-D arena, so this is the pass-to-collect analog of the
     // golf ball's physics pickup — no spatial collision to detect.)
@@ -793,12 +891,18 @@ export class Room {
     if (!bomb || bomb.stage !== "ticking" || !bomb.holderId) return;
     const victim = bomb.holderId;
     this.newGen();
+    // Bank the victim's final hold time before they leave the circle.
+    if (bomb.holderSince != null) {
+      const v = this.players.find((p) => p.id === victim);
+      if (v) v.taskBombHoldMs += Date.now() - bomb.holderSince;
+    }
     bomb.stage = "exploded";
     bomb.lastExplodedId = victim;
     bomb.earnings[victim] = 0; // greed punished: accrued cash burns with you
     bomb.alive = bomb.alive.filter((id) => id !== victim);
     bomb.eliminated.push(victim);
     bomb.holderId = null;
+    bomb.holderSince = null;
     bomb.jamUntil = null;
     this.broadcast();
     this.after(CONST.BOMB_ROUND_BREAK_MS, () => {
@@ -811,8 +915,14 @@ export class Room {
     const bomb = this.bomb;
     if (!bomb) return;
     this.newGen();
+    // Bank whoever is still holding (no explosion ended this) before tallying.
+    if (bomb.holderId && bomb.holderSince != null) {
+      const h = this.players.find((p) => p.id === bomb.holderId);
+      if (h) h.taskBombHoldMs += Date.now() - bomb.holderSince;
+    }
     bomb.stage = "done";
     bomb.holderId = null;
+    bomb.holderSince = null;
     bomb.survivors = [...bomb.alive];
     for (const p of this.players) {
       // Cash greedily accrued this game banks straight into the private wallet.
@@ -822,6 +932,7 @@ export class Room {
         p.coins += CONST.BOMB_SURVIVOR_BONUS; // plus a cash survival bonus
       }
       if (p.debuff === "jammed") p.debuff = null;
+      this.evaluateSecretTask(p); // settle the hidden objective (quiet coin payout)
     }
     this.broadcast();
     this.lineupIndex += 1; // bomb segment done — advance the lineup

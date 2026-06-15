@@ -101,6 +101,9 @@ export function handleClientMessage(
           case "collect_coin":
             room.collectCoin(playerId, String(msg.coinId), String(msg.playerId));
             break;
+          case "ball_reset":
+            room.reportBallReset(playerId, String(msg.playerId));
+            break;
           case "submit_bid":
             room.submitBid(playerId, Number(msg.amount));
             break;

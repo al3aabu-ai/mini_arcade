@@ -12,6 +12,7 @@ struct PhonePodiumView: View {
 
     var body: some View {
         VStack(spacing: 18) {
+            SecretTaskCard(completedOnly: true) // final game's task success, if any
             Spacer()
 
             if let place = myPlace {

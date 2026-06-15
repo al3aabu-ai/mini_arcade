@@ -43,6 +43,7 @@ struct PhoneGolfView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SecretTaskCard()
             header
 
             if finishedPlace != nil {
@@ -256,6 +257,74 @@ struct PhoneGolfView: View {
             client.fire(angle: l.angle, power: l.power)
         } else {
             client.sendAimClear()
+        }
+    }
+}
+
+/// Expandable "Secret Task" banner shown at the top of the golf & bomb
+/// controllers. Reads the player's OWN private task (`client.me?.secretTask`);
+/// it never exists for other players or on the TV. Tap to expand the details.
+struct SecretTaskCard: View {
+    @EnvironmentObject var client: GameClient
+    @ObservedObject private var loc = Localization.shared
+    @State private var expanded = false
+    /// On the podium we only want the success confirmation, never an active task.
+    var completedOnly: Bool = false
+
+    private var task: SecretTask? { client.me?.secretTask }
+
+    var body: some View {
+        if let task, !(completedOnly && !task.isCompleted) {
+            VStack(spacing: 0) {
+                if task.isCompleted {
+                    // Post-game confirmation: "Task complete! +150 coins".
+                    HStack(spacing: 8) {
+                        Text("✅")
+                        Text(loc.tr("Task complete! +%@ coins", "\(task.rewardCoins)"))
+                            .font(Theme.body(15))
+                            .foregroundStyle(Theme.cyan)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Theme.cyan.opacity(0.16))
+                } else {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { expanded.toggle() }
+                        Haptics.tick()
+                    } label: {
+                        VStack(spacing: 6) {
+                            HStack(spacing: 8) {
+                                Text("🤫")
+                                Text(loc.tr("Secret Task"))
+                                    .font(Theme.body(14))
+                                    .foregroundStyle(Theme.yellow)
+                                    .kerning(1)
+                                Spacer()
+                                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.white.opacity(0.5))
+                            }
+                            if expanded {
+                                Text(task.description(arabic: loc.isArabic))
+                                    .font(Theme.body(15))
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .multilineTextAlignment(.leading)
+                                Text(loc.tr("+%@ coins · kept secret", "\(task.rewardCoins)"))
+                                    .font(Theme.body(12))
+                                    .foregroundStyle(.white.opacity(0.45))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                    .background(Theme.panel.opacity(0.95))
+                }
+            }
+            .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.06)).frame(height: 1) }
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 }

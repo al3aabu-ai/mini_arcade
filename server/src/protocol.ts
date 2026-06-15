@@ -61,6 +61,62 @@ export interface Coin {
   z: number;
 }
 
+/**
+ * A hidden per-player objective. PRIVATE — only ever travels in the owning
+ * player's own `snapshotFor`, never to the TV or to other players. Carries both
+ * languages so the phone shows the right one for the user's setting.
+ */
+export interface SecretTask {
+  id: string;
+  descriptionEN: string;
+  descriptionAR: string;
+  rewardCoins: number;
+  isCompleted: boolean;
+}
+
+/** Casual secret tasks, one assigned at random per player when a game starts. */
+export const SECRET_TASKS: Record<GameType, SecretTask[]> = {
+  golf: [
+    {
+      id: "long_shot",
+      descriptionEN: "The Long Shot — smack the ball at full power at least once.",
+      descriptionAR: "الضربة الطويلة — اضرب الكرة بأقصى قوة مرة وحدة على الأقل.",
+      rewardCoins: 150,
+      isCompleted: false,
+    },
+    {
+      id: "greedy_golfer",
+      descriptionEN: "Greedy Golfer — grab at least 2 coins this game.",
+      descriptionAR: "طمّاع الذهب — لِم ٢ عملات على الأقل في هاللعبة.",
+      rewardCoins: 150,
+      isCompleted: false,
+    },
+    {
+      id: "safe_play",
+      descriptionEN: "Safe Play — finish without landing in water or resetting.",
+      descriptionAR: "لعب آمن — خلّص بدون ما تطيح بالماي أو تترجّع للبداية.",
+      rewardCoins: 150,
+      isCompleted: false,
+    },
+  ],
+  bomb: [
+    {
+      id: "hot_potato",
+      descriptionEN: "Hot Potato — pass the bomb within 1 second of getting it.",
+      descriptionAR: "بطاطس حارة — مرّر القنبلة خلال ثانية من ما توصلك.",
+      rewardCoins: 150,
+      isCompleted: false,
+    },
+    {
+      id: "survivor",
+      descriptionEN: "The Survivor — never hold the bomb more than 5 seconds total.",
+      descriptionAR: "الناجي — لا تمسك القنبلة أكثر من ٥ ثواني بالمجموع.",
+      rewardCoins: 150,
+      isCompleted: false,
+    },
+  ],
+};
+
 export type Debuff = "anvil" | "jammed";
 
 export interface SabotageItem {
@@ -109,6 +165,12 @@ export interface PlayerState {
   connected: boolean;
   isHost: boolean;
   debuff: Debuff | null;
+  /**
+   * This player's hidden objective for the current mini-game. PRIVATE — the
+   * server only fills it in the owner's own snapshot; everyone else (and the TV)
+   * receives null.
+   */
+  secretTask: SecretTask | null;
 }
 
 /** The host's live game-picker state, mirrored to the TV as slots fill. */
@@ -221,6 +283,7 @@ export type ClientMessage =
   | { t: "select_lineup"; lineup: GameType[] } // host commits exactly `size` games → starts the match
   | { t: "register_coins"; coins: Coin[] } // host board → server: this golf round's coin layout
   | { t: "collect_coin"; coinId: string; playerId: string } // host board → server: a ball hit a coin
+  | { t: "ball_reset"; playerId: string } // host board → server: a ball fell in water / out of bounds
   | { t: "submit_bid"; amount: number }
   | { t: "choose_target"; targetId: string }
   | { t: "aim"; angle: number; power: number } // power 0..1, angle radians (0 = right, pi/2 = up)

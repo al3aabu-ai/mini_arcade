@@ -54,6 +54,19 @@ struct Coin: Codable, Equatable, Identifiable {
     let z: Double
 }
 
+/// A hidden per-player objective. PRIVATE — only arrives in the owner's own
+/// snapshot. Carries both languages so the phone shows the right one.
+struct SecretTask: Codable, Equatable, Hashable {
+    let id: String
+    let descriptionEN: String
+    let descriptionAR: String
+    let rewardCoins: Int
+    let isCompleted: Bool
+
+    /// The description for the current language setting.
+    func description(arabic: Bool) -> String { arabic ? descriptionAR : descriptionEN }
+}
+
 struct PlayerState: Codable, Identifiable, Equatable, Hashable {
     let id: String
     let name: String
@@ -68,6 +81,9 @@ struct PlayerState: Codable, Identifiable, Equatable, Hashable {
     let connected: Bool
     let isHost: Bool
     let debuff: String?
+    /// This player's hidden objective — PRIVATE, only present in their own
+    /// snapshot (null for everyone else and on the TV).
+    let secretTask: SecretTask?
 }
 
 struct SabotageItem: Codable, Equatable {

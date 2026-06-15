@@ -174,6 +174,11 @@ final class Localization: ObservableObject {
         "Sink it in the fewest shots.": "نزّلها بأقل ضربات.",
         "Pass it fast — don't be holding it when it blows.": "مرّرها بسرعة — لا تكون ماسكها لمن تنفجر.",
 
+        // Secret tasks (private per-player objectives)
+        "Secret Task": "المهمة السرية",
+        "Task complete! +%@ coins": "المهمة اكتملت! +%@ عملة",
+        "+%@ coins · kept secret": "+%@ عملة · يبقى سر",
+
         // Bomb board
         "💣 THE BILLIONAIRE'S BOMB": "💣 قنبلة المليونير",
         "Hold it to earn. Pass it to survive. Last two standing bank everything.":

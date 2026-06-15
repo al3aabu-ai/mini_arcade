@@ -34,6 +34,47 @@
     ROOM_IDLE_SWEEP_MS: 6e4,
     ROOM_MAX_IDLE_MS: 10 * 6e4
   };
+  var SECRET_TASKS = {
+    golf: [
+      {
+        id: "long_shot",
+        descriptionEN: "The Long Shot \u2014 smack the ball at full power at least once.",
+        descriptionAR: "\u0627\u0644\u0636\u0631\u0628\u0629 \u0627\u0644\u0637\u0648\u064A\u0644\u0629 \u2014 \u0627\u0636\u0631\u0628 \u0627\u0644\u0643\u0631\u0629 \u0628\u0623\u0642\u0635\u0649 \u0642\u0648\u0629 \u0645\u0631\u0629 \u0648\u062D\u062F\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644.",
+        rewardCoins: 150,
+        isCompleted: false
+      },
+      {
+        id: "greedy_golfer",
+        descriptionEN: "Greedy Golfer \u2014 grab at least 2 coins this game.",
+        descriptionAR: "\u0637\u0645\u0651\u0627\u0639 \u0627\u0644\u0630\u0647\u0628 \u2014 \u0644\u0650\u0645 \u0662 \u0639\u0645\u0644\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u0641\u064A \u0647\u0627\u0644\u0644\u0639\u0628\u0629.",
+        rewardCoins: 150,
+        isCompleted: false
+      },
+      {
+        id: "safe_play",
+        descriptionEN: "Safe Play \u2014 finish without landing in water or resetting.",
+        descriptionAR: "\u0644\u0639\u0628 \u0622\u0645\u0646 \u2014 \u062E\u0644\u0651\u0635 \u0628\u062F\u0648\u0646 \u0645\u0627 \u062A\u0637\u064A\u062D \u0628\u0627\u0644\u0645\u0627\u064A \u0623\u0648 \u062A\u062A\u0631\u062C\u0651\u0639 \u0644\u0644\u0628\u062F\u0627\u064A\u0629.",
+        rewardCoins: 150,
+        isCompleted: false
+      }
+    ],
+    bomb: [
+      {
+        id: "hot_potato",
+        descriptionEN: "Hot Potato \u2014 pass the bomb within 1 second of getting it.",
+        descriptionAR: "\u0628\u0637\u0627\u0637\u0633 \u062D\u0627\u0631\u0629 \u2014 \u0645\u0631\u0651\u0631 \u0627\u0644\u0642\u0646\u0628\u0644\u0629 \u062E\u0644\u0627\u0644 \u062B\u0627\u0646\u064A\u0629 \u0645\u0646 \u0645\u0627 \u062A\u0648\u0635\u0644\u0643.",
+        rewardCoins: 150,
+        isCompleted: false
+      },
+      {
+        id: "survivor",
+        descriptionEN: "The Survivor \u2014 never hold the bomb more than 5 seconds total.",
+        descriptionAR: "\u0627\u0644\u0646\u0627\u062C\u064A \u2014 \u0644\u0627 \u062A\u0645\u0633\u0643 \u0627\u0644\u0642\u0646\u0628\u0644\u0629 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0665 \u062B\u0648\u0627\u0646\u064A \u0628\u0627\u0644\u0645\u062C\u0645\u0648\u0639.",
+        rewardCoins: 150,
+        isCompleted: false
+      }
+    ]
+  };
   var SABOTAGE_ITEMS = [
     {
       id: "anvil",
@@ -114,7 +155,13 @@
         debuff: null,
         ws: opts.ws,
         bid: null,
-        bidLockedAt: 0
+        bidLockedAt: 0,
+        secretTask: null,
+        taskMaxPower: false,
+        taskCoins: 0,
+        taskReset: false,
+        taskBombHoldMs: 0,
+        taskBombHotPotato: false
       };
       this.players.push(player);
       this.touch();
@@ -205,7 +252,9 @@
         // mask everyone else's wallet
         connected: !!p.ws,
         isHost: p.isHost,
-        debuff: p.debuff
+        debuff: p.debuff,
+        // PRIVACY: a secret task only ever reaches its own owner (never the TV).
+        secretTask: p.id === viewerId ? p.secretTask : null
       }));
       let selection = null;
       if (this.phase === "selection" && this.selection) {
@@ -332,6 +381,7 @@
       this.selection = { picks: [] };
       this.lineup = [];
       this.lineupIndex = 0;
+      this.clearSecretTasks();
       this.broadcast();
     }
     /** Keep only valid game types, capped at the lineup size. */
@@ -385,6 +435,7 @@
       var _a;
       this.newGen();
       this.phase = "auction";
+      this.clearSecretTasks();
       for (const p of this.players) {
         p.bid = null;
         p.bidLockedAt = 0;
@@ -503,6 +554,7 @@
         spawnedCoins: []
         // the host board registers this round's layout once it builds
       };
+      if (round === 1) this.assignSecretTasks("golf");
       this.after(CONST.GOLF_TIME_LIMIT_MS + 5e3, () => this.finishGolf([]));
       this.broadcast();
     }
@@ -527,6 +579,10 @@
       if (this.golf && this.golf.turnId === playerId) {
         this.golf.roundStrokes[playerId] = ((_a = this.golf.roundStrokes[playerId]) != null ? _a : 0) + 1;
         strokeCounted = true;
+        if (power >= 0.95) {
+          const shooter = this.players.find((p) => p.id === playerId);
+          if (shooter) shooter.taskMaxPower = true;
+        }
       }
       this.touch();
       this.sendToHost({
@@ -580,6 +636,7 @@
           if (winner) winner.trophies += CONST.TROPHY;
         }
         for (const p of this.players) if (p.debuff === "anvil") p.debuff = null;
+        for (const p of this.players) this.evaluateSecretTask(p);
         golf.results = { order: ranking, awarded };
         this.newGen();
         this.lineupIndex += 1;
@@ -617,9 +674,64 @@
       if (idx === -1) return;
       this.golf.spawnedCoins.splice(idx, 1);
       const collector = this.players.find((p) => p.id === collectorId);
-      if (collector) collector.coins += CONST.COIN_VALUE;
+      if (collector) {
+        collector.coins += CONST.COIN_VALUE;
+        collector.taskCoins += 1;
+      }
       this.touch();
       this.broadcast();
+    }
+    // --------------------------- secret tasks --------------------------------
+    /** Assign each player ONE random hidden objective and reset its telemetry. */
+    assignSecretTasks(game) {
+      const pool = SECRET_TASKS[game];
+      for (const p of this.players) {
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        p.secretTask = { ...pick, isCompleted: false };
+        p.taskMaxPower = false;
+        p.taskCoins = 0;
+        p.taskReset = false;
+        p.taskBombHoldMs = 0;
+        p.taskBombHotPotato = false;
+      }
+    }
+    /** Drop the current tasks (between games / on a fresh match). */
+    clearSecretTasks() {
+      for (const p of this.players) p.secretTask = null;
+    }
+    /** Host board reports a ball fell in water / out of bounds (fails Safe Play). */
+    reportBallReset(reporterId, playerId) {
+      const reporter = this.players.find((p2) => p2.id === reporterId);
+      if (!(reporter == null ? void 0 : reporter.isHost) || this.phase !== "golf") return;
+      const p = this.players.find((x) => x.id === playerId);
+      if (p) p.taskReset = true;
+    }
+    /** Check one player's task against the game's telemetry and pay out if met. */
+    evaluateSecretTask(p) {
+      const task = p.secretTask;
+      if (!task || task.isCompleted) return;
+      let done = false;
+      switch (task.id) {
+        case "long_shot":
+          done = p.taskMaxPower;
+          break;
+        case "greedy_golfer":
+          done = p.taskCoins >= 2;
+          break;
+        case "safe_play":
+          done = !p.taskReset;
+          break;
+        case "hot_potato":
+          done = p.taskBombHotPotato;
+          break;
+        case "survivor":
+          done = p.taskBombHoldMs <= 5e3;
+          break;
+      }
+      if (done) {
+        task.isCompleted = true;
+        p.coins += task.rewardCoins;
+      }
     }
     /** Scatter 2–3 coins around the 2-D bomb arena (fractional screen coords). */
     generateBombCoins() {
@@ -648,8 +760,10 @@
         jamUntil: null,
         lastExplodedId: null,
         survivors: null,
-        spawnedCoins: this.generateBombCoins()
+        spawnedCoins: this.generateBombCoins(),
+        holderSince: null
       };
+      this.assignSecretTasks("bomb");
       this.startBombRound();
     }
     startBombRound() {
@@ -674,10 +788,16 @@
     setBombHolder(playerId) {
       const bomb = this.bomb;
       if (!bomb) return;
+      const now = Date.now();
+      if (bomb.holderId && bomb.holderSince != null) {
+        const prev = this.players.find((p) => p.id === bomb.holderId);
+        if (prev) prev.taskBombHoldMs += now - bomb.holderSince;
+      }
       bomb.holderId = playerId;
+      bomb.holderSince = now;
       bomb.multiplier = 1;
       const holder = this.players.find((p) => p.id === playerId);
-      bomb.jamUntil = (holder == null ? void 0 : holder.debuff) === "jammed" ? Date.now() + CONST.BOMB_JAM_MS : null;
+      bomb.jamUntil = (holder == null ? void 0 : holder.debuff) === "jammed" ? now + CONST.BOMB_JAM_MS : null;
     }
     passBomb(playerId, direction) {
       const bomb = this.bomb;
@@ -690,6 +810,10 @@
       const step = direction === "left" ? -1 : 1;
       const next = bomb.alive[(idx + step + bomb.alive.length) % bomb.alive.length];
       if (next === playerId) return;
+      if (bomb.holderSince != null && Date.now() - bomb.holderSince <= 1e3) {
+        const passer = this.players.find((p) => p.id === playerId);
+        if (passer) passer.taskBombHotPotato = true;
+      }
       this.setBombHolder(next);
       const coin = bomb.spawnedCoins.shift();
       if (coin) {
@@ -704,12 +828,17 @@
       if (!bomb || bomb.stage !== "ticking" || !bomb.holderId) return;
       const victim = bomb.holderId;
       this.newGen();
+      if (bomb.holderSince != null) {
+        const v = this.players.find((p) => p.id === victim);
+        if (v) v.taskBombHoldMs += Date.now() - bomb.holderSince;
+      }
       bomb.stage = "exploded";
       bomb.lastExplodedId = victim;
       bomb.earnings[victim] = 0;
       bomb.alive = bomb.alive.filter((id) => id !== victim);
       bomb.eliminated.push(victim);
       bomb.holderId = null;
+      bomb.holderSince = null;
       bomb.jamUntil = null;
       this.broadcast();
       this.after(CONST.BOMB_ROUND_BREAK_MS, () => {
@@ -722,8 +851,13 @@
       const bomb = this.bomb;
       if (!bomb) return;
       this.newGen();
+      if (bomb.holderId && bomb.holderSince != null) {
+        const h = this.players.find((p) => p.id === bomb.holderId);
+        if (h) h.taskBombHoldMs += Date.now() - bomb.holderSince;
+      }
       bomb.stage = "done";
       bomb.holderId = null;
+      bomb.holderSince = null;
       bomb.survivors = [...bomb.alive];
       for (const p of this.players) {
         p.coins += (_a = bomb.earnings[p.id]) != null ? _a : 0;
@@ -732,6 +866,7 @@
           p.coins += CONST.BOMB_SURVIVOR_BONUS;
         }
         if (p.debuff === "jammed") p.debuff = null;
+        this.evaluateSecretTask(p);
       }
       this.broadcast();
       this.lineupIndex += 1;
@@ -884,6 +1019,9 @@
               break;
             case "collect_coin":
               room.collectCoin(playerId, String(msg.coinId), String(msg.playerId));
+              break;
+            case "ball_reset":
+              room.reportBallReset(playerId, String(msg.playerId));
               break;
             case "submit_bid":
               room.submitBid(playerId, Number(msg.amount));

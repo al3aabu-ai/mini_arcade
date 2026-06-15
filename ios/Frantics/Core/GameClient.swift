@@ -338,6 +338,10 @@ final class GameClient: NSObject, ObservableObject {
     func collectCoin(coinId: String, playerId: String) {
         send(["t": "collect_coin", "coinId": coinId, "playerId": playerId])
     }
+    /// Report that `playerId`'s ball fell in water / reset (fails the Safe Play task).
+    func reportBallReset(playerId: String) {
+        send(["t": "ball_reset", "playerId": playerId])
+    }
 }
 
 /// A coin the board placed, sent to the server so it owns coin existence/credit.

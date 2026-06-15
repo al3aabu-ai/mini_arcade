@@ -235,6 +235,44 @@ state (`spawnedCoins` on the golf/bomb snapshot) — only the wallet TOTAL is ma
 
 ---
 
+## 6. Secret tasks (private hidden objectives)
+
+Each player gets ONE random hidden objective per mini-game, shown only on their
+own phone, paying `rewardCoins` (150) into their private wallet on completion.
+
+### State + privacy
+- `SecretTask {id, descriptionEN, descriptionAR, rewardCoins, isCompleted}`;
+  pools live in `SECRET_TASKS[GameType]` (protocol.ts). Both languages travel in
+  the data so the phone shows the right one for the user's setting.
+- `PlayerState.secretTask` is **PRIVATE**, masked exactly like `coins`: in
+  `viewState(viewerId)` it's `p.id === viewerId ? p.secretTask : null`, so it
+  only ever reaches the owner — never another player, never the TV. The TV views
+  must never read `secretTask`.
+
+### Lifecycle
+1. **Assign** at mini-game start — `assignSecretTasks(game)` in `startGolf`
+   (only when `round === 1`, since a golf "game" is the whole 3-round segment)
+   and `startBomb`. It also resets that game's telemetry on every player.
+2. **Track telemetry** during play (server-side, on the player):
+   - golf `long_shot` → `taskMaxPower` set in `relayFire` when `power ≥ 0.95`.
+   - golf `greedy_golfer` → `taskCoins` bumped in `collectCoin`.
+   - golf `safe_play` → `taskReset` set by `reportBallReset` (the host board
+     sends `ball_reset {playerId}` from its water/out-of-bounds respawn branch).
+   - bomb `hot_potato` → `taskBombHotPotato` set in `passBomb` when held ≤ 1s.
+   - bomb `survivor` → `taskBombHoldMs` accumulated via `bomb.holderSince`
+     (banked on each `setBombHolder` / `explodeBomb` / `finishBomb`); pass if ≤ 5s.
+3. **Evaluate + pay** in `evaluateSecretTask(p)`, called for every player at the
+   END of the game (`finishGolf` final round, `finishBomb`). Sets `isCompleted`
+   and quietly credits `rewardCoins`.
+4. **Display**: `SecretTaskCard` (in `PhoneGolfView.swift`, reused by
+   `PhoneBombView` + `PhonePodiumView`) reads `client.me?.secretTask` — an
+   expandable banner while active, a "Task complete! +150" confirmation once done.
+5. **Clear** in `startAuction` / `startSelection` (so the intermission and next
+   game start clean). The final game's task survives to the podium on purpose,
+   where the card shows in `completedOnly` mode.
+
+---
+
 ## Repo orientation (key files)
 
 ```

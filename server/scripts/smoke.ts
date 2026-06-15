@@ -158,7 +158,7 @@ async function main() {
           `${tag}: ${shooter.label}'s turn (r${round})`,
         );
         const before = shooter.state!.golf!.strokes[shooter.playerId] ?? 0;
-        shooter.send({ t: "fire", angle: 0.7, power: 0.85 });
+        shooter.send({ t: "fire", angle: 0.7, power: 1.0 }); // full power → satisfies "The Long Shot"
         await shooter.waitForState(
           (s) => (s.golf!.strokes[shooter.playerId] ?? 0) > before,
           `${tag}: ${shooter.label} stroke counted (r${round})`,
@@ -283,8 +283,27 @@ async function main() {
   host.send({ t: "collect_coin", coinId: "coin-0", playerId: alice.playerId });
   await alice.waitForState((s) => (s.golf?.spawnedCoins?.length ?? 0) === 1, "collected coin removed from the course");
   ok(alice.myCoins() === aliceCoinsBeforePickup + 50, "collecting a coin credits +50 to that player's PRIVATE wallet");
+  host.send({ t: "collect_coin", coinId: "coin-1", playerId: alice.playerId }); // 2nd coin → "Greedy Golfer"
+  await alice.waitForState((s) => (s.golf?.spawnedCoins?.length ?? 0) === 0, "alice grabbed both coins");
+
+  // Secret tasks — one assigned per player at golf start, PRIVATE to each phone.
+  const task = alice.state!.players.find((p) => p.id === alice.playerId)?.secretTask;
+  ok(!!task, "alice was assigned a private secret task at golf start");
+  ok(
+    alice.state!.players.find((p) => p.id === bob.playerId)?.secretTask == null,
+    "PRIVACY: a player can't see anyone else's secret task",
+  );
+  ok(
+    host.state!.players.find((p) => p.id === alice.playerId)?.secretTask == null,
+    "PRIVACY: the TV/host snapshot never carries a player's task",
+  );
+  const aliceCoinsBeforeTask = alice.myCoins();
 
   const golf1 = await playGolfSegment("golf 1");
+  await alice.waitForState((s) => !!s.golf?.results, "alice sees the golf results");
+  const doneTask = alice.state!.players.find((p) => p.id === alice.playerId)?.secretTask;
+  ok(doneTask?.isCompleted === true, "alice completed her task (full-power shot + 2 coins + no reset all hold)");
+  ok(alice.myCoins() === aliceCoinsBeforeTask + 150, "completing the task quietly credited +150 to alice's wallet");
   ok(golf1.golf!.results!.order[0] === alice.playerId, "fewest total strokes (Alice) wins the match");
   ok(golf1.golf!.results!.awarded[alice.playerId] === 1, "the golf winner is awarded exactly 1 trophy");
   ok(golf1.golf!.results!.awarded[bob.playerId] === undefined || golf1.golf!.results!.awarded[bob.playerId] === 0, "non-winners get no trophy from golf");
@@ -296,6 +315,12 @@ async function main() {
 
   console.log("\n— the billionaire's bomb (cash → private coins) —");
   await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "bomb", "bomb phase")));
+  // Fresh secret tasks for the bomb, still private per player.
+  ok(!!alice.state!.players.find((p) => p.id === alice.playerId)?.secretTask, "bomb: alice has a private secret task");
+  ok(
+    alice.state!.players.find((p) => p.id === bob.playerId)?.secretTask == null,
+    "bomb: other players' secret tasks stay masked",
+  );
   const coinsBeforeBomb = Object.fromEntries(all.map((c) => [c.playerId, c.myCoins()]));
   const bombDone = await playBombSegment();
   ok(bombDone.bomb!.survivors!.length === 2, "exactly two players survive the bomb");

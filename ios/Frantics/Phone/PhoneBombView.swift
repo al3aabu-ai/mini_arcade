@@ -18,6 +18,7 @@ struct PhoneBombView: View {
 
     var body: some View {
         VStack(spacing: 18) {
+            SecretTaskCard()
             if let bomb {
                 if eliminated {
                     spectator
