@@ -53,6 +53,30 @@ Golf is a **three-round segment**, each round a different course, played turn-ba
 ### No particle splash effects
 - The launch/roll **trail** and the **sink celebration** particles are removed (trail `birthRate` forced to 0; `celebrate()` deleted). Only the ball↔ball contact spark remains.
 
+### Thermal / rendering budget (host phone runs the server AND renders)
+The host phone runs the JS game server *and* renders the 3D board, so the GPU
+budget is tight — it throttles fast. Keep these levers in place:
+- **Cap the frame rate.** Every `SceneView` passes `preferredFramesPerSecond:
+  GolfSceneController.targetFPS` (60). Uncapped, ProMotion hardware renders 120Hz
+  and overheats within minutes. Flip `targetFPS` to 30 to baseline thermals.
+- **On-demand rendering.** `SceneView` `options` deliberately OMIT
+  `.rendersContinuously`, so SceneKit only redraws when the scene is dirty.
+- **Cheaper AA.** `antialiasingMode: .multisampling2X` (not the 4X default) — half
+  the MSAA resolve cost, edges still smooth.
+- **Pause when off-screen.** `GolfBoardView.onDisappear` sets `controller.scene
+  .isPaused = true` (and `.onAppear` clears it). One flag freezes every looping
+  obstacle action, the physics step, and the render loop while the board isn't
+  visible (lobby, podium, between rounds, host closing the preview).
+- **HDR only off-AirPlay.** The HDR/bloom/SSAO post stack runs only when *not*
+  mirroring (`useHDR: !boardDisplayConnected`) — so it's already off during normal
+  TV play. If the phone still runs hot, this stack is the next lever to trim.
+- The render loop (`renderer(_:updateAtTime:)`) is **frame-rate independent** —
+  all timing gates on wall-clock `CACurrentMediaTime()`/`Date`, never frame counts.
+- Decorative looping actions (pennants, torches, water bob, propeller, gates) are
+  "juice" and run during play by design — do NOT freeze them mid-game; rely on the
+  off-screen pause + FPS cap instead. A map swap rebuilds the controller, which
+  releases the old scene and all its actions.
+
 ---
 
 ## 2. The Seamless Landmass component pattern (no sinking/clipping balls)

@@ -42,19 +42,38 @@ struct GolfBoardView: View {
                 SceneView(
                     scene: controller.scene,
                     pointOfView: controller.cameraNode,
+                    // options: [] deliberately omits `.rendersContinuously`, so the
+                    // renderer is ON-DEMAND: it only redraws when the scene is dirty
+                    // (a moving ball, a running action) instead of forcing a heavy
+                    // continuous redraw every vsync. Big thermal/idle win.
                     options: [],
+                    // Cap the frame rate — ProMotion (120Hz) hardware would otherwise
+                    // max out and overheat. 60 is smooth; set GolfSceneController
+                    // .targetFPS = 30 to baseline thermals.
+                    preferredFramesPerSecond: GolfSceneController.targetFPS,
+                    // Halve the MSAA resolve cost of the .multisampling4X default;
+                    // edges stay smooth without cooking the GPU.
+                    antialiasingMode: .multisampling2X,
                     delegate: controller
                 )
                 .ignoresSafeArea()
             }
             hud
         }
-        .onAppear { rebuildIfNeeded() }
+        .onAppear {
+            rebuildIfNeeded()
+            controller?.scene.isPaused = false // resume actions/physics when visible
+        }
         .onChange(of: golf?.map) { _, _ in rebuildIfNeeded() } // Round 1 → Round 2 swaps the map
         .onDisappear {
             client.onAim = nil
             client.onAimClear = nil
             client.onFire = nil
+            // Freeze the whole scene when the board leaves the screen (between
+            // rounds, podium, lobby, or the host closing the preview). Pausing
+            // halts every looping obstacle action, the physics step, AND the
+            // render loop at once — the scene stops cooking the GPU while idle.
+            controller?.scene.isPaused = true
         }
     }
 
@@ -420,6 +439,11 @@ final class GolfSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysicsC
 
     let scene = SCNScene()
     let cameraNode = SCNNode()
+
+    /// Thermal cap — the SceneView renders at most this many FPS. 60 plays
+    /// smoothly; flip to 30 here to baseline thermals on a hot device. Without
+    /// the cap, ProMotion hardware pushes 120Hz and needlessly cooks the GPU.
+    static let targetFPS = 60
 
     private let players: [GolfPlayerInfo]
     private let endsAt: Date

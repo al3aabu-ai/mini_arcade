@@ -561,7 +561,9 @@ struct TikiJungleCoursePreview: View {
             SceneView(
                 scene: scene,
                 pointOfView: scene.rootNode.childNode(withName: "previewCamera", recursively: false),
-                options: [.allowsCameraControl, .autoenablesDefaultLighting]
+                options: [.allowsCameraControl, .autoenablesDefaultLighting],
+                preferredFramesPerSecond: GolfSceneController.targetFPS, // thermal cap (matches gameplay)
+                antialiasingMode: .multisampling2X
             )
             .ignoresSafeArea()
 
