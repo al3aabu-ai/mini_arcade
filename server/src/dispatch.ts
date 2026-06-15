@@ -135,11 +135,15 @@ export function handleClientMessage(
           case "update_joystick":
             room.updateJoystick(playerId, Number(msg.x), Number(msg.y));
             break;
+          case "update_motion_vector":
+            room.updateMotionVector(playerId, Number(msg.pitch), Number(msg.roll));
+            break;
           case "bumper_knockout":
             room.bumperKnockout(
               playerId,
               String(msg.playerId),
               typeof msg.byPlayerId === "string" ? msg.byPlayerId : null,
+              msg.byBackwards === true,
             );
             break;
           case "replay":

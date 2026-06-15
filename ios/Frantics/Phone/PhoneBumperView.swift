@@ -7,6 +7,7 @@ import SwiftUI
 struct PhoneBumperView: View {
     @EnvironmentObject var client: GameClient
     @ObservedObject private var loc = Localization.shared
+    @StateObject private var motion = BumperMotionController()
 
     @State private var thumb: CGSize = .zero
     @State private var lastSent = Date.distantPast
@@ -17,6 +18,9 @@ struct PhoneBumperView: View {
     private var bumper: BumperState? { client.room?.bumper }
     private var alive: Bool { bumper?.alive.contains(client.playerId) ?? false }
     private var iWon: Bool { bumper?.winnerId == client.playerId }
+    private var isMotion: Bool { bumper?.isMotion ?? false }
+    private var spinningOut: Bool { client.me?.isSpinningOut ?? false }
+    private var accent: Color { (bumper?.isIce ?? false) ? Theme.blue : Theme.orange }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,6 +30,8 @@ struct PhoneBumperView: View {
             if let bumper {
                 if bumper.winnerId != nil || !alive {
                     resultView(bumper)
+                } else if isMotion {
+                    tiltControl
                 } else {
                     Spacer()
                     joystick
@@ -37,18 +43,25 @@ struct PhoneBumperView: View {
                 }
             }
         }
+        .onAppear {
+            if isMotion {
+                motion.onSample = { pitch, roll in client.updateMotionVector(pitch: pitch, roll: roll) }
+                motion.start(streamHz: 30)           // 30Hz: smooth, light on battery/thermals
+            }
+        }
+        .onDisappear { motion.stop() }
         .onChange(of: alive) { _, stillAlive in
-            if !stillAlive { resetThumb() } // splashed → stop driving
+            if !stillAlive { resetThumb(); motion.stop() } // splashed → stop driving
         }
     }
 
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(loc.tr("🤼 BUMPER ARENA"))
+                Text(loc.tr(isMotion ? "🧊 ICE SLAB" : "🤼 BUMPER ARENA"))
                     .font(Theme.title(24))
                     .foregroundStyle(.white)
-                    .neonGlow(Theme.orange, radius: 8)
+                    .neonGlow(accent, radius: 8)
                 if let bumper {
                     Text(loc.tr("%@ still in", "\(bumper.alive.count)"))
                         .font(Theme.body(13))
@@ -57,11 +70,64 @@ struct PhoneBumperView: View {
             }
             Spacer()
             if let bumper, bumper.winnerId == nil {
-                CountdownLabel(endsAt: bumper.endsAtDate, font: Theme.title(34), color: Theme.orange)
+                CountdownLabel(endsAt: bumper.endsAtDate, font: Theme.title(34), color: accent)
             }
         }
         .padding(.horizontal, 24)
         .padding(.top, 14)
+    }
+
+    // MARK: tilt (motion) control — a tray balance level, NO 3D on the phone
+
+    private var tiltControl: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            if spinningOut {
+                Text("🌀")
+                    .font(.system(size: 92))
+                    .rotationEffect(.degrees(spinningOut ? 360 : 0))
+                    .animation(.linear(duration: 0.5).repeatForever(autoreverses: false), value: spinningOut)
+                Text(loc.tr("SPINNING OUT!")).font(Theme.title(30)).foregroundStyle(Theme.red).neonGlow(Theme.red)
+                Text(loc.tr("You over-tilted — hold steady!"))
+                    .font(Theme.body(14)).foregroundStyle(.white.opacity(0.6))
+            } else {
+                Text(loc.tr("Hold your phone flat like a tray"))
+                    .font(Theme.title(20)).foregroundStyle(.white).multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                bubbleLevel
+                Text(loc.tr("Tilt to slide · don't tip past the edge"))
+                    .font(Theme.body(14)).foregroundStyle(.white.opacity(0.5))
+            }
+            Spacer()
+            if !motion.available {
+                Text(loc.tr("Motion sensor unavailable on this device"))
+                    .font(Theme.body(13)).foregroundStyle(Theme.yellow)
+            }
+            Button(loc.tr("Re-center")) { motion.recalibrate(); Haptics.tick() }
+                .buttonStyle(NeonButtonStyle(color: Theme.panelLight))
+                .padding(.horizontal, 70).padding(.bottom, 22)
+        }
+    }
+
+    /// Bubble-level: the dot is your live tilt; the dashed ring is the 30° edge.
+    private var bubbleLevel: some View {
+        let r: CGFloat = 120
+        let mag = (motion.roll * motion.roll + motion.pitch * motion.pitch).squareRoot()
+        let danger = mag > 0.42
+        return ZStack {
+            Circle().strokeBorder(.white.opacity(0.12), lineWidth: 2)
+            Circle()
+                .strokeBorder(Theme.red.opacity(0.45), style: StrokeStyle(lineWidth: 2, dash: [6]))
+                .frame(width: r, height: r) // radius 0.5·r ≈ sin(30°) over-tilt boundary
+            Circle()
+                .fill(danger ? Theme.red : accent)
+                .frame(width: 54, height: 54)
+                .neonGlow(danger ? Theme.red : accent, radius: 12)
+                .offset(x: CGFloat(motion.roll) * r, y: CGFloat(motion.pitch) * r)
+                .animation(.interactiveSpring(response: 0.15), value: motion.roll)
+                .animation(.interactiveSpring(response: 0.15), value: motion.pitch)
+        }
+        .frame(width: r * 2, height: r * 2)
     }
 
     // MARK: joystick

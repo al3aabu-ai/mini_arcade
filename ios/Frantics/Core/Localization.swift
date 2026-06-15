@@ -190,6 +190,18 @@ final class Localization: ObservableObject {
         "You survived!": "نجوت!",
         "Splashed! Spectating…": "طحت بالماي! تتفرّج…",
 
+        // Slippery Ice Slab (motion variant)
+        "Slippery Ice Slab": "حلبة الجليد الزلقة",
+        "Tilt your phone to balance on the ice — don't slide off!": "مِيل جوالك عشان توازن عالجليد — لا تنزلق بره!",
+        "🧊 SLIPPERY ICE SLAB": "🧊 حلبة الجليد الزلقة",
+        "🧊 ICE SLAB": "🧊 الحلبة الزلقة",
+        "Hold your phone flat like a tray": "امسك جوالك مسطّح مثل الصينية",
+        "Tilt to slide · don't tip past the edge": "مِيل عشان تنزلق · لا تبالغ بالميلان",
+        "SPINNING OUT!": "تدوّخت!",
+        "You over-tilted — hold steady!": "ملت وايد — ثبّت يدك!",
+        "Re-center": "إعادة الضبط",
+        "Motion sensor unavailable on this device": "حسّاس الحركة مو متوفر بهالجهاز",
+
         // Auction items (sabotage vs self-advantage)
         "Self-Advantage": "ميزة خاصة",
         "Sabotage": "تخريب",

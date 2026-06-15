@@ -63,6 +63,8 @@ final class GameClient: NSObject, ObservableObject {
     var onFire: ((String, Double, Double) -> Void)?
     /// Bumper: a player's joystick vector, relayed to the host board.
     var onJoystick: ((String, Double, Double) -> Void)?
+    /// Ice bumper: a player's device-tilt vector (pitch, roll), relayed to the host board.
+    var onMotion: ((String, Double, Double) -> Void)?
 
     let isDemo: Bool
     private var session: URLSession?
@@ -289,6 +291,10 @@ final class GameClient: NSObject, ObservableObject {
             if let msg = try? decoder.decode(JoystickMsg.self, from: data) {
                 onJoystick?(msg.playerId, msg.x, msg.y)
             }
+        case "motion":
+            if let msg = try? decoder.decode(MotionMsg.self, from: data) {
+                onMotion?(msg.playerId, msg.pitch, msg.roll)
+            }
         case "error":
             if let msg = try? decoder.decode(ErrorMsg.self, from: data) {
                 showError(msg.message)
@@ -338,9 +344,13 @@ final class GameClient: NSObject, ObservableObject {
     // MARK: bumper
     /// Stream the player's normalized joystick vector (bumper movement).
     func updateJoystick(x: Double, y: Double) { send(["t": "update_joystick", "x": x, "y": y]) }
-    /// Host board reports a player splashed off the slab (and who shoved them).
-    func reportBumperKnockout(playerId: String, byPlayerId: String?) {
-        send(["t": "bumper_knockout", "playerId": playerId, "byPlayerId": byPlayerId ?? NSNull()])
+    /// Ice bumper: stream the player's normalized device tilt (pitch, roll).
+    func updateMotionVector(pitch: Double, roll: Double) { send(["t": "update_motion_vector", "pitch": pitch, "roll": roll]) }
+    /// Host board reports a player splashed off the slab (who shoved them, and
+    /// whether the shover was sliding backwards — for the Ice Cold task).
+    func reportBumperKnockout(playerId: String, byPlayerId: String?, byBackwards: Bool = false) {
+        send(["t": "bumper_knockout", "playerId": playerId,
+              "byPlayerId": byPlayerId ?? NSNull(), "byBackwards": byBackwards])
     }
 
     // MARK: coins (host board only)

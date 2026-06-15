@@ -225,7 +225,7 @@ async function main() {
   await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "selection", "selection phase")));
   ok(host.state!.selection!.size === 3, "the host must pick 3 games");
   // A non-host cannot commit a lineup.
-  alice.send({ t: "select_lineup", lineup: ["golf", "bomb", "bumper"] });
+  alice.send({ t: "select_lineup", lineup: ["golf", "bomb", "bumper_ice"] });
   await new Promise((r) => setTimeout(r, 150));
   ok(host.state!.phase === "selection", "a non-host cannot start the match");
   // Host live-previews picks — the TV mirrors the slots filling up.
@@ -237,7 +237,7 @@ async function main() {
   await new Promise((r) => setTimeout(r, 100));
   ok(host.state!.phase === "selection", "a lineup that isn't exactly 3 games is rejected");
   // Host commits the full lineup → the match begins.
-  host.send({ t: "select_lineup", lineup: ["golf", "bomb", "bumper"] });
+  host.send({ t: "select_lineup", lineup: ["golf", "bomb", "bumper_ice"] });
 
   console.log("\n— auction 1 (golf): SABOTAGE lot wins, picks a target —");
   await Promise.all(
@@ -349,32 +349,41 @@ async function main() {
   });
   ok(survivorsBanked, "survivors banked their bomb cash + 250 bonus into their PRIVATE coins");
 
-  console.log("\n— auction 3 (bumper): dedicated lots, no sale —");
-  await passAuction(3, "flat_tire"); // bumper now has its own sabotage + advantage
+  console.log("\n— auction 3 (ice bumper): reuses bumper lots, no sale —");
+  await passAuction(3, "flat_tire"); // bumper_ice reuses the bumper sabotage/advantage
 
-  console.log("\n— bumper sumo arena (real-time joystick + knockouts) —");
-  await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "bumper", "bumper phase")));
-  ok(host.state!.bumper!.alive.length === 4, "all four players start on the slab");
-  ok(!!alice.state!.players.find((p) => p.id === alice.playerId)?.secretTask, "bumper: alice has a private secret task");
+  console.log("\n— SLIPPERY ICE SLAB (motion control + spin-out + knockouts) —");
+  await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "bumper", "ice bumper phase")));
+  ok(host.state!.bumper!.surfaceType === "ice", "the slab surface is ice");
+  ok(host.state!.bumper!.controlType === "motion", "control is by device motion (tilt)");
+  ok(host.state!.bumper!.alive.length === 4, "all four players start on the ice");
+  ok(!!alice.state!.players.find((p) => p.id === alice.playerId)?.secretTask, "ice: alice has a private secret task");
   ok(
     alice.state!.players.find((p) => p.id === bob.playerId)?.secretTask == null,
-    "bumper: other players' tasks stay masked",
+    "ice: other players' tasks stay masked",
   );
-  // Joystick vectors stream to the host board (relay, not broadcast).
-  alice.send({ t: "update_joystick", x: 0.5, y: -0.5 });
-  const relay = await host.waitForMsg((m) => m.t === "joystick" && m.playerId === alice.playerId, "joystick relay");
-  ok(Math.abs(relay.x - 0.5) < 1e-9, "the host board receives the streamed joystick vector");
+  // Motion vectors stream to the host board (relay, not broadcast).
+  alice.send({ t: "update_motion_vector", pitch: 0.2, roll: -0.1 });
+  const relay = await host.waitForMsg((m) => m.t === "motion" && m.playerId === alice.playerId, "motion relay");
+  ok(Math.abs(relay.pitch - 0.2) < 1e-9, "the host board receives the streamed tilt vector");
+  // Over-tilt past 30° (|(pitch,roll)| > 0.5) → authoritative spin-out.
+  alice.send({ t: "update_motion_vector", pitch: 0.7, roll: 0.2 });
+  await alice.waitForState(
+    (s) => s.players.find((p) => p.id === alice.playerId)?.isSpinningOut === true,
+    "an over-tilt spins alice out",
+  );
+  ok(alice.state!.players.find((p) => p.id === alice.playerId)!.spinOutTimer > Date.now(), "spin-out timer is set ahead");
   const aliceCoinsBeforeBumper = alice.myCoins();
-  // Host board shoves everyone else off — alice is the last one standing.
-  host.send({ t: "bumper_knockout", playerId: bob.playerId, byPlayerId: alice.playerId });
+  // Alice shoves everyone off (one while "sliding backwards") — last one standing.
+  host.send({ t: "bumper_knockout", playerId: bob.playerId, byPlayerId: alice.playerId, byBackwards: true });
   await host.waitForState((s) => s.bumper?.eliminated.includes(bob.playerId) ?? false, "bob splashed");
   host.send({ t: "bumper_knockout", playerId: cara.playerId, byPlayerId: alice.playerId });
   host.send({ t: "bumper_knockout", playerId: host.playerId, byPlayerId: alice.playerId });
   await alice.waitForState(
     (s) => s.players.find((p) => p.id === alice.playerId)?.secretTask?.isCompleted === true,
-    "alice completed her bumper task (aggressor + last standing)",
+    "alice completed her ice task (Drift King: spun out + survived / Ice Cold: backwards shove)",
   );
-  ok(alice.myCoins() === aliceCoinsBeforeBumper + 150, "bumper task reward (+150) credited to alice");
+  ok(alice.myCoins() === aliceCoinsBeforeBumper + 150, "ice task reward (+150) credited to alice");
 
   console.log("\n— podium —");
   const podiumState = await host.waitForState((s) => s.phase === "podium", "podium");

@@ -52,6 +52,11 @@ interface Player {
   taskBombHotPotato: boolean; // bomb: passed within 1s of receiving at least once
   taskBumperAggressor: boolean; // bumper: knocked another player off the slab
   taskBumperSurvived: boolean;  // bumper: won or survived 30s without falling (set at finish)
+  // Ice bumper:
+  isSpinningOut: boolean;       // currently spun out from an over-tilt (public)
+  spinOutTimer: number;         // epoch ms the current spin-out ends (0 = not spinning)
+  taskDidSpinOut: boolean;      // experienced a spin-out this game ("Drift King")
+  taskIceCold: boolean;         // shoved a rival off while sliding backwards ("Ice Cold")
 }
 
 interface AuctionInternal {
@@ -103,6 +108,8 @@ interface BumperInternal {
   eliminated: string[];
   winnerId: string | null;
   startedAt: number;
+  controlType: "joystick" | "motion";
+  surfaceType: "stone" | "ice";
 }
 
 export class Room {
@@ -162,6 +169,10 @@ export class Room {
       taskBombHotPotato: false,
       taskBumperAggressor: false,
       taskBumperSurvived: false,
+      isSpinningOut: false,
+      spinOutTimer: 0,
+      taskDidSpinOut: false,
+      taskIceCold: false,
     };
     this.players.push(player);
     this.touch();
@@ -267,6 +278,8 @@ export class Room {
       connected: !!p.ws,
       isHost: p.isHost,
       modifier: p.modifier, // public buff/debuff (the boards read it to apply effects)
+      isSpinningOut: p.isSpinningOut, // public ice spin-out state
+      spinOutTimer: p.spinOutTimer,
       // PRIVACY: a secret task only ever reaches its own owner (never the TV).
       secretTask: p.id === viewerId ? p.secretTask : null,
     }));
@@ -329,6 +342,8 @@ export class Room {
         alive: this.bumper.alive,
         eliminated: this.bumper.eliminated,
         winnerId: this.bumper.winnerId,
+        controlType: this.bumper.controlType,
+        surfaceType: this.bumper.surfaceType,
       };
     }
     let podium: PodiumState | null = null;
@@ -420,7 +435,7 @@ export class Room {
 
   /** Keep only valid game types, capped at the lineup size. */
   private sanitizeLineup(lineup: unknown): GameType[] {
-    const valid: GameType[] = ["golf", "bomb", "bumper"];
+    const valid: GameType[] = ["golf", "bomb", "bumper", "bumper_ice"];
     if (!Array.isArray(lineup)) return [];
     return lineup
       .filter((g): g is GameType => valid.includes(g as GameType))
@@ -469,7 +484,8 @@ export class Room {
   /** Launch a mini-game by type (golf begins at its first round). */
   private launchGame(game: GameType) {
     if (game === "golf") this.startGolf(1);
-    else if (game === "bumper") this.startBumper();
+    else if (game === "bumper") this.startBumper("bumper");
+    else if (game === "bumper_ice") this.startBumper("bumper_ice");
     else this.startBomb();
   }
 
@@ -487,7 +503,9 @@ export class Room {
       p.bidLockedAt = 0;
     }
     // Put up both lots for the upcoming game — one sabotage, one self-advantage.
-    const items = AUCTION_ITEMS.filter((it) => it.appliesTo === forGame);
+    // Ice bumper reuses the standard bumper lots (Flat Tire / Nitro).
+    const itemGame = forGame === "bumper_ice" ? "bumper" : forGame;
+    const items = AUCTION_ITEMS.filter((it) => it.appliesTo === itemGame);
     this.auction = {
       round: this.lineupIndex + 1, // 1-based position in the lineup, for display
       stage: "bidding",
@@ -792,6 +810,10 @@ export class Room {
       p.taskBombHotPotato = false;
       p.taskBumperAggressor = false;
       p.taskBumperSurvived = false;
+      p.isSpinningOut = false;
+      p.spinOutTimer = 0;
+      p.taskDidSpinOut = false;
+      p.taskIceCold = false;
     }
   }
 
@@ -821,6 +843,8 @@ export class Room {
       case "survivor": done = p.taskBombHoldMs <= 5000; break;
       case "aggressor": done = p.taskBumperAggressor; break;
       case "pacifist": done = p.taskBumperSurvived; break;
+      case "drift_king": done = p.taskDidSpinOut && p.taskBumperSurvived; break;
+      case "ice_cold": done = p.taskIceCold; break;
     }
     if (done) {
       task.isCompleted = true;
@@ -995,9 +1019,10 @@ export class Room {
 
   // ------------------------------ bumper -----------------------------------
 
-  private startBumper() {
+  private startBumper(variant: "bumper" | "bumper_ice") {
     this.newGen();
     this.phase = "bumper";
+    const ice = variant === "bumper_ice";
     const now = Date.now();
     this.bumper = {
       endsAt: now + CONST.BUMPER_TIME_MS,
@@ -1005,8 +1030,10 @@ export class Room {
       eliminated: [],
       winnerId: null,
       startedAt: now,
+      controlType: ice ? "motion" : "joystick",
+      surfaceType: ice ? "ice" : "stone",
     };
-    this.assignSecretTasks("bumper");
+    this.assignSecretTasks(variant); // ice gets Drift King / Ice Cold
     // Survival buzzer — whoever's still on the slab when it sounds wins.
     this.after(CONST.BUMPER_TIME_MS, () => this.finishBumper());
     this.broadcast();
@@ -1019,8 +1046,34 @@ export class Room {
     this.sendToHost({ t: "joystick", playerId, x, y });
   }
 
+  /**
+   * Ice bumper: stream a player's device-tilt vector to the host board (which
+   * applies the drift force), and detect an over-tilt → authoritative spin-out.
+   */
+  updateMotionVector(playerId: string, pitch: number, roll: number) {
+    if (this.phase !== "bumper" || !this.bumper) return;
+    const p = this.players.find((x) => x.id === playerId);
+    if (!p || !this.bumper.alive.includes(playerId)) return; // the dead don't drive
+    this.sendToHost({ t: "motion", playerId, pitch, roll });
+
+    // Over-tilt (|(pitch,roll)| past sin 30° = 0.5) → spin out for BUMPER_SPINOUT_MS.
+    const now = Date.now();
+    const tiltMag = Math.hypot(pitch, roll);
+    if (tiltMag > CONST.BUMPER_OVERTILT && !p.isSpinningOut) {
+      p.isSpinningOut = true;
+      p.spinOutTimer = now + CONST.BUMPER_SPINOUT_MS;
+      p.taskDidSpinOut = true; // telemetry for "Drift King"
+      this.after(CONST.BUMPER_SPINOUT_MS, () => {
+        p.isSpinningOut = false;
+        p.spinOutTimer = 0;
+        if (this.phase === "bumper") this.broadcast();
+      });
+      this.broadcast(); // rising edge → board spins the node, phone shows the warning
+    }
+  }
+
   /** Host board reports a player splashed off the slab; `byPlayerId` shoved them. */
-  bumperKnockout(reporterId: string, playerId: string, byPlayerId: string | null) {
+  bumperKnockout(reporterId: string, playerId: string, byPlayerId: string | null, byBackwards = false) {
     const reporter = this.players.find((p) => p.id === reporterId);
     if (!reporter?.isHost) return; // only the authoritative board calls knockouts
     const bumper = this.bumper;
@@ -1028,10 +1081,13 @@ export class Room {
     if (!bumper.alive.includes(playerId)) return; // already out
     bumper.alive = bumper.alive.filter((id) => id !== playerId);
     bumper.eliminated.push(playerId);
-    // Credit the shover for "The Aggressor".
-    if (byPlayerId) {
+    // Credit the shover for "The Aggressor", and "Ice Cold" if they were drifting backwards.
+    if (byPlayerId && byPlayerId !== playerId) {
       const aggressor = this.players.find((p) => p.id === byPlayerId);
-      if (aggressor && byPlayerId !== playerId) aggressor.taskBumperAggressor = true;
+      if (aggressor) {
+        aggressor.taskBumperAggressor = true;
+        if (byBackwards) aggressor.taskIceCold = true;
+      }
     }
     this.touch();
     if (bumper.alive.length <= 1) {
@@ -1055,6 +1111,8 @@ export class Room {
         survived && (bumper.winnerId === p.id || elapsed >= CONST.BUMPER_PACIFIST_MS);
       this.evaluateSecretTask(p);
       p.modifier = null; // bumper modifiers (flat tire / nitro) are consumed at game end
+      p.isSpinningOut = false;
+      p.spinOutTimer = 0;
     }
     this.broadcast();
     this.lineupIndex += 1;

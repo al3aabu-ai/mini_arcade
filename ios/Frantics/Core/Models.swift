@@ -8,7 +8,7 @@ enum GamePhase: String {
 
 /// A playable mini-game. The match `lineup` is an ordered list of these.
 enum GameType: String, Codable, CaseIterable {
-    case golf, bomb, bumper
+    case golf, bomb, bumper, bumper_ice
 
     /// Big graphic for the picker cards and the TV lineup slots.
     var emoji: String {
@@ -16,6 +16,7 @@ enum GameType: String, Codable, CaseIterable {
         case .golf: return "🏌️"
         case .bomb: return "💣"
         case .bumper: return "🤼"
+        case .bumper_ice: return "🧊"
         }
     }
     /// Localization keys (English source strings) for the card text.
@@ -24,6 +25,7 @@ enum GameType: String, Codable, CaseIterable {
         case .golf: return "Mini-Golf"
         case .bomb: return "Hot Potato Bomb"
         case .bumper: return "Bumper Arena"
+        case .bumper_ice: return "Slippery Ice Slab"
         }
     }
     var blurbKey: String {
@@ -31,6 +33,7 @@ enum GameType: String, Codable, CaseIterable {
         case .golf: return "Sink it in the fewest shots."
         case .bomb: return "Pass it fast — don't be holding it when it blows."
         case .bumper: return "Shove rivals off the slab — last one floating wins."
+        case .bumper_ice: return "Tilt your phone to balance on the ice — don't slide off!"
         }
     }
     /// Theme accent hex for the card / slot.
@@ -39,6 +42,7 @@ enum GameType: String, Codable, CaseIterable {
         case .golf: return "#00F5D4"
         case .bomb: return "#FF3355"
         case .bumper: return "#FB5607"
+        case .bumper_ice: return "#00BBF9"
         }
     }
 }
@@ -86,6 +90,10 @@ struct PlayerState: Codable, Identifiable, Equatable, Hashable {
     let isHost: Bool
     /// Active buff/debuff for the upcoming game (PUBLIC). Effect id, or nil.
     let modifier: String?
+    /// Ice bumper: true while spinning out from an over-tilt (PUBLIC).
+    let isSpinningOut: Bool
+    /// epoch ms the current spin-out ends (0 = not spinning).
+    let spinOutTimer: Double
     /// This player's hidden objective — PRIVATE, only present in their own
     /// snapshot (null for everyone else and on the TV).
     let secretTask: SecretTask?
@@ -164,8 +172,12 @@ struct BumperState: Codable, Equatable {
     let alive: [String]
     let eliminated: [String]
     let winnerId: String?
+    let controlType: String  // "joystick" | "motion"
+    let surfaceType: String  // "stone" | "ice"
 
     var endsAtDate: Date { Date(timeIntervalSince1970: endsAt / 1000) }
+    var isMotion: Bool { controlType == "motion" }
+    var isIce: Bool { surfaceType == "ice" }
 }
 
 struct PodiumState: Codable, Equatable {
@@ -229,6 +241,12 @@ struct JoystickMsg: Decodable {
     let playerId: String
     let x: Double
     let y: Double
+}
+
+struct MotionMsg: Decodable {
+    let playerId: String
+    let pitch: Double
+    let roll: Double
 }
 
 struct ErrorMsg: Decodable { let message: String }

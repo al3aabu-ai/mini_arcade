@@ -33,6 +33,7 @@ struct BoardBumperView: View {
         }
         .onDisappear {
             client.onJoystick = nil
+            client.onMotion = nil
             controller?.scene.isPaused = true
         }
     }
@@ -42,20 +43,26 @@ struct BoardBumperView: View {
         let infos = room.players.map {
             GolfPlayerInfo(id: $0.id, name: $0.name, avatar: $0.avatar, colorHex: $0.color, modifier: $0.modifier)
         }
-        let c = BumperSceneController(players: infos) { playerId, byPlayerId in
-            client.reportBumperKnockout(playerId: playerId, byPlayerId: byPlayerId)
+        let ice = bumper?.isIce ?? false
+        let c = BumperSceneController(players: infos, ice: ice) { playerId, byPlayerId, byBackwards in
+            client.reportBumperKnockout(playerId: playerId, byPlayerId: byPlayerId, byBackwards: byBackwards)
         }
-        client.onJoystick = { [weak c] id, x, y in c?.setJoystick(playerId: id, x: x, y: y) }
+        // Ice = device-tilt control; stone = the 2D joystick.
+        if bumper?.isMotion ?? false {
+            client.onMotion = { [weak c] id, pitch, roll in c?.setTilt(playerId: id, pitch: pitch, roll: roll) }
+        } else {
+            client.onJoystick = { [weak c] id, x, y in c?.setJoystick(playerId: id, x: x, y: y) }
+        }
         controller = c
     }
 
     private var hud: some View {
         VStack {
             HStack(alignment: .top) {
-                Text(loc.tr("🤼 BUMPER ARENA"))
+                Text(loc.tr(bumper?.isIce ?? false ? "🧊 SLIPPERY ICE SLAB" : "🤼 BUMPER ARENA"))
                     .font(Theme.title(34))
                     .foregroundStyle(.white)
-                    .neonGlow(Theme.orange, radius: 12)
+                    .neonGlow(bumper?.isIce ?? false ? Theme.blue : Theme.orange, radius: 12)
                 Spacer()
                 if let bumper, bumper.winnerId == nil {
                     VStack(alignment: .trailing, spacing: 2) {
@@ -95,22 +102,32 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
     private static let bumperCategory = 1 << 5      // (mirrors golf's ball bit, separate scene)
 
     private let players: [GolfPlayerInfo]
-    private let onKnockout: (String, String?) -> Void
+    /// (victimId, shoverId?, shoverWasSlidingBackwards)
+    private let onKnockout: (String, String?, Bool) -> Void
     private let playerIds: Set<String>
+    private let isIce: Bool
+
+    // Ice tuning.
+    private static let overTiltSin: Float = 0.5      // sin(30°) → over-tilt
+    private static let spinOutSecs: TimeInterval = 1.5
+    private static let backwardsVZ: Float = 1.5      // +Z velocity = "sliding backwards"
 
     // Render-thread state.
     private var bumpers: [String: SCNNode] = [:]
-    private var joystick: [String: SCNVector3] = [:]
+    private var control: [String: SCNVector3] = [:]  // latest steer vector (joystick OR tilt)
     private var lastHitBy: [String: String] = [:]
     private var eliminated: Set<String> = []
+    private var spinOutUntil: [String: TimeInterval] = [:]
     /// Auction modifier per player: nitro shoves harder, flat tire shoves weaker.
     private var forceScale: [String: Float] = [:]
 
     private let pendingLock = NSLock()
     private var pending: [(BumperSceneController) -> Void] = []
 
-    init(players: [GolfPlayerInfo], onKnockout: @escaping (String, String?) -> Void) {
+    init(players: [GolfPlayerInfo], ice: Bool = false,
+         onKnockout: @escaping (String, String?, Bool) -> Void) {
         self.players = players
+        self.isIce = ice
         self.onKnockout = onKnockout
         self.playerIds = Set(players.map(\.id))
         super.init()
@@ -128,7 +145,12 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
     func setJoystick(playerId: String, x: Double, y: Double) {
         // Map to the floor plane: screen-down (+y) → toward the camera (+Z),
         // screen-up (−y) → away (−Z); x → world X.
-        enqueue { s in s.joystick[playerId] = SCNVector3(Float(x), 0, Float(y)) }
+        enqueue { s in s.control[playerId] = SCNVector3(Float(x), 0, Float(y)) }
+    }
+
+    /// Ice device tilt: roll → world X, pitch → world Z (same plane as joystick).
+    func setTilt(playerId: String, pitch: Double, roll: Double) {
+        enqueue { s in s.control[playerId] = SCNVector3(Float(roll), 0, Float(pitch)) }
     }
 
     // MARK: world
@@ -185,8 +207,12 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
         let slabNode = SCNNode(geometry: slab)
         slabNode.position = SCNVector3(0, -1.2, 0)
         let slabBody = SCNPhysicsBody(type: .static, shape: SCNPhysicsShape(geometry: slab, options: nil))
-        slabBody.friction = 0.6
+        slabBody.friction = isIce ? 0.02 : 0.6   // near-frictionless ice vs grippy stone
         slabBody.collisionBitMask = -1
+        if isIce {                                // tint the slab icy blue
+            stone.diffuse.contents = UIColor(red: 0.62, green: 0.82, blue: 0.95, alpha: 1)
+            stone.roughness.contents = 0.1
+        }
         slabNode.physicsBody = slabBody
         scene.rootNode.addChildNode(slabNode)
     }
@@ -224,10 +250,12 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
 
             let body = SCNPhysicsBody(type: .dynamic, shape: SCNPhysicsShape(geometry: sphere, options: nil))
             body.mass = isNitro ? 5.6 : 4    // heavier = more impact when it connects
-            body.restitution = 0.75          // bouncy bumpers
-            body.friction = 0.4
-            body.damping = 0.7               // so they coast to a stop when released
-            body.angularDamping = 0.6
+            // Ice: slick, bouncy, and low-damping → momentum/drift; you must
+            // counter-tilt to brake. Stone: grippy, coasts to a stop when released.
+            body.restitution = isIce ? 0.85 : 0.75
+            body.friction = isIce ? 0.05 : 0.4
+            body.damping = isIce ? 0.12 : 0.7
+            body.angularDamping = isIce ? 0.35 : 0.6
             body.categoryBitMask = Self.bumperCategory
             body.collisionBitMask = -1        // collide with slab + each other
             body.contactTestBitMask = Self.bumperCategory // report bumper↔bumper (for "who shoved whom")
@@ -266,17 +294,27 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
         pendingLock.unlock()
         for command in commands { command(self) }
 
-        let force: Float = 34
+        let force: Float = isIce ? 26 : 34   // ice needs less push (low damping)
+        let now = CACurrentMediaTime()
         for (id, node) in bumpers where !eliminated.contains(id) {
-            // Continuous thrust from the latest joystick vector, scaled by any
-            // active modifier (nitro ×1.4 / flat tire ×0.5).
-            if let dir = joystick[id], (dir.x != 0 || dir.z != 0) {
+            let dir = control[id] ?? SCNVector3Zero
+
+            if now < (spinOutUntil[id] ?? 0) {
+                // SPUN OUT: no traction, no steering — just slides and spins,
+                // wide open to a ricochet. (Inputs frozen for 1.5s.)
+            } else if isIce, (dir.x * dir.x + dir.z * dir.z).squareRoot() > Self.overTiltSin {
+                // Over-tilt past 30° → uncontrollable spin-out on the center axis.
+                spinOutUntil[id] = now + Self.spinOutSecs
+                node.physicsBody?.applyTorque(SCNVector4(0, 1, 0, 9), asImpulse: true)
+                node.physicsBody?.angularVelocity = SCNVector4(0, 1, 0, 13)
+            } else if dir.x != 0 || dir.z != 0 {
+                // Continuous thrust (drift on ice), scaled by the auction modifier.
                 let f = force * (forceScale[id] ?? 1.0)
                 node.physicsBody?.applyForce(SCNVector3(dir.x * f, 0, dir.z * f), asImpulse: false)
             }
+
             // Knockout: shoved off the slab and falling into the water.
-            let p = node.presentation.position
-            if p.y < Self.fallY {
+            if node.presentation.position.y < Self.fallY {
                 knockOut(id: id, node: node)
             }
         }
@@ -287,10 +325,15 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
         eliminated.insert(id)
         bumpers.removeValue(forKey: id)
         let by = lastHitBy[id]
+        // "Ice Cold": was the shover still sliding backwards (toward +Z, the camera)?
+        var byBackwards = false
+        if let by, let v = bumpers[by]?.physicsBody?.velocity {
+            byBackwards = v.z > Self.backwardsVZ
+        }
         splash(at: node.presentation.position)
         node.physicsBody = nil
         node.runAction(.sequence([.fadeOut(duration: 0.3), .removeFromParentNode()]))
-        DispatchQueue.main.async { [onKnockout] in onKnockout(id, by) }
+        DispatchQueue.main.async { [onKnockout] in onKnockout(id, by, byBackwards) }
     }
 
     private func splash(at point: SCNVector3) {

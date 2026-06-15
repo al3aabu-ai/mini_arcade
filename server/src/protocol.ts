@@ -43,6 +43,9 @@ export const CONST = {
   BUMPER_TIME_MS: FAST ? 1_500 : 45_000,   // survival timer
   BUMPER_PACIFIST_MS: FAST ? 600 : 30_000, // "Pacifist" survival threshold
   BUMPER_RESULTS_MS: FAST ? 400 : 5_000,
+  BUMPER_SPINOUT_MS: FAST ? 300 : 1_500,    // ice over-tilt spin-out duration
+  /** Over-tilt threshold: |(pitch,roll)| past this = a >30° tilt (sin 30° = 0.5). */
+  BUMPER_OVERTILT: 0.5,
 
   ROOM_IDLE_SWEEP_MS: 60_000,
   ROOM_MAX_IDLE_MS: 10 * 60_000,
@@ -51,7 +54,7 @@ export const CONST = {
 export type Phase = "lobby" | "selection" | "auction" | "golf" | "bomb" | "bumper" | "podium";
 
 /** A playable mini-game. The match `lineup` is an ordered list of these. */
-export type GameType = "golf" | "bomb" | "bumper";
+export type GameType = "golf" | "bomb" | "bumper" | "bumper_ice";
 
 /**
  * A collectible coin on the active field. PUBLIC map state (positions are not
@@ -131,6 +134,22 @@ export const SECRET_TASKS: Record<GameType, SecretTask[]> = {
       id: "pacifist",
       descriptionEN: "Pacifist — win, or survive 30 seconds without falling in.",
       descriptionAR: "المسالم — افوز، أو اصمد ٣٠ ثانية بدون ما تطيح بالماي.",
+      rewardCoins: 150,
+      isCompleted: false,
+    },
+  ],
+  bumper_ice: [
+    {
+      id: "drift_king",
+      descriptionEN: "Drift King — survive a spin-out and stay on the ice.",
+      descriptionAR: "ملك الانجراف — اطلع سالم من الدوخة واثبت عالجليد.",
+      rewardCoins: 150,
+      isCompleted: false,
+    },
+    {
+      id: "ice_cold",
+      descriptionEN: "Ice Cold — shove a rival off while you're sliding backwards.",
+      descriptionAR: "دم بارد — طِيح خصم وانت زاحف للخلف.",
       rewardCoins: 150,
       isCompleted: false,
     },
@@ -216,6 +235,10 @@ export interface PlayerState {
   isHost: boolean;
   /** Active buff/debuff for the upcoming mini-game (PUBLIC). Cleared at game end. */
   modifier: Modifier | null;
+  /** Ice bumper: true while spinning out from an over-tilt (PUBLIC). */
+  isSpinningOut: boolean;
+  /** epoch ms when the current spin-out ends (0 when not spinning). */
+  spinOutTimer: number;
   /**
    * This player's hidden objective for the current mini-game. PRIVATE — the
    * server only fills it in the owner's own snapshot; everyone else (and the TV)
@@ -315,6 +338,10 @@ export interface BumperState {
   eliminated: string[];
   /** the last one standing, or null if several survive to the buzzer */
   winnerId: string | null;
+  /** how players steer their bumper this round */
+  controlType: "joystick" | "motion";
+  /** the slab surface — "ice" is near-frictionless and drifty */
+  surfaceType: "stone" | "ice";
 }
 
 export interface PodiumState {
@@ -363,7 +390,8 @@ export type ClientMessage =
   | { t: "golf_progress"; turnId: string | null; sunk: string[] } // host board only
   | { t: "pass_bomb"; direction: "left" | "right" }
   | { t: "update_joystick"; x: number; y: number } // bumper: stream normalized movement vector
-  | { t: "bumper_knockout"; playerId: string; byPlayerId: string | null } // host board: a player splashed
+  | { t: "update_motion_vector"; pitch: number; roll: number } // ice bumper: stream normalized device tilt
+  | { t: "bumper_knockout"; playerId: string; byPlayerId: string | null; byBackwards?: boolean } // host board: a player splashed
   | { t: "replay" }
   | { t: "leave" };
 
@@ -376,6 +404,7 @@ export type ServerMessage =
   | { t: "aim_clear"; playerId: string }
   | { t: "fire"; playerId: string; angle: number; power: number }
   | { t: "joystick"; playerId: string; x: number; y: number } // bumper input relayed to the host board
+  | { t: "motion"; playerId: string; pitch: number; roll: number } // ice bumper tilt relayed to the host board
   | { t: "error"; message: string };
 
 /**

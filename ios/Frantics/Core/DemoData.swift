@@ -18,13 +18,13 @@ enum DemoData {
     )
     static let players: [PlayerState] = [
         .init(id: "p1", name: "Maya", avatar: "🦊", color: "#FF2E88", trophies: 2, coins: 450,
-              connected: true, isHost: true, modifier: nil, secretTask: nil),
+              connected: true, isHost: true, modifier: nil, isSpinningOut: false, spinOutTimer: 0, secretTask: nil),
         .init(id: "p2", name: "Omar", avatar: "🐸", color: "#00F5D4", trophies: 3, coins: 600,
-              connected: true, isHost: false, modifier: nil, secretTask: demoTask),
+              connected: true, isHost: false, modifier: nil, isSpinningOut: false, spinOutTimer: 0, secretTask: demoTask),
         .init(id: "p3", name: "Lina", avatar: "🦄", color: "#9B5DE5", trophies: 1, coins: 700,
-              connected: true, isHost: false, modifier: "anvil", secretTask: nil),
+              connected: true, isHost: false, modifier: "anvil", isSpinningOut: false, spinOutTimer: 0, secretTask: nil),
         .init(id: "p4", name: "Ziad", avatar: "🐼", color: "#FEE440", trophies: 1, coins: 300,
-              connected: true, isHost: false, modifier: nil, secretTask: nil),
+              connected: true, isHost: false, modifier: nil, isSpinningOut: false, spinOutTimer: 0, secretTask: nil),
     ]
 
     static func state(phase: String, selection: SelectionState? = nil, auction: AuctionState? = nil,
@@ -92,7 +92,8 @@ enum DemoData {
             phase: "bumper",
             bumper: BumperState(
                 endsAt: Date().addingTimeInterval(38).timeIntervalSince1970 * 1000,
-                alive: ["p1", "p2", "p4"], eliminated: ["p3"], winnerId: nil
+                alive: ["p1", "p2", "p4"], eliminated: ["p3"], winnerId: nil,
+                controlType: "motion", surfaceType: "ice"
             )
         )
     }

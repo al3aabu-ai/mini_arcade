@@ -307,6 +307,33 @@ slab. The first **real-time, continuous-input** game (golf/bomb are turn/tap).
 `aggressor` (shoved someone off → `taskBumperAggressor` in `bumperKnockout`) and
 `pacifist` (`taskBumperSurvived` = alive at the end AND (won OR survived ≥30s)).
 
+### Ice variant — `bumper_ice` (motion control + slick surface)
+A 4th `GameType` that reuses the whole bumper pipeline with two flags on
+`BumperState`: `controlType: "joystick" | "motion"` and `surfaceType: "stone" |
+"ice"` (set in `startBumper(variant)`). It reuses the bumper auction lots
+(`startAuction` maps `bumper_ice` → `bumper`) and adds its own secret tasks.
+
+- **Motion packet:** phones stream `update_motion_vector {pitch, roll}` ~30Hz;
+  the server relays it to the host (`{t:"motion", playerId, pitch, roll}`, like
+  `joystick`). Values are GRAVITY components from CoreMotion (`BumperMotionController`,
+  using `deviceMotion.gravity`), so each ≈ `sin(tilt-on-axis)` and
+  `hypot(pitch,roll)` ≈ `sin(total tilt)`. roll → world X, pitch → world Z.
+- **Over-tilt spin-out:** when `hypot(pitch,roll) > 0.5` (= sin 30°), the SERVER
+  sets `player.isSpinningOut` + `spinOutTimer` (+`taskDidSpinOut`) for
+  `BUMPER_SPINOUT_MS` (1.5s); the BOARD independently detects the same from the
+  relayed vector and applies a Y-axis spin (`applyTorque`/`angularVelocity`) while
+  FREEZING that bumper's control. Both use the same threshold so they agree.
+- **Ice physics material (`BumperSceneController`, `ice` flag):** slab
+  `friction 0.02` (vs 0.6); bumper `friction 0.05`, `damping 0.12` (vs 0.7 →
+  momentum/drift, must counter-tilt to brake), `restitution 0.85`, `angularDamping
+  0.35`. Knockout (`y < −3`) and the contact delegate are unchanged. The solver
+  produces the high-speed ricochet — NEVER inject manual impulses.
+- **Ice secret tasks:** `drift_king` (`taskDidSpinOut && taskBumperSurvived`) and
+  `ice_cold` (`taskIceCold`, set when a knockout's shover was sliding backwards —
+  the board flags `byBackwards` when the aggressor's `velocity.z > 1.5`).
+- **Phone:** `PhoneBumperView` swaps the joystick for a tray bubble-level when
+  `controlType == .motion`; no 3D on the phone, 30Hz stream → low thermals.
+
 ---
 
 ## 8. The Dirty Auction — items, buffs & debuffs
@@ -370,8 +397,9 @@ ios/Frantics/
   Board/Golf3DBoard.swift      GolfSceneController, GolfBoardView, GolfHazardCourse, Round 1
   Board/TikiJungleCourse.swift Round 2 course
   Board/TikiRunwayCourse.swift Round 3 course
-  Board/BoardBumperView.swift  Bumper Sumo arena (BumperSceneController, real-time)
-  Phone/PhoneBumperView.swift  Bumper 2D virtual joystick controller
+  Board/BoardBumperView.swift  Bumper Sumo arena (BumperSceneController; stone + ice)
+  Phone/PhoneBumperView.swift  Bumper controller (2D joystick OR ice tilt tray)
+  Core/BumperMotionController.swift  CoreMotion gravity-tilt streamer (ice variant)
 local-install.sh               side-load to a plugged-in iPhone
 ```
 
