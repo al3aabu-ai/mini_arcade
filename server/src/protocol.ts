@@ -42,7 +42,7 @@ export const CONST = {
   ROOM_MAX_IDLE_MS: 10 * 60_000,
 } as const;
 
-export type Phase = "lobby" | "auction" | "golf" | "bomb" | "podium";
+export type Phase = "lobby" | "selection" | "auction" | "golf" | "bomb" | "podium";
 
 /** A playable mini-game. The match `lineup` is an ordered list of these. */
 export type GameType = "golf" | "bomb";
@@ -95,6 +95,14 @@ export interface PlayerState {
   connected: boolean;
   isHost: boolean;
   debuff: Debuff | null;
+}
+
+/** The host's live game-picker state, mirrored to the TV as slots fill. */
+export interface SelectionState {
+  /** games chosen so far (0..size), in slot order */
+  picks: GameType[];
+  /** how many games the host must pick before the match can start */
+  size: number;
 }
 
 export type AuctionStage = "bidding" | "targeting" | "reveal";
@@ -174,6 +182,8 @@ export interface RoomState {
   lineup: GameType[];
   /** Index into `lineup` of the game currently being set up / played. */
   currentLineupIndex: number;
+  /** Host's in-progress game-picker (only while phase === "selection"). */
+  selection: SelectionState | null;
   auction: AuctionState | null;
   golf: GolfState | null;
   bomb: BombState | null;
@@ -189,6 +199,8 @@ export type ClientMessage =
   | { t: "join_room"; code: string; name: string; avatar: string; color: string }
   | { t: "rejoin"; code: string; playerId: string; token: string }
   | { t: "start_game" }
+  | { t: "preview_lineup"; lineup: GameType[] } // host live-updates the in-progress picks (TV mirror)
+  | { t: "select_lineup"; lineup: GameType[] } // host commits exactly `size` games → starts the match
   | { t: "submit_bid"; amount: number }
   | { t: "choose_target"; targetId: string }
   | { t: "aim"; angle: number; power: number } // power 0..1, angle radians (0 = right, pi/2 = up)

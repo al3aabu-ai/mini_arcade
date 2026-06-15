@@ -89,6 +89,12 @@ export function handleClientMessage(
           case "start_game":
             room.startGame(playerId);
             break;
+          case "preview_lineup":
+            room.previewLineup(playerId, msg.lineup); // sanitized server-side
+            break;
+          case "select_lineup":
+            room.selectLineup(playerId, msg.lineup); // sanitized + validated server-side
+            break;
           case "submit_bid":
             room.submitBid(playerId, Number(msg.amount));
             break;

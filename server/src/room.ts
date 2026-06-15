@@ -14,6 +14,7 @@ import {
   type PodiumState,
   type RoomState,
   type SabotageItem,
+  type SelectionState,
   type ServerMessage,
   type Socket,
 } from "./protocol.js";
@@ -81,6 +82,8 @@ export class Room {
   /** Ordered mini-games for this match, and where we are in it. */
   private lineup: GameType[] = [];
   private lineupIndex = 0;
+  /** Host's in-progress game-picker (non-null only while phase === "selection"). */
+  private selection: { picks: GameType[] } | null = null;
   private auction: AuctionInternal | null = null;
   private golf: GolfInternal | null = null;
   private bomb: BombInternal | null = null;
@@ -225,6 +228,10 @@ export class Room {
       isHost: p.isHost,
       debuff: p.debuff,
     }));
+    let selection: SelectionState | null = null;
+    if (this.phase === "selection" && this.selection) {
+      selection = { picks: this.selection.picks, size: CONST.LINEUP_SIZE };
+    }
     let auction: AuctionState | null = null;
     if (this.phase === "auction" && this.auction) {
       auction = {
@@ -286,6 +293,7 @@ export class Room {
       players,
       lineup: this.lineup,
       currentLineupIndex: this.lineupIndex,
+      selection,
       auction,
       golf,
       bomb,
@@ -340,18 +348,56 @@ export class Room {
     if (connected < min)
       return this.sendError(playerId, `Need at least ${CONST.MIN_PLAYERS} players`);
     this.touch();
-    // TEMP: until the host picker UI lands, every match runs a fixed lineup.
-    this.lineup = this.defaultLineup();
+    this.startSelection();
+  }
+
+  // --------------------------- game selection ------------------------------
+
+  /** Open the host's game picker; the match lineup is built here. */
+  private startSelection() {
+    this.newGen();
+    this.phase = "selection";
+    this.selection = { picks: [] };
+    this.lineup = [];
     this.lineupIndex = 0;
+    this.broadcast();
+  }
+
+  /** Keep only valid game types, capped at the lineup size. */
+  private sanitizeLineup(lineup: unknown): GameType[] {
+    const valid: GameType[] = ["golf", "bomb"];
+    if (!Array.isArray(lineup)) return [];
+    return lineup
+      .filter((g): g is GameType => valid.includes(g as GameType))
+      .slice(0, CONST.LINEUP_SIZE);
+  }
+
+  /** Host live-updates the in-progress picks so the TV can mirror the slots. */
+  previewLineup(playerId: string, lineup: GameType[]) {
+    const p = this.players.find((x) => x.id === playerId);
+    if (!p?.isHost) return;
+    if (this.phase !== "selection" || !this.selection) return;
+    this.selection.picks = this.sanitizeLineup(lineup);
+    this.touch();
+    this.broadcast();
+  }
+
+  /** Host commits exactly LINEUP_SIZE games → overrides the lineup and starts. */
+  selectLineup(playerId: string, lineup: GameType[]) {
+    const p = this.players.find((x) => x.id === playerId);
+    if (!p?.isHost) return this.sendError(playerId, "Only the host picks the games");
+    if (this.phase !== "selection") return;
+    const clean = this.sanitizeLineup(lineup);
+    if (clean.length !== CONST.LINEUP_SIZE)
+      return this.sendError(playerId, `Pick exactly ${CONST.LINEUP_SIZE} games`);
+    this.lineup = clean;
+    this.lineupIndex = 0;
+    this.selection = null;
+    this.touch();
     this.advanceLineup();
   }
 
   // --------------------------- lineup flow ---------------------------------
-
-  /** Placeholder lineup; the host will choose these in the next milestone. */
-  private defaultLineup(): GameType[] {
-    return ["golf", "bomb", "golf"].slice(0, CONST.LINEUP_SIZE) as GameType[];
-  }
 
   /**
    * Generic match driver: run the bidding intermission for the next game in the
@@ -740,10 +786,8 @@ export class Room {
       this.golf = null;
       this.bomb = null;
       this.replayVotes.clear();
-      // Fresh match: rebuild the lineup and drive it from the top.
-      this.lineup = this.defaultLineup();
-      this.lineupIndex = 0;
-      this.advanceLineup();
+      // Fresh match: the host curates a brand-new lineup from the picker.
+      this.startSelection();
     } else {
       this.broadcast();
     }

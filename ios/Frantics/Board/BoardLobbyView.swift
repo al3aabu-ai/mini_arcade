@@ -59,3 +59,71 @@ struct BoardLobbyView: View {
         }
     }
 }
+
+/// Phase `.selection`: the TV mirrors the host's game picker in real time, the
+/// 3 lineup slots filling with big graphics as the host taps on their phone.
+struct BoardGameSelectionView: View {
+    @ObservedObject private var loc = Localization.shared
+    let room: RoomState
+
+    private var picks: [GameType] { (room.selection?.picks ?? []).compactMap(GameType.init(rawValue:)) }
+    private var size: Int { room.selection?.size ?? 3 }
+
+    var body: some View {
+        VStack(spacing: 36) {
+            Spacer()
+
+            Text(loc.tr("BUILDING THE LINEUP"))
+                .font(Theme.title(60))
+                .foregroundStyle(
+                    LinearGradient(colors: [Theme.pink, Theme.purple, Theme.cyan],
+                                   startPoint: .leading, endPoint: .trailing)
+                )
+                .neonGlow(Theme.purple, radius: 20)
+
+            Text(loc.tr("The host is choosing the games…"))
+                .font(Theme.body(26))
+                .foregroundStyle(.white.opacity(0.6))
+
+            HStack(spacing: 30) {
+                ForEach(0..<size, id: \.self) { i in
+                    slot(index: i, game: i < picks.count ? picks[i] : nil)
+                }
+            }
+            .padding(.top, 8)
+
+            Spacer()
+        }
+        .animation(.spring(response: 0.5, dampingFraction: 0.6), value: room.selection?.picks)
+    }
+
+    private func slot(index: Int, game: GameType?) -> some View {
+        VStack(spacing: 14) {
+            Text(loc.tr("Slot %@", "\(index + 1)"))
+                .font(Theme.body(22))
+                .foregroundStyle(.white.opacity(0.5))
+            ZStack {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(game.map { Color(hex: $0.themeHex).opacity(0.22) } ?? Theme.panel)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .strokeBorder(game.map { Color(hex: $0.themeHex) } ?? .white.opacity(0.1), lineWidth: 3)
+                    )
+                    .frame(width: 240, height: 280)
+                    .neonGlow(game.map { Color(hex: $0.themeHex) } ?? .clear, radius: game != nil ? 22 : 0)
+
+                if let game {
+                    VStack(spacing: 16) {
+                        Text(game.emoji).font(.system(size: 110))
+                        Text(loc.tr(game.titleKey)).font(Theme.title(28)).foregroundStyle(.white)
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                } else {
+                    Text("?")
+                        .font(Theme.title(96))
+                        .foregroundStyle(.white.opacity(0.14))
+                }
+            }
+        }
+    }
+}

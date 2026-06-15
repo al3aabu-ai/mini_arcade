@@ -313,6 +313,10 @@ final class GameClient: NSObject, ObservableObject {
     }
 
     func startGame() { send(["t": "start_game"]) }
+    /// Host live-updates the in-progress picks so the TV mirrors the slots.
+    func previewLineup(_ lineup: [String]) { send(["t": "preview_lineup", "lineup": lineup]) }
+    /// Host commits the chosen games (must be exactly the required count) → starts.
+    func selectLineup(_ lineup: [String]) { send(["t": "select_lineup", "lineup": lineup]) }
     func submitBid(_ amount: Int) { send(["t": "submit_bid", "amount": amount]) }
     func chooseTarget(_ targetId: String) { send(["t": "choose_target", "targetId": targetId]) }
     func sendAim(angle: Double, power: Double) { send(["t": "aim", "angle": angle, "power": power]) }

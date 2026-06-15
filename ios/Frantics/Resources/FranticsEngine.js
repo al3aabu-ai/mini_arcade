@@ -79,6 +79,8 @@
       /** Ordered mini-games for this match, and where we are in it. */
       __publicField(this, "lineup", []);
       __publicField(this, "lineupIndex", 0);
+      /** Host's in-progress game-picker (non-null only while phase === "selection"). */
+      __publicField(this, "selection", null);
       __publicField(this, "auction", null);
       __publicField(this, "golf", null);
       __publicField(this, "bomb", null);
@@ -203,6 +205,10 @@
         isHost: p.isHost,
         debuff: p.debuff
       }));
+      let selection = null;
+      if (this.phase === "selection" && this.selection) {
+        selection = { picks: this.selection.picks, size: CONST.LINEUP_SIZE };
+      }
       let auction = null;
       if (this.phase === "auction" && this.auction) {
         auction = {
@@ -264,6 +270,7 @@
         players,
         lineup: this.lineup,
         currentLineupIndex: this.lineupIndex,
+        selection,
         auction,
         golf,
         bomb,
@@ -311,15 +318,48 @@
       if (connected < min)
         return this.sendError(playerId, `Need at least ${CONST.MIN_PLAYERS} players`);
       this.touch();
-      this.lineup = this.defaultLineup();
+      this.startSelection();
+    }
+    // --------------------------- game selection ------------------------------
+    /** Open the host's game picker; the match lineup is built here. */
+    startSelection() {
+      this.newGen();
+      this.phase = "selection";
+      this.selection = { picks: [] };
+      this.lineup = [];
       this.lineupIndex = 0;
+      this.broadcast();
+    }
+    /** Keep only valid game types, capped at the lineup size. */
+    sanitizeLineup(lineup) {
+      const valid = ["golf", "bomb"];
+      if (!Array.isArray(lineup)) return [];
+      return lineup.filter((g) => valid.includes(g)).slice(0, CONST.LINEUP_SIZE);
+    }
+    /** Host live-updates the in-progress picks so the TV can mirror the slots. */
+    previewLineup(playerId, lineup) {
+      const p = this.players.find((x) => x.id === playerId);
+      if (!(p == null ? void 0 : p.isHost)) return;
+      if (this.phase !== "selection" || !this.selection) return;
+      this.selection.picks = this.sanitizeLineup(lineup);
+      this.touch();
+      this.broadcast();
+    }
+    /** Host commits exactly LINEUP_SIZE games → overrides the lineup and starts. */
+    selectLineup(playerId, lineup) {
+      const p = this.players.find((x) => x.id === playerId);
+      if (!(p == null ? void 0 : p.isHost)) return this.sendError(playerId, "Only the host picks the games");
+      if (this.phase !== "selection") return;
+      const clean = this.sanitizeLineup(lineup);
+      if (clean.length !== CONST.LINEUP_SIZE)
+        return this.sendError(playerId, `Pick exactly ${CONST.LINEUP_SIZE} games`);
+      this.lineup = clean;
+      this.lineupIndex = 0;
+      this.selection = null;
+      this.touch();
       this.advanceLineup();
     }
     // --------------------------- lineup flow ---------------------------------
-    /** Placeholder lineup; the host will choose these in the next milestone. */
-    defaultLineup() {
-      return ["golf", "bomb", "golf"].slice(0, CONST.LINEUP_SIZE);
-    }
     /**
      * Generic match driver: run the bidding intermission for the next game in the
      * lineup, or finish at the podium once every game has been played.
@@ -665,9 +705,7 @@
         this.golf = null;
         this.bomb = null;
         this.replayVotes.clear();
-        this.lineup = this.defaultLineup();
-        this.lineupIndex = 0;
-        this.advanceLineup();
+        this.startSelection();
       } else {
         this.broadcast();
       }
@@ -778,6 +816,12 @@
           switch (msg.t) {
             case "start_game":
               room.startGame(playerId);
+              break;
+            case "preview_lineup":
+              room.previewLineup(playerId, msg.lineup);
+              break;
+            case "select_lineup":
+              room.selectLineup(playerId, msg.lineup);
               break;
             case "submit_bid":
               room.submitBid(playerId, Number(msg.amount));

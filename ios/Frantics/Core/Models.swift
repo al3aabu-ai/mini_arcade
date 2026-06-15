@@ -3,12 +3,46 @@ import Foundation
 // Mirrors server/src/protocol.ts — keep both sides in sync.
 
 enum GamePhase: String {
-    case lobby, auction, golf, bomb, podium
+    case lobby, selection, auction, golf, bomb, podium
 }
 
 /// A playable mini-game. The match `lineup` is an ordered list of these.
-enum GameType: String, Codable {
+enum GameType: String, Codable, CaseIterable {
     case golf, bomb
+
+    /// Big graphic for the picker cards and the TV lineup slots.
+    var emoji: String {
+        switch self {
+        case .golf: return "🏌️"
+        case .bomb: return "💣"
+        }
+    }
+    /// Localization keys (English source strings) for the card text.
+    var titleKey: String {
+        switch self {
+        case .golf: return "Mini-Golf"
+        case .bomb: return "Hot Potato Bomb"
+        }
+    }
+    var blurbKey: String {
+        switch self {
+        case .golf: return "Sink it in the fewest shots."
+        case .bomb: return "Pass it fast — don't be holding it when it blows."
+        }
+    }
+    /// Theme accent hex for the card / slot.
+    var themeHex: String {
+        switch self {
+        case .golf: return "#00F5D4"
+        case .bomb: return "#FF3355"
+        }
+    }
+}
+
+/// The host's live game-picker state, mirrored to the TV as slots fill.
+struct SelectionState: Codable, Equatable {
+    let picks: [String] // GameType raw values, in slot order
+    let size: Int       // how many games the host must pick
 }
 
 struct PlayerState: Codable, Identifiable, Equatable, Hashable {
@@ -96,6 +130,8 @@ struct RoomState: Codable, Equatable {
     let lineup: [String]
     /// Index into `lineup` of the game currently being set up / played.
     let currentLineupIndex: Int
+    /// Host's in-progress game-picker (only while phase == .selection).
+    let selection: SelectionState?
     let auction: AuctionState?
     let golf: GolfState?
     let bomb: BombState?

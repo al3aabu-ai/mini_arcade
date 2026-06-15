@@ -46,6 +46,7 @@ struct PhoneRootView: View {
     private func phaseView(_ room: RoomState) -> some View {
         switch room.gamePhase {
         case .lobby: PhoneLobbyView()
+        case .selection: PhoneGameSelectionView()
         case .auction: PhoneAuctionView()
         case .golf: PhoneGolfView()
         case .bomb: PhoneBombView()

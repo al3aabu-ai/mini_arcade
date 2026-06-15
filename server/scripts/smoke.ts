@@ -216,13 +216,31 @@ async function main() {
   ok(all.every((c) => c.myCoins() === 1000), "each player starts with a private 1000-coin wallet");
   ok(alice.coins(alice.state!, bob.playerId) === 0, "PRIVACY: other players' coins are masked to 0 on every client");
 
-  console.log("\n— auction 1 (golf → anvil), bids paid in coins —");
+  console.log("\n— game selection (host curates the lineup) —");
   host.send({ t: "start_game" });
+  await Promise.all(all.map((c) => c.waitForState((s) => s.phase === "selection", "selection phase")));
+  ok(host.state!.selection!.size === 3, "the host must pick 3 games");
+  // A non-host cannot commit a lineup.
+  alice.send({ t: "select_lineup", lineup: ["golf", "bomb", "golf"] });
+  await new Promise((r) => setTimeout(r, 150));
+  ok(host.state!.phase === "selection", "a non-host cannot start the match");
+  // Host live-previews picks — the TV mirrors the slots filling up.
+  host.send({ t: "preview_lineup", lineup: ["golf"] });
+  await host.waitForState((s) => (s.selection?.picks.length ?? 0) === 1, "first pick mirrors to the room");
+  ok(host.state!.selection!.picks[0] === "golf", "slot 1 shows golf on every device");
+  // An over-long or invalid submit is rejected.
+  host.send({ t: "select_lineup", lineup: ["golf", "bomb"] });
+  await new Promise((r) => setTimeout(r, 100));
+  ok(host.state!.phase === "selection", "a lineup that isn't exactly 3 games is rejected");
+  // Host commits the full lineup → the match begins.
+  host.send({ t: "select_lineup", lineup: ["golf", "bomb", "golf"] });
+
+  console.log("\n— auction 1 (golf → anvil), bids paid in coins —");
   await Promise.all(
     all.map((c) => c.waitForState((s) => s.phase === "auction" && s.auction?.round === 1, "auction 1")),
   );
   ok(host.state!.auction!.item.debuff === "anvil", "auction 1 offers the Heavy Anvil (golf sabotage)");
-  ok(host.state!.lineup.length === 3, "the match lineup holds 3 games");
+  ok(host.state!.lineup.length === 3, "the committed lineup holds 3 games");
 
   host.send({ t: "submit_bid", amount: 100 });
   alice.send({ t: "submit_bid", amount: 250 });
@@ -300,13 +318,13 @@ async function main() {
   console.log("\n— replay —");
   all.forEach((c) => c.send({ t: "replay" }));
   const restarted = await host.waitForState(
-    (s) => s.phase === "auction" && s.auction?.round === 1,
-    "replay loops back to auction 1",
+    (s) => s.phase === "selection",
+    "replay loops back to game selection",
   );
-  // Wait for every client to receive the reset (auction-1) broadcast before
+  // Wait for every client to receive the reset (selection) broadcast before
   // reading their own wallet.
   await Promise.all(
-    all.map((c) => c.waitForState((s) => s.phase === "auction" && s.auction?.round === 1, `${c.label} sees replay`)),
+    all.map((c) => c.waitForState((s) => s.phase === "selection", `${c.label} sees replay`)),
   );
   ok(restarted.players.every((p) => p.trophies === 0), "trophies reset to 0 on replay");
   ok(all.every((c) => c.myCoins() === 1000), "coin wallets reset to 1000 on replay");

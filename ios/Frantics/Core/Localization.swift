@@ -160,6 +160,20 @@ final class Localization: ObservableObject {
         "%@ sabotaged %@!": "%@ خرّب على %@!",
         "NO SALE — everyone kept their coins": "ما انباع — كلٍّ احتفظ بكوينزه",
 
+        // Game selection (host picker + TV mirror)
+        "SELECT 3 GAMES": "اختر ٣ ألعاب",
+        "Slot %@": "خانة %@",
+        "Tap a game to fill the next slot (%@/%@)": "اضغط لعبة عشان تعبّي الخانة (%@/%@)",
+        "START MATCH  🎬": "ابدأ الجولة  🎬",
+        "TAP TO ADD": "اضغط للإضافة",
+        "SLOTS FULL": "الخانات كاملة",
+        "The host is choosing the games…": "المضيف يختار الألعاب…",
+        "BUILDING THE LINEUP": "نبني قائمة الألعاب",
+        "Mini-Golf": "ميني قولف",
+        "Hot Potato Bomb": "القنبلة الحارة",
+        "Sink it in the fewest shots.": "نزّلها بأقل ضربات.",
+        "Pass it fast — don't be holding it when it blows.": "مرّرها بسرعة — لا تكون ماسكها لمن تنفجر.",
+
         // Bomb board
         "💣 THE BILLIONAIRE'S BOMB": "💣 قنبلة المليونير",
         "Hold it to earn. Pass it to survive. Last two standing bank everything.":

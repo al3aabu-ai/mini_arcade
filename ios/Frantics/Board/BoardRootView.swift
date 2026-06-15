@@ -28,6 +28,7 @@ struct BoardRootView: View {
     private func phaseView(_ room: RoomState) -> some View {
         switch room.gamePhase {
         case .lobby: BoardLobbyView(room: room)
+        case .selection: BoardGameSelectionView(room: room)
         case .auction: BoardAuctionView(room: room)
         case .golf: GolfBoardView()
         case .bomb: BombBoardView(room: room)

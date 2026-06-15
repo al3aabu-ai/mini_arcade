@@ -19,14 +19,18 @@ enum DemoData {
               connected: true, isHost: false, debuff: nil),
     ]
 
-    static func state(phase: String, auction: AuctionState? = nil, golf: GolfState? = nil,
-                      bomb: BombState? = nil, podium: PodiumState? = nil) -> RoomState {
+    static func state(phase: String, selection: SelectionState? = nil, auction: AuctionState? = nil,
+                      golf: GolfState? = nil, bomb: BombState? = nil, podium: PodiumState? = nil) -> RoomState {
         RoomState(code: "FRNX", phase: phase, players: players,
                   lineup: ["golf", "bomb", "golf"], currentLineupIndex: 0,
-                  auction: auction, golf: golf, bomb: bomb, podium: podium, rev: 1)
+                  selection: selection, auction: auction, golf: golf, bomb: bomb, podium: podium, rev: 1)
     }
 
     static var lobby: RoomState { state(phase: "lobby") }
+
+    static var selection: RoomState {
+        state(phase: "selection", selection: SelectionState(picks: ["golf"], size: 3))
+    }
 
     static var auction: RoomState {
         state(
@@ -77,6 +81,9 @@ enum DemoData {
         let myId = "p2"
         switch mode {
         case "board-lobby", "phone-lobby": return GameClient(demoState: lobby, playerId: myId)
+        // View the picker AS THE HOST so the carousel (not the waiting screen) shows.
+        case "board-selection", "phone-selection":
+            return GameClient(demoState: selection, playerId: players.first(where: \.isHost)?.id ?? myId)
         case "board-auction", "phone-auction": return GameClient(demoState: auction, playerId: myId)
         case "board-golf", "phone-golf": return GameClient(demoState: golf, playerId: myId)
         case "board-bomb", "phone-bomb": return GameClient(demoState: bomb, playerId: myId)
@@ -102,6 +109,7 @@ struct DemoContainerView: View {
                     }
                     Group {
                         switch mode {
+                        case "phone-selection": PhoneGameSelectionView()
                         case "phone-auction": PhoneAuctionView()
                         case "phone-golf": PhoneGolfView()
                         case "phone-bomb": PhoneBombView()
