@@ -318,19 +318,24 @@ A 4th `GameType` that reuses the whole bumper pipeline with two flags on
   `joystick`). Values are GRAVITY components from CoreMotion (`BumperMotionController`,
   using `deviceMotion.gravity`), so each ≈ `sin(tilt-on-axis)` and
   `hypot(pitch,roll)` ≈ `sin(total tilt)`. roll → world X, pitch → world Z.
+  **Pitch is INVERTED in `setTilt`** (`-pitch`) so forward tilt = forward (−Z),
+  per the playtest. Roll is left un-inverted.
 - **Over-tilt spin-out:** when `hypot(pitch,roll) > 0.5` (= sin 30°), the SERVER
   sets `player.isSpinningOut` + `spinOutTimer` (+`taskDidSpinOut`) for
   `BUMPER_SPINOUT_MS` (1.5s); the BOARD independently detects the same from the
   relayed vector and applies a Y-axis spin (`applyTorque`/`angularVelocity`) while
-  FREEZING that bumper's control. Both use the same threshold so they agree.
-- **Ice physics material (`BumperSceneController`, `ice` flag):** slab
-  `friction 0.02` (vs 0.6); bumper `friction 0.05`, `damping 0.12` (vs 0.7 →
-  momentum/drift, must counter-tilt to brake), `restitution 0.85`, `angularDamping
-  0.35`. Knockout (`y < −3`) and the contact delegate are unchanged. The solver
-  produces the high-speed ricochet — NEVER inject manual impulses.
+  FREEZING that bumper's control. Both use the same threshold so they agree. The
+  phone bubble-level's dashed ring sits at this 0.5 (= 30°) edge.
+- **Ice physics material (`BumperSceneController`, `ice` flag) — playtest-tuned:**
+  slab `friction 0.02` (vs 0.6); bumper `friction 0.05`, `damping 0.15` (vs 0.7;
+  tuned up from 0.12 → less slide, tighter control), `restitution 0.85`,
+  `angularDamping 0.35`. Drift thrust `force = 32` (ice) vs 34 (stone), tuned up
+  from 26 for more punch against the slide. Knockout (`y < −3`) and the contact
+  delegate are unchanged. The solver produces the ricochet — NEVER inject impulses.
 - **Ice secret tasks:** `drift_king` (`taskDidSpinOut && taskBumperSurvived`) and
   `ice_cold` (`taskIceCold`, set when a knockout's shover was sliding backwards —
-  the board flags `byBackwards` when the aggressor's `velocity.z > 1.5`).
+  the board flags `byBackwards` when the aggressor's `velocity.z > 1.7`, tracking
+  the force bump).
 - **Phone:** `PhoneBumperView` swaps the joystick for a tray bubble-level when
   `controlType == .motion`; no 3D on the phone, 30Hz stream → low thermals.
 

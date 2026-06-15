@@ -110,7 +110,7 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
     // Ice tuning.
     private static let overTiltSin: Float = 0.5      // sin(30°) → over-tilt
     private static let spinOutSecs: TimeInterval = 1.5
-    private static let backwardsVZ: Float = 1.5      // +Z velocity = "sliding backwards"
+    private static let backwardsVZ: Float = 1.7      // +Z velocity = "sliding backwards" (tracks the force bump)
 
     // Render-thread state.
     private var bumpers: [String: SCNNode] = [:]
@@ -148,9 +148,11 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
         enqueue { s in s.control[playerId] = SCNVector3(Float(x), 0, Float(y)) }
     }
 
-    /// Ice device tilt: roll → world X, pitch → world Z (same plane as joystick).
+    /// Ice device tilt: roll → world X, pitch → world Z. Pitch is INVERTED so
+    /// tilting the phone forward (away from you) drives the bumper forward (−Z,
+    /// away from the camera), matching the playtest expectation.
     func setTilt(playerId: String, pitch: Double, roll: Double) {
-        enqueue { s in s.control[playerId] = SCNVector3(Float(roll), 0, Float(pitch)) }
+        enqueue { s in s.control[playerId] = SCNVector3(Float(roll), 0, Float(-pitch)) }
     }
 
     // MARK: world
@@ -254,7 +256,7 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
             // counter-tilt to brake. Stone: grippy, coasts to a stop when released.
             body.restitution = isIce ? 0.85 : 0.75
             body.friction = isIce ? 0.05 : 0.4
-            body.damping = isIce ? 0.12 : 0.7
+            body.damping = isIce ? 0.15 : 0.7   // tuned up from 0.12 → less slide, tighter control
             body.angularDamping = isIce ? 0.35 : 0.6
             body.categoryBitMask = Self.bumperCategory
             body.collisionBitMask = -1        // collide with slab + each other
@@ -294,7 +296,7 @@ final class BumperSceneController: NSObject, SCNSceneRendererDelegate, SCNPhysic
         pendingLock.unlock()
         for command in commands { command(self) }
 
-        let force: Float = isIce ? 26 : 34   // ice needs less push (low damping)
+        let force: Float = isIce ? 32 : 34   // ice (tuned up from 26 for more punch vs the slide)
         let now = CACurrentMediaTime()
         for (id, node) in bumpers where !eliminated.contains(id) {
             let dir = control[id] ?? SCNVector3Zero
