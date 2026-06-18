@@ -1,107 +1,191 @@
-# 🎉 Frantics
+# Mini Arcade
 
-A *Frantics*-style couch party game. **One iPhone is the TV.** The host AirPlay-mirrors their iPhone to the big screen — the app claims the external display and renders the shared **game board** there, while every phone (including the host's) stays a private **controller**. A Node.js server is the single source of truth.
+Asymmetric local-multiplayer 3D party game prototype inspired by the broad
+mini-game-party feel of titles like *Frantics*. The production concept matches
+the original SwiftUI/SceneKit draft in `al3aabu-ai/mini_arcade`: one iPhone is
+the host, AirPlay/HDMI sends the public board to the TV like a console, and the
+host phone plus every other phone stays a private controller.
 
-| Main menu | TV board — The Bomb | Controller — The Auction | TV board — Golf |
-|---|---|---|---|
-| ![menu](docs/screens/menu.png) | ![bomb](docs/screens/board-bomb.png) | ![auction](docs/screens/phone-auction.png) | ![golf](docs/screens/board-golf.png) |
+This Windows/Unity prototype keeps the game logic and LAN controller model
+platform-agnostic so it can later move to iOS.
 
-*(Board screenshots above were captured on a portrait iPhone simulator — on a real TV the board renders full-screen 16:9.)*
+All mini-games should be original 3D party-game challenges. The first/main game
+is a 3D mini-golf game; the older tap games are temporary framework samples.
 
-## How the TV trick works
+See `Asymmetric_Multiplayer_Game_Specification.md` for the full design.
 
-iOS supports *external display scenes*: when the host starts **Screen Mirroring** (AirPlay) or plugs in an HDMI adapter, the system hands the app the TV as a separate, non-interactive screen. Frantics opts in (`UIApplicationSupportsMultipleScenes` + the `windowExternalDisplayNonInteractive` scene role in [AppDelegate.swift](ios/Frantics/App/AppDelegate.swift)), so the TV shows [BoardRootView](ios/Frantics/Board/BoardRootView.swift) while the host's phone keeps showing their private controller. No Apple TV app, no web TV client.
+## Current Status
 
+Milestone 1: project setup complete.
+
+Milestone 2: first playable complete.
+
+Milestone 3: multi-round match loop complete and compile-verified.
+
+Milestone 4 started: first 3D party mini-game, `Party Mini Golf`, implemented
+as a procedural Unity physics course.
+
+Milestone 4 presentation pass: dynamic arcade camera, safe-area UI scaling, and
+first-pass ball VFX hooks are implemented.
+
+Milestone 4 tiki theme pass: procedural tropical/tiki environment pieces and a
+matching arcade HUD skin are implemented.
+
+External-display routing pass: the app now boots `DisplayManager`, activates
+external displays, keeps private UI on display 0, and routes the public
+mini-golf camera to display 1 when AirPlay/HDMI is available.
+
+The prototype is code-driven. Pressing Play boots the whole app through
+`AppRoot`; no scene or prefab wiring is required.
+
+## Playable Flow
+
+Current loop:
+
+`Role select -> Lobby -> 3-round match -> Round result -> Secret bidding -> Next round -> Final standings`
+
+Implemented now:
+
+- Host and controller role selection.
+- Host device runs the authoritative local session and owns the public TV view.
+- Unity-app controllers over raw TCP on port `7777`.
+- Browser controllers over HTTP/WebSocket on port `8080`.
+- Shared lobby across both controller types.
+- Free-tier 2-player cap with a Premium host toggle for larger tests.
+- Three mini-games in rotation:
+  - `Party Mini Golf`: 3D procedural mini-golf course with physics ball, rails,
+    blockers, rotating bumper, coin pickups, aim/power/shoot controls, strokes,
+    hole scoring, speed-follow camera, ball trail, shot burst, and impact burst
+    feedback. The course now uses a tropical/tiki visual pass: raised wood
+    platform, bamboo rail placeholders, leaf accents, glowing masks, torches,
+    warm lighting, and hot arcade colors.
+  - `Coin Rush`: tap race, each tap scores and earns coins.
+  - `Reaction Duel`: wait for GO, then tap fast; early taps false-start.
+- Three-round default match, cycling through the mini-game catalog.
+- Secret bidding between rounds:
+  - Controllers see only their own spendable coin balance.
+  - TV/host public view sees only who has submitted, not amounts or balances.
+  - Highest unique bid pays that amount and receives a small score head-start
+    in the next round.
+  - Tied highest bids award no advantage.
+- Final winner uses the spec rule: most mini-game wins, then highest total coins
+  earned across the match as the tie-breaker.
+
+## Running
+
+1. Open the project in Unity `6000.3.18f1`.
+2. Press Play.
+3. Fastest single-window demo: click `Host + 1 local bot`, then `Start Match`.
+   The first round starts with `Party Mini Golf`.
+4. Browser controller: click `Host a game`, then open the lobby URL shown in
+   Unity. On this same PC use `http://localhost:8080`; on a phone use the
+   `http://<PC-LAN-IP>:8080` address shown in the lobby.
+5. Unity-app controller: run another app instance/device and Join the host LAN
+   IP on port `7777`.
+
+Browsers cannot use `localhost:7777`; that is the raw TCP protocol. Browser
+controllers use `8080`.
+
+Windows Firewall must allow the Unity app on the private network for phones to
+connect over Wi-Fi.
+
+Target iPhone/TV behavior:
+
+- Host taps Host Party on the iPhone.
+- Host starts AirPlay Screen Mirroring or connects HDMI.
+- iOS exposes the TV as an external display.
+- Unity activates display 1 and renders the public mini-golf board there.
+- The host iPhone screen remains display 0 and shows private controls.
+- Other phones join the same LAN session as controllers.
+
+Mini-golf controls:
+
+- Aim Left / Aim Right
+- Power - / Power +
+- Shoot
+
+These controls appear both in Unity-app controllers and the browser controller
+during mini-golf. Tap-based games still show a TAP button.
+
+The mini-golf camera now uses a center gameplay viewport with reserved HUD zones:
+about 12% at the top and 18% at the bottom. The Unity IMGUI overlay and browser
+controller both derive layout from safe-area / viewport-relative measurements
+instead of fixed screen pixels. The HUD skin uses procedural wood/bamboo/hot
+orange textures so iPhone notch and Dynamic Island layouts stay inside safe
+bounds while still reading as a tropical arcade controller.
+
+## Project Structure
+
+```text
+Assets/Scripts/
+  Core/
+    AppRoot.cs              code-driven app coordinator and IMGUI prototype
+    MatchDirector.cs        multi-round match sequence and scoring
+    AppState.cs             lobby/game/bidding/results states
+    GameStateMachine.cs
+    MainThreadDispatcher.cs socket callbacks back onto Unity main thread
+  Networking/
+    TcpHostService.cs       host transport for Unity-app controllers
+    TcpClientService.cs     Unity-app controller transport
+    WebControllerServer.cs  HTTP + WebSocket browser controller
+    MessageCodec.cs         length-prefixed JSON TCP framing
+    NetworkMessage.cs       shared message envelope
+    Dtos.cs                 payload DTOs
+    LanDiscovery.cs         scaffold for later auto-discovery
+  MiniGames/
+    IMiniGame.cs
+    MiniGameCatalog.cs
+    MiniGameResult.cs
+    MiniGolf/MiniGolfGame.cs
+    CoinRush/CoinRushGame.cs
+    Reaction/ReactionGame.cs
+  Economy/
+    BiddingSystem.cs
+  Players/
+    PlayerData.cs           private spendable coins, earned coins, wins
+  Session/
+    SessionData.cs          host-owned session state and free/premium cap
+  Display/
+    DisplayManager.cs       activates AirPlay/HDMI display and exposes display routing
 ```
-   TV (AirPlay / HDMI)  ←  host iPhone renders the board on the external screen
-                              ▲
-                              │ room_state snapshots + aim/fire relays (WebSocket)
-                              ▼
-                  ┌─────────────────────────┐
-                  │  Node.js game server     │   ← authoritative scores, bids,
-                  │  server/ (TypeScript)    │     bomb fuse, phase machine
-                  └─────────────────────────┘
-                              ▲
-                              │ bids, targets, slingshot vectors, PASS (WebSocket)
-                              ▼
-        📱 all players' iPhones — same app, "JOIN PARTY" + room code
-```
 
-## The game loop
+## Spec Mapping
 
-`Lobby → Dirty Auction → Guerilla Golf → Dirty Auction → Billionaire's Bomb → Podium → (replay → Auction…)`
+| Spec area | Implementation |
+|---|---|
+| Guest-first onboarding | Role-select flow, no login requirement |
+| Local LAN host topology | Host opens TCP and WebSocket services |
+| Phone controllers | Unity-app controllers plus browser controllers |
+| One phone as TV console | `DisplayManager` plus public camera target display routing |
+| Public/private information split | Public TV hides balances and bid amounts; controllers receive private bidding state |
+| Multi-round loop | `MatchDirector` and `AppRoot` |
+| Coin reset at match start | `SessionData.ResetForNewSession()` |
+| Coin earning | Mini-game score, mini-golf pickups, plus placement payout |
+| Hidden bidding | `BiddingSystem`, `BiddingStateDto`, bid UI on Unity/browser controllers |
+| Final tie-breaker | Wins first, total coins earned second |
+| Host-centric premium cap | `SessionData.MaxPlayers` and Premium host toggle |
 
-1. **Lobby** — host creates a party, TV shows a 4-letter room code, avatars drop in as friends join (2–8 players, everyone starts with **1000 points**).
-2. **The Dirty Auction** — 15 s of sealed bids on a sabotage item. Winner pays their bid and picks a victim on their phone:
-   - 🪨 **The Heavy Anvil** (before golf): victim's shots launch **30 % weaker**.
-   - 🧈 **Butter Fingers** (before the bomb): victim's PASS button **jams for 2 s** every time they catch the bomb.
-3. **⛳️ Guerilla Golf** — simultaneous slingshot race across a **3D low-poly island course** (SceneKit physics on the host's board, PS4-Frantics style: floating fairways over the void, bumpers, a spinning paddle, a flag on the green). Drag back on your phone's touchpad, 3D aim arrows stream live to the TV (~30 msg/s), release to fire — and to bodycheck rivals off the map. Bounties: **500 / 300 / 200**, then 100 per finisher.
-4. **💣 The Billionaire's Bomb** — hot-potato chicken. Holding the bomb mints cash with a rising greed multiplier; tilt your phone (or tap an arrow) + **PASS** to shove it at a neighbor. The fuse is hidden — explode and your unbanked cash burns. Rounds repeat until **exactly two survive**, who bank everything **+ $250**.
-5. **🏆 Podium** — confetti, crowns, and a **Replay?** button. If *everyone* votes replay, scores reset and the loop jumps straight back to the auction.
+## Prototype Notes
 
-## Quick start (same WiFi)
+The current UI is IMGUI and intentionally plain. The mini-golf arena itself is
+real Unity 3D; the control/status UI is still prototype-level.
 
-**1. Run the server** (Node 20+):
+On Windows, display separation is only testable if a second monitor is attached.
+On iPhone, the target behavior is the same as the SwiftUI/SceneKit draft:
+external display gets the public board; the physical phone remains the private
+controller/master UI. iOS build and real AirPlay/HDMI testing require a Mac with
+Xcode and Unity iOS Build Support.
 
-```bash
-cd server
-npm install
-npm run dev
-#   🎉 Frantics server is up
-#      LAN:  ws://192.168.1.70:8080   ← put this in the iPhone app
-```
+The mini-game selector from the spec is represented by a default 3-round
+rotation. A polished selector is a later UI milestone.
 
-**2. Run the app:** open `ios/Frantics.xcodeproj` in Xcode 16+, select your iPhone (or a simulator), Run. On first launch tap ⚙️ and enter the server's LAN address. Sign with your own team in *Signing & Capabilities* for a real device.
+## Next Milestones
 
-**3. Party:** host taps **HOST PARTY**, starts **Screen Mirroring** to the TV (Control Center → Screen Mirroring), friends tap **JOIN PARTY** with the room code. The host phone's `tv` icon lights up when the external display is attached; there's also an on-phone board preview behind that icon for development.
-
-## Deploy the server (play over the internet)
-
-The server is a single stateless-ish process (rooms live in memory) — any Node host or the included [Dockerfile](server/Dockerfile) works:
-
-- **Render / Railway:** new web service from this repo, root `server/`, build `npm install && npm run build`, start `npm start`. Use the resulting `wss://your-app.onrender.com` URL in the app's settings.
-- **Fly.io / any Docker host:** `docker build -t frantics server/ && docker run -p 8080:8080 frantics`.
-- `GET /health` returns `{ ok, rooms }` for monitoring.
-
-## Repo layout
-
-```
-server/             Node.js + TypeScript authoritative game server
-  src/protocol.ts     wire contract + game constants (timers, bounties…)
-  src/room.ts         the whole state machine (lobby/auction/golf/bomb/podium)
-  src/server.ts       WebSocket plumbing + room manager
-  scripts/smoke.ts    full-game E2E test with 4 fake clients
-ios/                SwiftUI iPhone app (controller + TV board in one binary)
-  Frantics/App/       app + phone/external-display scene delegates
-  Frantics/Core/      GameClient (WebSocket), models, tilt, haptics
-  Frantics/Phone/     controller screens for every phase
-  Frantics/Board/     TV screens, incl. the SpriteKit golf scene
-```
-
-## Protocol cheat-sheet
-
-Every frame is JSON with a `t` discriminator ([protocol.ts](server/src/protocol.ts) ⇄ [Models.swift](ios/Frantics/Core/Models.swift)).
-
-| Direction | Message | Meaning |
-|---|---|---|
-| 📱→ | `create_room` / `join_room` / `rejoin` | seat management (rejoin reclaims a seat after a drop) |
-| 📱→ | `submit_bid { amount }` | sealed auction bid |
-| 📱→ | `choose_target { targetId }` | auction winner picks a victim |
-| 📱→ | `aim { angle, power }` · `fire` · `aim_clear` | slingshot input, throttled to ~30/s |
-| 📱→ | `pass_bomb { direction }` | tilt-and-tap hand-off |
-| 📱→ | `replay` | podium vote |
-| 🖥→ | `golf_finished { order }` | host board reports physics results |
-| →📱🖥 | `room_state { state }` | full authoritative snapshot on every change |
-| →🖥 | `aim` / `aim_clear` / `fire` | relays for the board's physics scene |
-
-## Development
-
-```bash
-cd server
-npm run typecheck   # strict TS
-npm run smoke       # full game E2E in ~10 s (FAST_GAME shrinks every timer)
-```
-
-- `ALLOW_SOLO=1` lets a lone host start a game while developing.
-- The app has screenshot/dev fixtures: launch with env `FRANTICS_DEMO=board-bomb` (or `board-lobby`, `board-golf`, `board-podium`, `phone-auction`, `phone-bomb`, …) to render any screen with canned data, no server needed.
-- Game feel lives in two files: timers/payouts in [protocol.ts](server/src/protocol.ts) (`CONST`), 3D golf physics/course layout in [Golf3DBoard.swift](ios/Frantics/Board/Golf3DBoard.swift).
+- Replace IMGUI with real TV and controller UI.
+- Add the mini-game selector screen.
+- Expand mini-golf into a richer 3D party course: themed obstacles, better camera
+  work, stronger feedback, and multiple course layouts.
+- Add LAN auto-discovery to remove manual IP entry.
+- Add secret tasks pushed to individual controllers.
+- Add ads, IAP subscription gating, and restore-purchase sign-in.
+- Port to iOS on a Mac with Xcode and Unity iOS Build Support.

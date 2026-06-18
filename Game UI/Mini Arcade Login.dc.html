@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @keyframes ma-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+  @keyframes ma-bob2 { 0%,100% { transform: translateY(0) rotate(-12deg); } 50% { transform: translateY(-20px) rotate(8deg); } }
+  @keyframes ma-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes ma-twinkle { 0%,100% { opacity: 0.85; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+  @keyframes ma-pulse { 0%,100% { transform: scale(1); opacity: 0.55; } 50% { transform: scale(1.14); opacity: 0.85; } }
+  @keyframes ma-markbob { 0%,100% { transform: rotate(-7deg) translateY(0); } 50% { transform: rotate(-7deg) translateY(-10px); } }
+</style>
+</helmet>
+
+<div style="width: max-content; min-width: 100%; min-height: 100vh; box-sizing: border-box; padding: 56px; background: #e7e5df; font-family: 'Fredoka', system-ui, sans-serif;">
+  <div style="margin-bottom: 8px; font-size: 22px; font-weight: 700; color: #2b2b30; letter-spacing: -0.3px;">Mini Arcade — Login Screen</div>
+  <div style="margin-bottom: 40px; font-size: 14px; font-weight: 500; color: #8a8a92;">Login-first · guest as a quick exit · iPhone</div>
+
+  <div style="display: flex; gap: 64px; align-items: flex-start;">
+
+    <!-- ========================= VARIATION A ========================= -->
+    <div style="flex: none; width: 402px;">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ darkMode }}" hint-size="402px,874px">
+
+        <div style="position: relative; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(135% 95% at 50% -12%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%); display: flex; flex-direction: column; box-sizing: border-box; padding: 88px 30px 42px;">
+
+          <!-- language selector -->
+          <button style="position: absolute; top: 52px; right: 24px; z-index: 10; height: 36px; padding: 0 13px; border: 1.5px solid rgba(255,255,255,0.28); border-radius: 18px; background: rgba(255,255,255,0.12); display: flex; align-items: center; gap: 7px; cursor: pointer; font-family: 'Fredoka', sans-serif;" onClick="{{ onLang }}">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" style="display: block;">
+              <circle cx="10" cy="10" r="8" stroke="#fff" stroke-width="1.6"/>
+              <ellipse cx="10" cy="10" rx="3.4" ry="8" stroke="#fff" stroke-width="1.6"/>
+              <line x1="2.2" y1="10" x2="17.8" y2="10" stroke="#fff" stroke-width="1.6"/>
+            </svg>
+            <span style="font-size: 14px; font-weight: 600; color: #fff; letter-spacing: 0.3px;">EN</span>
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+
+          <!-- energy glows -->
+          <div style="position: absolute; top: 40px; left: 50%; transform: translateX(-50%); width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.5) 0%, rgba(216,112,255,0) 70%); animation: ma-pulse 6s ease-in-out infinite; pointer-events: none;"></div>
+          <div style="position: absolute; bottom: -40px; right: -30px; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle, rgba(255,93,162,0.32) 0%, rgba(255,93,162,0) 70%); pointer-events: none;"></div>
+
+          <!-- confetti -->
+          <div style="position: absolute; top: 78px; left: 26px; width: 22px; height: 22px; border-radius: 7px; background: #FFD23F; transform: rotate(18deg); box-shadow: 0 6px 14px rgba(0,0,0,0.18); animation: ma-bob2 5.5s ease-in-out infinite;"></div>
+          <div style="position: absolute; top: 120px; right: 30px; width: 18px; height: 18px; border-radius: 50%; background: #38E1FF; animation: ma-bob 4.2s ease-in-out infinite;"></div>
+          <div style="position: absolute; top: 250px; left: 28px; width: 0; height: 0; border-left: 11px solid transparent; border-right: 11px solid transparent; border-bottom: 18px solid #FF5DA2; filter: drop-shadow(0 5px 9px rgba(0,0,0,0.2)); animation: ma-spin 9s linear infinite;"></div>
+          <div style="position: absolute; top: 200px; right: 26px; width: 16px; height: 16px; border-radius: 50%; border: 5px solid #B6FF4B; animation: ma-bob 6s ease-in-out infinite; animation-delay: -1s;"></div>
+
+          <!-- logo -->
+          <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 26px;">
+            <div style="width: 78px; height: 78px; border-radius: 22px; background: linear-gradient(150deg, #FFE27A, #FFB300); display: flex; align-items: center; justify-content: center; box-shadow: 0 14px 26px rgba(0,0,0,0.32), inset 0 -5px 0 rgba(0,0,0,0.12); position: relative; animation: ma-markbob 5s ease-in-out infinite;">
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: #3b0d73; box-shadow: inset 0 0 0 3px rgba(255,255,255,0.25);"></div>
+              <div style="position: absolute; bottom: 11px; right: 13px; display: flex; gap: 4px;">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #FF5DA2;"></div>
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #38E1FF;"></div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; line-height: 0.9;">
+              <div style="font-size: 21px; font-weight: 600; color: rgba(255,255,255,0.9); letter-spacing: 5px; margin-bottom: 2px; text-shadow: 0 2px 0 rgba(0,0,0,0.2);">MINI</div>
+              <div style="display: flex; align-items: flex-end;">
+                <span style="display: inline-block; font-size: 50px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(-5deg); text-shadow: 2px 2px 0 #d98c00, 3px 4px 0 #c97f00, 0 9px 14px rgba(0,0,0,0.35);">A</span>
+                <span style="display: inline-block; font-size: 50px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(3deg) translateY(-3px); text-shadow: 2px 2px 0 #d98c00, 3px 4px 0 #c97f00, 0 9px 14px rgba(0,0,0,0.35);">R</span>
+                <span style="display: inline-block; font-size: 50px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(-3deg); text-shadow: 2px 2px 0 #d98c00, 3px 4px 0 #c97f00, 0 9px 14px rgba(0,0,0,0.35);">C</span>
+                <span style="display: inline-block; font-size: 50px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(4deg) translateY(-2px); text-shadow: 2px 2px 0 #d98c00, 3px 4px 0 #c97f00, 0 9px 14px rgba(0,0,0,0.35);">A</span>
+                <span style="display: inline-block; font-size: 50px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(-2deg); text-shadow: 2px 2px 0 #d98c00, 3px 4px 0 #c97f00, 0 9px 14px rgba(0,0,0,0.35);">D</span>
+                <span style="display: inline-block; font-size: 50px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(3deg) translateY(-3px); text-shadow: 2px 2px 0 #d98c00, 3px 4px 0 #c97f00, 0 9px 14px rgba(0,0,0,0.35);">E</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- form (hero) -->
+          <div style="position: relative; display: flex; flex-direction: column; gap: 12px;">
+            <div style="width: 100%; height: 56px; border-radius: 16px; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.22); display: flex; align-items: center; padding: 0 18px; color: rgba(255,255,255,0.55); font-size: 16px; font-weight: 500;">Email or username</div>
+            <div style="width: 100%; height: 56px; border-radius: 16px; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; color: rgba(255,255,255,0.55); font-size: 16px; font-weight: 500;">
+              <span>Password</span>
+              <span style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.7);">Show</span>
+            </div>
+            <div style="text-align: right; margin-top: -2px;">
+              <span style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.65);">Forgot password?</span>
+            </div>
+
+            <button style="width: 100%; height: 64px; margin-top: 8px; border: none; border-radius: 18px; background: linear-gradient(180deg, #FFE27A, #FFC21A); color: #3b0d73; font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 700; letter-spacing: 0.2px; cursor: pointer; box-shadow: 0 7px 0 #D99700, 0 16px 22px rgba(0,0,0,0.28);" onClick="{{ onLogin }}">Log In</button>
+
+            <div style="display: flex; align-items: center; gap: 12px; margin: 10px 0 2px;">
+              <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.2);"></div>
+              <span style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5);">or</span>
+              <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.2);"></div>
+            </div>
+
+            <button style="width: 100%; height: 54px; border: 1.5px solid rgba(255,255,255,0.28); border-radius: 16px; background: rgba(255,255,255,0.06); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 16px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 9px;" onClick="{{ onApple }}">
+              <span style="display: inline-flex; transform: translateY(-1px);">{{ appleGlyph }}</span>
+              Continue with Apple
+            </button>
+          </div>
+
+          <!-- footer: create account + small guest -->
+          <div style="position: relative; margin-top: auto; padding-top: 22px; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+            <div style="font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.7);">New here? <span style="color: #FFD23F; font-weight: 700;">Create account</span></div>
+            <button style="border: none; background: none; cursor: pointer; font-family: 'Fredoka', sans-serif; font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,0.55); text-decoration: underline; text-underline-offset: 3px;" onClick="{{ onGuest }}">Skip — continue as guest</button>
+          </div>
+
+        </div>
+      </x-import>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 980, &quot;height&quot;: 1000}}">
+class Component extends DCLogic {
+  renderVals() {
+    const apple = (fill) => React.createElement('svg', { width: 16, height: 19, viewBox: '0 0 17 20', fill },
+      React.createElement('path', { d: 'M14.07 10.86c0-2.4 1.97-3.55 2.06-3.61-1.13-1.65-2.88-1.88-3.5-1.9-1.49-.15-2.9.88-3.65.88-.75 0-1.91-.86-3.14-.84-1.62.02-3.11.94-3.94 2.39-1.68 2.91-.43 7.22 1.21 9.58.8 1.16 1.76 2.45 3.02 2.41 1.21-.05 1.67-.78 3.13-.78 1.46 0 1.87.78 3.14.76 1.3-.02 2.12-1.18 2.92-2.34.92-1.34 1.3-2.64 1.32-2.71-.03-.01-2.53-.97-2.56-3.85zM11.66 3.86c.67-.81 1.12-1.93.99-3.06-.96.04-2.12.64-2.81 1.45-.62.72-1.16 1.86-1.02 2.96 1.07.08 2.17-.54 2.84-1.35z' }));
+    return {
+      darkMode: true,
+      appleGlyph: apple('#ffffff'),
+      onLogin: () => {},
+      onApple: () => {},
+      onGuest: () => {},
+      onLang: () => {},
+    };
+  }
+}
+</script>
+</body>
+</html>

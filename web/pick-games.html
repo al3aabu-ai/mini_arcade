@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Mini Arcade — Pick Games</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root { --gold:#FFD23F; --deep:#3b0d73; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Fredoka', system-ui, sans-serif;
+    background: #3b0d73;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  @keyframes ma-pulse { 0%,100% { transform: translateX(-50%) scale(1); opacity:.5; } 50% { transform: translateX(-50%) scale(1.14); opacity:.8; } }
+  .ma-scroll::-webkit-scrollbar { display: none; }
+  .ma-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+  button { font-family: 'Fredoka', sans-serif; }
+  .screen {
+    position: relative; width: 100%; min-height: 100vh; height: 100vh; overflow: hidden;
+    background: radial-gradient(135% 95% at 50% -12%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%);
+    display: flex; flex-direction: column;
+    padding: calc(26px + env(safe-area-inset-top)) 0 calc(20px + env(safe-area-inset-bottom));
+  }
+  .card { flex: none; width: 252px; height: 328px; border-radius: 24px; overflow: hidden; position: relative; scroll-snap-align: center; transition: box-shadow .15s ease, transform .12s ease; cursor: pointer; }
+  .card:active { transform: scale(0.98); }
+  .lineup-slot { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 13px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.16); min-width: 0; }
+  .lineup-num { width: 24px; height: 24px; border-radius: 50%; background: var(--gold); color: var(--deep); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+  .lineup-name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lineup-empty { border-style: dashed; border-color: rgba(255,255,255,0.22); }
+  .lineup-empty .lineup-num { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.7); }
+  .lineup-empty .lineup-name { color: rgba(255,255,255,0.4); }
+  #toast { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%) translateY(10px); background: rgba(20,16,30,0.92); color: #fff; font-size: 13px; font-weight: 600; padding: 10px 16px; border-radius: 999px; opacity: 0; transition: opacity .2s ease, transform .2s ease; pointer-events: none; z-index: 20; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="screen">
+  <!-- ambient glow -->
+  <div style="position:absolute; top:14px; left:50%; transform:translateX(-50%); width:78vw; max-width:300px; aspect-ratio:1; border-radius:50%; background:radial-gradient(circle, rgba(216,112,255,0.4) 0%, rgba(216,112,255,0) 70%); animation:ma-pulse 6s ease-in-out infinite; pointer-events:none;"></div>
+
+  <!-- top row -->
+  <div style="position:relative; display:flex; align-items:center; justify-content:space-between; padding:0 20px; margin-bottom:6px;">
+    <button id="back" style="width:40px; height:40px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.24); background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; cursor:pointer;">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div style="font-size:17px; font-weight:600; color:#fff;">Pick 3 Games</div>
+    <div id="counter" style="padding:7px 12px; border-radius:999px; background:#FFD23F; color:#3b0d73; font-size:13px; font-weight:700;">3 / 3</div>
+  </div>
+  <div style="position:relative; padding:0 20px; font-size:13px; font-weight:500; color:rgba(255,255,255,0.65); margin-bottom:16px;">Swipe to browse · tap a game to add it.</div>
+
+  <!-- carousel -->
+  <div class="ma-scroll" id="carousel" style="position:relative; display:flex; gap:16px; overflow-x:auto; padding:4px 20px 6px; scroll-snap-type:x mandatory;">
+
+    <!-- GOLF -->
+    <div class="card" data-key="golf" data-name="Mini Golf" data-short="Golf" style="background:linear-gradient(160deg,#34d399,#059669);">
+      <div class="badge" style="position:absolute; top:14px; right:14px; z-index:3;"></div>
+      <div style="height:244px; display:flex; align-items:center; justify-content:center;">
+        <svg width="110" height="120" viewBox="0 0 76 84" fill="none"><ellipse cx="38" cy="68" rx="30" ry="8" fill="rgba(0,0,0,0.18)"/><rect x="36" y="10" width="4.5" height="54" rx="2" fill="#fff"/><path d="M40 12h22l-7 8 7 8H40z" fill="#FF5DA2"/><circle cx="20" cy="64" r="8" fill="#fff"/></svg>
+      </div>
+      <div style="position:absolute; bottom:0; left:0; right:0; padding:18px; background:linear-gradient(transparent, rgba(0,0,0,0.4));">
+        <div style="font-size:24px; font-weight:700; color:#fff;">Mini Golf</div>
+        <div style="font-size:13px; font-weight:500; color:rgba(255,255,255,0.82);">Precision · sink the trickiest shots</div>
+      </div>
+    </div>
+
+    <!-- SUMO -->
+    <div class="card" data-key="sumo" data-name="Sumo Smash" data-short="Sumo" style="background:linear-gradient(160deg,#fb923c,#ea580c);">
+      <div class="badge" style="position:absolute; top:14px; right:14px; z-index:3;"></div>
+      <div style="height:244px; display:flex; align-items:center; justify-content:center;">
+        <svg width="130" height="96" viewBox="0 0 96 70" fill="none"><circle cx="34" cy="40" r="24" fill="#3b0d73"/><circle cx="64" cy="40" r="24" fill="#fff"/><circle cx="27" cy="35" r="3.5" fill="#fff"/><circle cx="71" cy="35" r="3.5" fill="#3b0d73"/></svg>
+      </div>
+      <div style="position:absolute; bottom:0; left:0; right:0; padding:18px; background:linear-gradient(transparent, rgba(0,0,0,0.4));">
+        <div style="font-size:24px; font-weight:700; color:#fff;">Sumo Smash</div>
+        <div style="font-size:13px; font-weight:500; color:rgba(255,255,255,0.82);">Brawl · shove rivals off the ring</div>
+      </div>
+    </div>
+
+    <!-- HOT BOMB -->
+    <div class="card" data-key="bomb" data-name="Hot Bomb" data-short="Bomb" style="background:linear-gradient(160deg,#f472b6,#db2777);">
+      <div class="badge" style="position:absolute; top:14px; right:14px; z-index:3;"></div>
+      <div style="height:244px; display:flex; align-items:center; justify-content:center;">
+        <svg width="112" height="120" viewBox="0 0 78 84" fill="none"><circle cx="34" cy="50" r="24" fill="#1a1a22"/><rect x="40" y="20" width="8" height="14" rx="3" fill="#1a1a22"/><path d="M46 22c8-4 6-12 12-14" stroke="#1a1a22" stroke-width="3.5" fill="none" stroke-linecap="round"/><circle cx="61" cy="7" r="6" fill="#FFD23F"/><circle cx="26" cy="44" r="6" fill="rgba(255,255,255,0.28)"/></svg>
+      </div>
+      <div style="position:absolute; bottom:0; left:0; right:0; padding:18px; background:linear-gradient(transparent, rgba(0,0,0,0.4));">
+        <div style="font-size:24px; font-weight:700; color:#fff;">Hot Bomb</div>
+        <div style="font-size:13px; font-weight:500; color:rgba(255,255,255,0.82);">Chaos · don't be holding it at zero</div>
+      </div>
+    </div>
+
+    <!-- LOCKED: Kart Dash -->
+    <div class="card" data-key="kart" data-locked="1" style="background:linear-gradient(160deg,#6b6480,#4a4458); box-shadow:0 14px 28px rgba(0,0,0,0.25); cursor:default;">
+      <div style="position:absolute; inset:0; background:rgba(20,16,30,0.4);"></div>
+      <div style="position:absolute; top:14px; right:14px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><rect x="4.5" y="9.5" width="13" height="9" rx="2" stroke="#fff" stroke-width="1.8"/><path d="M7 9.5V7a4 4 0 0 1 8 0v2.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </div>
+      <div style="position:absolute; top:16px; left:16px; padding:5px 11px; border-radius:999px; background:rgba(255,210,63,0.9); color:#3b0d73; font-size:11px; font-weight:700; letter-spacing:0.5px;">PREMIUM</div>
+      <div style="height:244px; display:flex; align-items:center; justify-content:center; opacity:0.5;">
+        <svg width="120" height="90" viewBox="0 0 120 90" fill="none"><circle cx="32" cy="62" r="16" fill="#1a1a22"/><circle cx="88" cy="62" r="16" fill="#1a1a22"/><rect x="24" y="32" width="72" height="22" rx="8" fill="#fff"/></svg>
+      </div>
+      <div style="position:absolute; bottom:0; left:0; right:0; padding:18px;">
+        <div style="font-size:24px; font-weight:700; color:rgba(255,255,255,0.85);">Kart Dash</div>
+        <div style="font-size:13px; font-weight:500; color:rgba(255,255,255,0.55);">Racing · unlock with Premium</div>
+      </div>
+    </div>
+
+    <!-- LOCKED: Sky Hop -->
+    <div class="card" data-key="sky" data-locked="1" style="background:linear-gradient(160deg,#6b6480,#4a4458); box-shadow:0 14px 28px rgba(0,0,0,0.25); cursor:default;">
+      <div style="position:absolute; inset:0; background:rgba(20,16,30,0.4);"></div>
+      <div style="position:absolute; top:14px; right:14px; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><rect x="4.5" y="9.5" width="13" height="9" rx="2" stroke="#fff" stroke-width="1.8"/><path d="M7 9.5V7a4 4 0 0 1 8 0v2.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </div>
+      <div style="position:absolute; top:16px; left:16px; padding:5px 11px; border-radius:999px; background:rgba(255,210,63,0.9); color:#3b0d73; font-size:11px; font-weight:700; letter-spacing:0.5px;">PREMIUM</div>
+      <div style="height:244px; display:flex; align-items:center; justify-content:center; opacity:0.5;">
+        <svg width="100" height="100" viewBox="0 0 100 100" fill="none"><rect x="20" y="64" width="60" height="14" rx="4" fill="#fff"/><path d="M50 20l16 28H34z" fill="#fff"/></svg>
+      </div>
+      <div style="position:absolute; bottom:0; left:0; right:0; padding:18px;">
+        <div style="font-size:24px; font-weight:700; color:rgba(255,255,255,0.85);">Sky Hop</div>
+        <div style="font-size:13px; font-weight:500; color:rgba(255,255,255,0.55);">Platformer · unlock with Premium</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- line-up strip -->
+  <div style="position:relative; padding:16px 20px 0;">
+    <div style="font-size:12px; font-weight:600; color:rgba(255,255,255,0.6); letter-spacing:1px; margin-bottom:10px;">YOUR LINE-UP · IN ORDER</div>
+    <div id="lineup" style="display:flex; gap:10px;"></div>
+  </div>
+
+  <!-- how to win -->
+  <div style="position:relative; padding:16px 20px 0;">
+    <div style="font-size:12px; font-weight:600; color:rgba(255,255,255,0.6); letter-spacing:1px; margin-bottom:10px;">HOW TO WIN</div>
+    <div style="display:flex; gap:8px; padding:5px; border-radius:16px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.16);">
+      <button id="modeWins" data-mode="wins" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; height:50px; border:none; border-radius:12px; cursor:pointer;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M7 4h10v4a5 5 0 0 1-10 0z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 14h4M9 19h6M12 14v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <div style="text-align:left; line-height:1.1;">
+          <div style="font-size:14px; font-weight:700; white-space:nowrap;">Most Wins</div>
+          <div style="font-size:10px; font-weight:500; opacity:0.7; white-space:nowrap;">across all games</div>
+        </div>
+      </button>
+      <button id="modeFinal" data-mode="final" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; height:50px; border:none; border-radius:12px; cursor:pointer;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 3v18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 4h12l-2.5 4L17 12H5z" fill="currentColor"/></svg>
+        <div style="text-align:left; line-height:1.1;">
+          <div style="font-size:14px; font-weight:700; white-space:nowrap;">Final Game</div>
+          <div style="font-size:10px; font-weight:500; opacity:0.7; white-space:nowrap;">decides it all</div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <!-- confirm -->
+  <div style="position:relative; margin-top:auto; padding:16px 20px 0;">
+    <button id="go" style="width:100%; height:66px; border:none; border-radius:20px; background:linear-gradient(180deg,#FFE27A,#FFC21A); color:#3b0d73; font-size:22px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:0 7px 0 #D99700, 0 16px 24px rgba(0,0,0,0.26);">
+      Let's Go!
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 11h13M12 5l6 6-6 6" stroke="#3b0d73" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+  var SEL_BADGE = "width:38px;height:38px;border-radius:50%;background:#FFD23F;display:flex;align-items:center;justify-content:center;color:#3b0d73;font-size:19px;font-weight:700;box-shadow:0 3px 8px rgba(0,0,0,0.25);";
+  var ADD_BADGE = "width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.18);border:1.5px solid rgba(255,255,255,0.45);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:600;";
+  var RING_ON = "0 14px 28px rgba(0,0,0,0.3), 0 0 0 3px #FFD23F";
+  var RING_OFF = "0 14px 28px rgba(0,0,0,0.25)";
+
+  // Initial line-up matches the design: Golf, Sumo, Hot Bomb selected in order.
+  var selected = ["golf", "sumo", "bomb"];
+  var winMode = "wins";
+
+  function $(id){ return document.getElementById(id); }
+  function shortFor(key){
+    var c = document.querySelector('.card[data-key="' + key + '"]');
+    return c ? c.getAttribute("data-short") : key;
+  }
+
+  function render(){
+    $("counter").textContent = selected.length + " / 3";
+
+    document.querySelectorAll('.card[data-key]').forEach(function(card){
+      if (card.getAttribute("data-locked") === "1") return;
+      var key = card.getAttribute("data-key");
+      var idx = selected.indexOf(key);
+      var badge = card.querySelector(".badge");
+      if (idx >= 0) { badge.style.cssText = SEL_BADGE; badge.textContent = (idx + 1); card.style.boxShadow = RING_ON; }
+      else { badge.style.cssText = ADD_BADGE; badge.textContent = "+"; card.style.boxShadow = RING_OFF; }
+    });
+
+    var lineup = $("lineup");
+    lineup.innerHTML = "";
+    for (var i = 0; i < 3; i++){
+      var key = selected[i];
+      var slot = document.createElement("div");
+      slot.className = "lineup-slot" + (key ? "" : " lineup-empty");
+      var num = document.createElement("div"); num.className = "lineup-num"; num.textContent = (i + 1);
+      var name = document.createElement("div"); name.className = "lineup-name"; name.textContent = key ? shortFor(key) : "Empty";
+      slot.appendChild(num); slot.appendChild(name); lineup.appendChild(slot);
+    }
+
+    var ok = selected.length === 3;
+    $("go").style.opacity = ok ? "1" : "0.5";
+    $("go").style.boxShadow = ok ? "0 7px 0 #D99700, 0 16px 24px rgba(0,0,0,0.26)" : "0 4px 0 #D99700";
+
+    setMode(winMode, true);
+  }
+
+  function setMode(mode, silent){
+    winMode = mode;
+    var wins = $("modeWins"), fin = $("modeFinal");
+    var active = "flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:50px;border:none;border-radius:12px;cursor:pointer;background:#FFD23F;color:#3b0d73;box-shadow:0 3px 8px rgba(0,0,0,0.2);";
+    var idle = "flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:50px;border:none;border-radius:12px;cursor:pointer;background:transparent;color:rgba(255,255,255,0.7);";
+    wins.style.cssText = (mode === "wins") ? active : idle;
+    fin.style.cssText  = (mode === "final") ? active : idle;
+    if (!silent) sync();
+  }
+
+  function toast(msg){
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove("show"); }, 1600);
+  }
+
+  function toggle(key){
+    var idx = selected.indexOf(key);
+    if (idx >= 0) selected.splice(idx, 1);
+    else if (selected.length < 3) selected.push(key);
+    else toast("Pick is full — tap a game to remove it first");
+    render(); sync();
+  }
+
+  document.querySelectorAll(".card").forEach(function(card){
+    card.addEventListener("click", function(){
+      if (card.getAttribute("data-locked") === "1") { toast("Locked — unlock with Premium"); return; }
+      toggle(card.getAttribute("data-key"));
+    });
+  });
+  $("modeWins").addEventListener("click", function(){ setMode("wins"); });
+  $("modeFinal").addEventListener("click", function(){ setMode("final"); });
+  $("back").addEventListener("click", function(){ send({ t: "pickBack" }); });
+  $("go").addEventListener("click", function(){
+    if (selected.length !== 3) { toast("Pick 3 games to start"); return; }
+    send({ t: "pickStart", games: selected, mode: winMode });
+    toast("Starting…");
+  });
+
+  // --- Optional live link to the host (works when served over the LAN; ---
+  // --- no-ops gracefully when the file is opened standalone for preview). ---
+  var ws = null;
+  function send(payload){
+    try { if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload)); } catch (e) {}
+  }
+  function sync(){ send({ t: "pickUpdate", games: selected, mode: winMode }); }
+  function connect(){
+    try {
+      if (!location.host) return;
+      ws = new WebSocket("ws://" + location.host + "/");
+      ws.onopen = function(){ sync(); };
+    } catch (e) { ws = null; }
+  }
+  connect();
+
+  render();
+</script>
+</body>
+</html>

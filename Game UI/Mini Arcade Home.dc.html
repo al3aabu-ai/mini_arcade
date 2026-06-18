@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @keyframes ma-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+  @keyframes ma-bob2 { 0%,100% { transform: translateY(0) rotate(-12deg); } 50% { transform: translateY(-20px) rotate(8deg); } }
+  @keyframes ma-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes ma-twinkle { 0%,100% { opacity: 0.85; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+  @keyframes ma-pulse { 0%,100% { transform: scale(1); opacity: 0.55; } 50% { transform: scale(1.14); opacity: 0.85; } }
+  @keyframes ma-markbob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+</style>
+</helmet>
+
+<div style="width: max-content; min-width: 100%; min-height: 100vh; box-sizing: border-box; padding: 56px; background: #e7e5df; font-family: 'Fredoka', system-ui, sans-serif;">
+  <div style="margin-bottom: 8px; font-size: 22px; font-weight: 700; color: #2b2b30; letter-spacing: -0.3px;">Mini Arcade — Home</div>
+  <div style="margin-bottom: 40px; font-size: 14px; font-weight: 500; color: #8a8a92;">Gateway · Host or Join · iPhone</div>
+
+  <div style="display: flex; gap: 64px; align-items: flex-start;">
+    <div style="flex: none; width: 402px;">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ darkMode }}" hint-size="402px,874px">
+
+        <div style="position: relative; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(135% 95% at 50% -12%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%); display: flex; flex-direction: column; box-sizing: border-box; padding: 108px 26px 40px;">
+
+          <!-- glows -->
+          <div style="position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.45) 0%, rgba(216,112,255,0) 70%); animation: ma-pulse 6s ease-in-out infinite; pointer-events: none;"></div>
+
+          <!-- confetti -->
+          <div style="position: absolute; top: 150px; left: 30px; width: 20px; height: 20px; border-radius: 6px; background: #FFD23F; transform: rotate(18deg); animation: ma-bob2 5.5s ease-in-out infinite;"></div>
+          <div style="position: absolute; top: 132px; right: 34px; width: 16px; height: 16px; border-radius: 50%; background: #38E1FF; animation: ma-bob 4.2s ease-in-out infinite;"></div>
+          <div style="position: absolute; top: 230px; right: 40px; width: 14px; height: 14px; border-radius: 50%; border: 4px solid #B6FF4B; animation: ma-bob 6s ease-in-out infinite; animation-delay: -1s;"></div>
+          <div style="position: absolute; top: 250px; left: 36px; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 15px solid #FF5DA2; filter: drop-shadow(0 4px 7px rgba(0,0,0,0.2)); animation: ma-spin 9s linear infinite;"></div>
+
+          <!-- top bar -->
+          <div style="position: absolute; top: 54px; left: 24px; right: 24px; z-index: 10; display: flex; align-items: center; justify-content: space-between;">
+            <!-- account -->
+            <button style="display: flex; align-items: center; gap: 9px; border: none; background: none; cursor: pointer; padding: 0; font-family: 'Fredoka', sans-serif;" onClick="{{ onAccount }}">
+              <div style="width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(150deg, #FF5DA2, #a435ee); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.25);">G</div>
+              <div style="text-align: left; line-height: 1.1;">
+                <div style="font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.55);">Signed in as</div>
+                <div style="font-size: 15px; font-weight: 600; color: #fff;">Guest</div>
+              </div>
+            </button>
+            <!-- settings cluster -->
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button style="height: 44px; padding: 0 13px; border: 1.5px solid rgba(255,255,255,0.26); border-radius: 22px; background: rgba(255,255,255,0.12); display: flex; align-items: center; gap: 6px; cursor: pointer; font-family: 'Fredoka', sans-serif;" onClick="{{ onLang }}">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#fff" stroke-width="1.6"/><ellipse cx="10" cy="10" rx="3.4" ry="8" stroke="#fff" stroke-width="1.6"/><line x1="2.2" y1="10" x2="17.8" y2="10" stroke="#fff" stroke-width="1.6"/></svg>
+                <span style="font-size: 14px; font-weight: 600; color: #fff;">EN</span>
+              </button>
+              <button style="width: 44px; height: 44px; border: 1.5px solid rgba(255,255,255,0.26); border-radius: 50%; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ onSettings }}">
+                <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><line x1="3" y1="7" x2="19" y2="7" stroke="#fff" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="15" x2="19" y2="15" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="14" cy="7" r="3.2" fill="#fff"/><circle cx="8" cy="15" r="3.2" fill="#fff"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- hero logo -->
+          <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px;">
+            <div style="width: 66px; height: 66px; border-radius: 19px; background: linear-gradient(150deg, #FFE27A, #FFB300); display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 24px rgba(0,0,0,0.3), inset 0 -4px 0 rgba(0,0,0,0.12); position: relative; animation: ma-markbob 5s ease-in-out infinite;">
+              <div style="width: 34px; height: 34px; border-radius: 9px; background: #3b0d73; box-shadow: inset 0 0 0 3px rgba(255,255,255,0.25);"></div>
+              <div style="position: absolute; bottom: 10px; right: 12px; display: flex; gap: 4px;">
+                <div style="width: 7px; height: 7px; border-radius: 50%; background: #FF5DA2;"></div>
+                <div style="width: 7px; height: 7px; border-radius: 50%; background: #38E1FF;"></div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; line-height: 0.9;">
+              <div style="font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9); letter-spacing: 5px; margin-bottom: 2px; text-shadow: 0 2px 0 rgba(0,0,0,0.2);">MINI</div>
+              <div style="display: flex; align-items: flex-end;">
+                <span style="display: inline-block; font-size: 38px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(-5deg); text-shadow: 2px 2px 0 #d98c00, 0 7px 11px rgba(0,0,0,0.32);">A</span>
+                <span style="display: inline-block; font-size: 38px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(3deg) translateY(-2px); text-shadow: 2px 2px 0 #d98c00, 0 7px 11px rgba(0,0,0,0.32);">R</span>
+                <span style="display: inline-block; font-size: 38px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(-3deg); text-shadow: 2px 2px 0 #d98c00, 0 7px 11px rgba(0,0,0,0.32);">C</span>
+                <span style="display: inline-block; font-size: 38px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(4deg) translateY(-2px); text-shadow: 2px 2px 0 #d98c00, 0 7px 11px rgba(0,0,0,0.32);">A</span>
+                <span style="display: inline-block; font-size: 38px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(-2deg); text-shadow: 2px 2px 0 #d98c00, 0 7px 11px rgba(0,0,0,0.32);">D</span>
+                <span style="display: inline-block; font-size: 38px; font-weight: 700; font-style: italic; color: #FFD23F; transform: rotate(3deg) translateY(-2px); text-shadow: 2px 2px 0 #d98c00, 0 7px 11px rgba(0,0,0,0.32);">E</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 7px; padding: 5px 12px 5px 8px; border-radius: 999px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18);">
+              <span style="display: inline-flex; align-items: center; justify-content: center; height: 18px; padding: 0 7px; border-radius: 999px; background: rgba(255,255,255,0.85); color: #6d28d9; font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px;">FREE</span>
+              <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.78);">2 players · 3 games</span>
+            </div>
+          </div>
+
+          <!-- actions -->
+          <div style="position: relative; display: flex; flex-direction: column; gap: 13px; margin-top: 32px;">
+            <!-- HOST (hero) -->
+            <button style="display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px; border: none; border-radius: 22px; background: linear-gradient(180deg, #FFE27A, #FFC21A); cursor: pointer; text-align: left; font-family: 'Fredoka', sans-serif; box-shadow: 0 7px 0 #D99700, 0 16px 24px rgba(0,0,0,0.26);" onClick="{{ onHost }}">
+              <div style="flex: none; width: 54px; height: 54px; border-radius: 15px; background: rgba(59,13,115,0.12); display: flex; align-items: center; justify-content: center;">
+                <svg width="28" height="28" viewBox="0 0 26 26" fill="none"><rect x="3" y="4" width="20" height="14" rx="2.5" stroke="#3b0d73" stroke-width="2"/><path d="M9 22h8" stroke="#3b0d73" stroke-width="2" stroke-linecap="round"/><path d="M11 8l5 3-5 3z" fill="#3b0d73"/></svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 21px; font-weight: 700; color: #3b0d73; line-height: 1.1;">Host a Game</div>
+                <div style="font-size: 13.5px; font-weight: 500; color: rgba(59,13,115,0.7); margin-top: 2px;">Play here · cast to the TV</div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="flex: none;"><path d="M7 4l7 6-7 6" stroke="#3b0d73" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+
+            <!-- JOIN (secondary) -->
+            <button style="display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px; border: 1.5px solid rgba(255,255,255,0.24); border-radius: 22px; background: rgba(255,255,255,0.1); cursor: pointer; text-align: left; font-family: 'Fredoka', sans-serif;" onClick="{{ onJoin }}">
+              <div style="flex: none; width: 54px; height: 54px; border-radius: 15px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center;">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><circle cx="5" cy="8" r="1.9"/><circle cx="12" cy="8" r="1.9"/><circle cx="19" cy="8" r="1.9"/><circle cx="5" cy="16" r="1.9"/><circle cx="12" cy="16" r="1.9"/><circle cx="19" cy="16" r="1.9"/></svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 21px; font-weight: 700; color: #fff; line-height: 1.1;">Join a Game</div>
+                <div style="font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,0.65); margin-top: 2px;">Enter a room code</div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="flex: none;"><path d="M7 4l7 6-7 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+
+          <!-- footer -->
+          <div style="position: relative; margin-top: auto; padding-top: 22px; display: flex; flex-direction: column; gap: 12px;">
+            <sc-if value="{{ showWifiHint }}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; align-items: center; gap: 11px; padding: 12px 15px; border-radius: 15px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);">
+                <svg width="22" height="18" viewBox="0 0 22 18" fill="none"><path d="M3 7a12 12 0 0 1 16 0" stroke="#B6FF4B" stroke-width="2" stroke-linecap="round"/><path d="M6.5 10.5a7 7 0 0 1 9 0" stroke="#B6FF4B" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="15" r="1.5" fill="#B6FF4B"/></svg>
+                <span style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.75); line-height: 1.35;">Everyone must be on the <span style="color: #fff; font-weight: 600;">same Wi-Fi</span> to play together.</span>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ showPremiumBanner }}" hint-placeholder-val="{{ true }}">
+              <button style="display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; border: 1.5px solid rgba(255,210,63,0.4); border-radius: 16px; background: rgba(255,210,63,0.13); cursor: pointer; text-align: left; font-family: 'Fredoka', sans-serif;" onClick="{{ onPremium }}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#FFD23F" style="flex: none;"><path d="M12 1l2.4 7.6L22 11l-7.6 2.4L12 21l-2.4-7.6L2 11l7.6-2.4z"/></svg>
+                <div style="flex: 1;">
+                  <div style="font-size: 15px; font-weight: 700; color: #FFD23F; line-height: 1.1;">Go Premium</div>
+                  <div style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.72); margin-top: 1px;">4+ players · all games · no ads</div>
+                </div>
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style="flex: none;"><path d="M7 4l7 6-7 6" stroke="#FFD23F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </sc-if>
+          </div>
+
+        </div>
+      </x-import>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 530, &quot;height&quot;: 1000}, &quot;showWifiHint&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;}, &quot;showPremiumBanner&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      darkMode: true,
+      showWifiHint: this.props.showWifiHint ?? true,
+      showPremiumBanner: this.props.showPremiumBanner ?? true,
+      onAccount: () => {},
+      onSettings: () => {},
+      onLang: () => {},
+      onHost: () => {},
+      onJoin: () => {},
+      onPremium: () => {},
+    };
+  }
+}
+</script>
+</body>
+</html>
