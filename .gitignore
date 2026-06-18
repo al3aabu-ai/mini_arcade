@@ -45,6 +45,9 @@ xcuserdata/
 *.unitypackage
 *.unitypackage.meta
 
+# Claude Code — share launch.json (preview config), keep local settings out
+.claude/settings.local.json
+
 # OS files
 .DS_Store
 Thumbs.db
