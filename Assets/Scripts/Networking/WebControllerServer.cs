@@ -54,7 +54,16 @@ namespace MiniArcade.Networking
         public void StartServer(int port)
         {
             if (_running) return;
+#if UNITY_EDITOR
+            // In the Editor, serve the canonical source straight from the repo's
+            // top-level web/ folder so edits go live with no copy step. Player
+            // builds use the StreamingAssets copy WebSync mirrors at build time.
+            _webRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "web"));
+            if (!Directory.Exists(_webRoot))
+                _webRoot = Path.Combine(Application.streamingAssetsPath, "web");
+#else
             _webRoot = Path.Combine(Application.streamingAssetsPath, "web");
+#endif
             _listener = new TcpListener(IPAddress.Any, port);
             _listener.Start();
             _running = true;
@@ -490,167 +499,6 @@ namespace MiniArcade.Networking
             return null;
         }
 
-        // The browser controller (served on GET /). Uses single quotes throughout
-        // so it embeds cleanly in this verbatim C# string.
-        private const string ControllerPageHtml = @"<!doctype html>
-<html>
-<head>
-<meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no'>
-<title>Mini Arcade Controller</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap');
-  :root{--top:12svh;--bottom:20svh;--gap:1.35svh;--pad-x:6vw;--purple:#6d28d9;--deep:#3b0d73;--pink:#ff5da2;--yellow:#ffd23f;--cyan:#38e1ff;--green:#b6ff4b;}
-  html,body{margin:0;height:100%;font-family:Fredoka,system-ui,sans-serif;background:radial-gradient(135% 95% at 50% -12%,#a435ee 0%,#6d28d9 44%,#3b0d73 100%);color:white;-webkit-user-select:none;user-select:none;overflow:hidden;}
-  body:before{content:'';position:fixed;top:3svh;left:50%;width:74vw;max-width:22rem;aspect-ratio:1;border-radius:50%;transform:translateX(-50%);background:radial-gradient(circle,rgba(216,112,255,.45) 0%,rgba(216,112,255,0) 70%);pointer-events:none;}
-  body:after{content:'';position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 9% 18%,#ffd23f 0 .45rem,transparent .5rem),radial-gradient(circle at 89% 14%,#38e1ff 0 .4rem,transparent .45rem),radial-gradient(circle at 87% 74%,#b6ff4b 0 .48rem,transparent .55rem),radial-gradient(circle at 12% 62%,#ff5da2 0 .42rem,transparent .48rem);}
-  #app{position:relative;display:flex;flex-direction:column;min-height:100svh;box-sizing:border-box;padding:calc(env(safe-area-inset-top) + 3svh) calc(env(safe-area-inset-right) + var(--pad-x)) calc(env(safe-area-inset-bottom) + 3svh) calc(env(safe-area-inset-left) + var(--pad-x));}
-  h1{font-size:clamp(1.65rem,7vw,2.45rem);margin:0 0 var(--gap);color:#ffd23f;text-align:center;font-weight:700;font-style:italic;text-shadow:.13rem .13rem 0 #d98c00,0 .45rem .8rem rgba(0,0,0,.32);}
-  .muted{color:rgba(255,255,255,.72);font-size:clamp(.95rem,4vw,1.28rem);font-weight:600;}
-  .stat{font-size:clamp(1rem,4.7vw,1.55rem);margin:.7svh 0;color:#fff;font-weight:700;}
-  #joinView,#waitView,#bidView,#resultView{border-radius:1.4rem;background:rgba(255,255,255,.10);border:.1rem solid rgba(255,255,255,.18);padding:1.2rem;box-shadow:0 1rem 1.6rem rgba(0,0,0,.22);}
-  input{font-size:clamp(1.05rem,5vw,1.6rem);padding:1.2svh 4vw;border-radius:1rem;border:.1rem solid rgba(255,255,255,.24);background:rgba(255,255,255,.12);color:#fff;width:100%;box-sizing:border-box;font-family:inherit;font-weight:700;outline:none;}
-  button{font-size:clamp(1.05rem,5vw,1.65rem);padding:1.55svh 3vw;margin-top:var(--gap);border:0;border-radius:1.25rem;background:linear-gradient(180deg,#ffe27a,#ffc21a);color:#3b0d73;width:100%;min-height:8svh;font-family:inherit;font-weight:700;box-shadow:0 .45rem 0 #d99700,0 1rem 1.4rem rgba(0,0,0,.26);}
-  button:active{transform:translateY(.18rem);box-shadow:0 .2rem 0 #d99700,0 .45rem .9rem rgba(0,0,0,.22);}
-  button:disabled{opacity:.55;filter:saturate(.5);}
-  #tap{flex:1;font-size:clamp(2.3rem,12vw,4rem);background:linear-gradient(180deg,#ff8b19,#ff3d63);color:#fff;margin-top:2svh;min-height:30svh;text-shadow:0 .16rem 0 rgba(59,13,115,.4);box-shadow:0 .55rem 0 #a41443,0 0 1.2rem rgba(255,93,162,.85);}
-  #tap:active{background:linear-gradient(180deg,#ffb11c,#d91955);}
-  .row{display:flex;gap:2.6vw;}
-  .row button{flex:1;}
-  #shoot{font-size:clamp(1.9rem,9vw,3.4rem);background:linear-gradient(180deg,#ff8b19,#ff3d63);color:white;min-height:16svh;text-shadow:0 .2rem 0 rgba(59,13,115,.45);box-shadow:0 .6rem 0 #a41443,0 0 1.2rem rgba(255,93,162,.95);}
-  #gameView{display:flex;flex-direction:column;min-height:calc(100svh - var(--top));}
-  #gameView .stat,#gameView #prompt{border-radius:1rem;background:rgba(255,255,255,.10);border:.1rem solid rgba(255,255,255,.16);padding:.8rem .95rem;}
-  #golfControls{margin-top:auto;padding-bottom:calc(env(safe-area-inset-bottom) + 1svh);}
-  .hidden{display:none!important;}
-</style>
-</head>
-<body>
-<div id='app'>
-  <h1>Mini Arcade</h1>
-  <div id='status' class='muted'>Connecting...</div>
-
-  <div id='joinView' class='hidden'>
-    <p>Enter your name:</p>
-    <input id='name' value='Player' maxlength='16'>
-    <button id='joinBtn'>Join game</button>
-  </div>
-
-  <div id='waitView' class='hidden'>
-    <div class='stat'>You are in! Waiting for the host to start...</div>
-    <div id='roster' class='muted'></div>
-  </div>
-
-  <div id='gameView' class='hidden'>
-    <h1 id='gameTitle'>Mini-game</h1>
-    <div class='stat' id='prompt'>Ready</div>
-    <div class='stat'>Round <span id='round'>-</span>/<span id='rounds'>-</span></div>
-    <div class='stat'>Time left: <span id='time'>-</span>s</div>
-    <div class='stat'>Your score: <span id='score'>0</span></div>
-    <div id='golfControls' class='hidden'>
-      <div class='row'><button id='aimLeft'>Aim Left</button><button id='aimRight'>Aim Right</button></div>
-      <div class='row'><button id='powerDown'>Power -</button><button id='powerUp'>Power +</button></div>
-      <button id='shoot'>SHOOT</button>
-    </div>
-    <button id='tap'>TAP!</button>
-  </div>
-
-  <div id='bidView' class='hidden'>
-    <h1>Secret Bid</h1>
-    <div class='stat'>Time left: <span id='bidTime'>-</span>s</div>
-    <div class='stat'>Your private coins: <span id='coins'>0</span></div>
-    <div class='stat'>Bid: <span id='bidAmount'>0</span></div>
-    <button id='minus'>-10</button>
-    <button id='plus'>+10</button>
-    <button id='all'>All</button>
-    <button id='submitBid'>Submit bid</button>
-  </div>
-
-  <div id='resultView' class='hidden'>
-    <h1>Results</h1>
-    <div id='results' class='stat'></div>
-    <div class='muted'>See the TV. Waiting for the next round...</div>
-  </div>
-</div>
-<script>
-  var ws, myId=null, bidAmount=0, bidMax=0, bidSubmitted=false;
-  var $=function(id){return document.getElementById(id);};
-  function show(v){['joinView','waitView','gameView','bidView','resultView'].forEach(function(x){$(x).classList.add('hidden');});$(v).classList.remove('hidden');}
-  function isGame(){return !$('gameView').classList.contains('hidden');}
-  function connect(){
-    ws=new WebSocket('ws://'+location.host+'/');
-    ws.onopen=function(){$('status').textContent='Connected';show('joinView');};
-    ws.onclose=function(){$('status').textContent='Disconnected - reload to retry';};
-    ws.onmessage=function(e){
-      var m;try{m=JSON.parse(e.data);}catch(err){return;}
-      var d=m.d||{};
-      if(m.t==='joined'){myId=d.AssignedId;}
-      else if(m.t==='lobby'){$('roster').textContent='In the room: '+((d.PlayerNames||[]).join(', '));if(!isGame())show('waitView');}
-      else if(m.t==='game'){onGame(d);}
-      else if(m.t==='bidding'){onBidding(d);}
-      else if(m.t==='results'){onResults(d);}
-    };
-  }
-  function onGame(d){
-    show('gameView');
-    $('gameTitle').textContent=d.GameName||'Mini-game';
-    $('prompt').textContent=d.Prompt||'';
-    $('round').textContent=d.Round||'-';
-    $('rounds').textContent=d.TotalRounds||'-';
-    $('time').textContent=(d.TimeLeft||0).toFixed(1);
-    if(d.MiniGameId==='mini_golf'){
-      $('golfControls').classList.remove('hidden');
-      $('tap').classList.add('hidden');
-    }else{
-      $('golfControls').classList.add('hidden');
-      $('tap').classList.remove('hidden');
-    }
-    var s=0,ids=d.PlayerIds||[],sc=d.Scores||[];
-    for(var i=0;i<ids.length;i++){if(ids[i]===myId)s=sc[i];}
-    $('score').textContent=s;
-  }
-  function setBid(v){
-    bidAmount=Math.max(0,Math.min(bidMax,v));
-    $('bidAmount').textContent=bidAmount;
-  }
-  function onBidding(d){
-    show('bidView');
-    bidMax=d.YourCoins||0;
-    bidSubmitted=!!d.HasSubmitted;
-    setBid(Math.min(bidAmount,bidMax));
-    $('bidTime').textContent=(d.TimeLeft||0).toFixed(1);
-    $('coins').textContent=bidMax;
-    $('submitBid').textContent=bidSubmitted?'Bid submitted':'Submit bid';
-    $('submitBid').disabled=bidSubmitted;
-  }
-  function onResults(d){
-    show('resultView');
-    var names=d.PlayerNames||[],pl=d.Placements||[],co=d.CoinsCollected||[];
-    var order=names.map(function(_,i){return i;}).sort(function(a,b){return pl[a]-pl[b];});
-    if(d.Final){
-      var wins=d.Wins||[],tot=d.TotalCoins||[];
-      $('results').innerHTML=order.map(function(i){return '#'+pl[i]+'  '+names[i]+'  wins: '+(wins[i]||0)+'  total coins: '+(tot[i]||0);}).join('<br>');
-    }else{
-      $('results').innerHTML=order.map(function(i){return '#'+pl[i]+'  '+names[i]+'  (+'+(co[i]||0)+' coins)';}).join('<br>');
-    }
-  }
-  $('joinBtn').onclick=function(){var n=$('name').value||'Player';ws.send(JSON.stringify({t:'join',name:n}));show('waitView');};
-  function sendInput(action,ev){if(ev){ev.preventDefault();}if(ws&&ws.readyState===1){ws.send(JSON.stringify({t:'input',action:action}));}}
-  function sendTap(ev){sendInput('tap',ev);}
-  $('tap').addEventListener('touchstart',sendTap,{passive:false});
-  $('tap').addEventListener('mousedown',sendTap);
-  $('aimLeft').onclick=function(){sendInput('aim_left');};
-  $('aimRight').onclick=function(){sendInput('aim_right');};
-  $('powerDown').onclick=function(){sendInput('power_down');};
-  $('powerUp').onclick=function(){sendInput('power_up');};
-  $('shoot').onclick=function(){sendInput('shoot');};
-  $('minus').onclick=function(){setBid(bidAmount-10);};
-  $('plus').onclick=function(){setBid(bidAmount+10);};
-  $('all').onclick=function(){setBid(bidMax);};
-  $('submitBid').onclick=function(){if(ws&&ws.readyState===1&&!bidSubmitted){ws.send(JSON.stringify({t:'bid',amount:bidAmount}));bidSubmitted=true;$('submitBid').textContent='Bid submitted';$('submitBid').disabled=true;}};
-  connect();
-</script>
-</body>
-</html>";
     }
 
     [Serializable]

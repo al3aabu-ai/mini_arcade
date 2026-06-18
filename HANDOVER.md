@@ -29,7 +29,7 @@ Full phone web app, faithful to the designs, with client-side navigation:
 - `web/index.html` — all screens (Home, Join/Host-Setup shared, Lobby host+player, Pick Games) + shared CSS design system.
 - `web/app.js` — data (faces/colors/games), state, router `go(screen)`, render fns, button wiring, and a WebSocket client hook (`ws://location.host/`).
 - Verified by driving Home→Host→Setup→Create Room→Lobby→Pick in-browser (no JS errors); Pick screen styling confirmed pixel-exact (Fredoka, gold button gradient `#FFE27A→#FFC21A` + `0 7px 0 #D99700`, etc.).
-- Copied to **`Assets/StreamingAssets/web/`** (so the Unity host can serve it in Editor and builds). **Keep `web/` and `Assets/StreamingAssets/web/` in sync** (web/ is for local preview; StreamingAssets is what the host serves).
+- Served as the **single source of truth**: in the Editor the host serves the repo's `web/` folder directly (live, no copy step); player builds get a copy mirrored into `Assets/StreamingAssets/web/` automatically by `Assets/Editor/WebSync.cs` (pre-build hook, also **Mini Arcade ▸ Sync Web Controller → StreamingAssets**). **Edit only `web/`** — never hand-edit the StreamingAssets copy.
 
 Design tokens: font **Fredoka**; bg `radial-gradient(135% 95% at 50% -12%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%)`; gold `#FFD23F`; deep `#3b0d73`; accents pink `#FF5DA2`, cyan `#38E1FF`, lime `#B6FF4B`.
 
@@ -108,8 +108,12 @@ Read the CURRENT `AppRoot.cs` first — it now boots `DisplayManager`, has a big
 - Add `BuildWebLobby()` → `WebLobbyDto` from `SessionData.Players` (+ code, host name, `IsPremiumHost`), broadcast via both transports (`_host` TCP + `_web`). Reuse the existing fan-out helper (e.g. `HostBroadcast`).
 - Keep the Unity-app TCP controllers (`TcpHostService`) working in parallel (web + app feed the same session).
 
-### 4e. Sync `web/` ⇄ StreamingAssets
-After editing `web/index.html`/`web/app.js`, copy them to `Assets/StreamingAssets/web/` (the host serves from StreamingAssets).
+### 4e. Single source of truth for the web UI — DONE
+`web/` is the only copy you edit. The Editor serves it live (`WebControllerServer`
+uses a `#if UNITY_EDITOR` branch → repo `web/`, falling back to StreamingAssets);
+`Assets/Editor/WebSync.cs` mirrors `web/` → `Assets/StreamingAssets/web/` automatically
+before every build (and via **Mini Arcade ▸ Sync Web Controller → StreamingAssets**).
+No manual copying. The old embedded `ControllerPageHtml` string was removed.
 
 ---
 
