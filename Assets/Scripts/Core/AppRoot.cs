@@ -94,6 +94,9 @@ namespace MiniArcade.Core
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
         {
+#if MINIARCADE_THINSLICE
+            return;   // thin-slice build: the old Unity app shell is disabled; ThinSliceScene boots instead
+#else
             if (Instance != null) return;
 
             var go = new GameObject("MiniArcadeApp");
@@ -109,6 +112,7 @@ namespace MiniArcade.Core
             cam.targetDisplay = DisplayManager.PrivateDisplayIndex;
 
             Instance = go.AddComponent<AppRoot>();
+#endif
         }
 
         private void Awake()
@@ -492,7 +496,7 @@ namespace MiniArcade.Core
                 switch ((raw ?? "").Trim().ToLowerInvariant())
                 {
                     case "golf":
-                        yield return "mini_golf";
+                        yield return "double_drive";
                         break;
                     case "sumo":
                         yield return "coin_rush";
@@ -1497,10 +1501,10 @@ namespace MiniArcade.Core
             DrawScoreRows(state);
 
             GUILayout.FlexibleSpace();
-            if (state.MiniGameId == "mini_golf")
+            if (state.MiniGameId == "mini_golf" || state.MiniGameId == "double_drive")
             {
                 DrawGolfHostControls();
-                GUILayout.Label("Golf controls are private on player phones.", _miniMutedStyle);
+                GUILayout.Label("Aim and shoot — the board is on the TV.", _miniMutedStyle);
             }
             else
             {
@@ -1522,7 +1526,7 @@ namespace MiniArcade.Core
             }
             GUILayout.Label($"Your score: {MyScoreFromState()}", _miniCenterStyle);
             GUILayout.FlexibleSpace();
-            if (_mgState != null && _mgState.MiniGameId == "mini_golf")
+            if (_mgState != null && (_mgState.MiniGameId == "mini_golf" || _mgState.MiniGameId == "double_drive"))
                 DrawGolfControllerControls();
             else if (GUILayout.Button("TAP", UiHeight(0.26f)))
                 SendControllerAction("tap");
