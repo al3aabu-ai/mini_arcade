@@ -81,7 +81,7 @@ namespace MiniArcade.Bridge
         string _shaderName = "?";
         Texture2D _turfTex, _sandTex;
         PhysicsMaterial _wallMat, _turfMat, _ballMat, _bumperMat;
-        float _aimAngle, _aimPower;
+        float _aimAngle, _aimPower, _neutralAngle;   // _aimAngle = phone swipe (relative); _neutralAngle = per-turn world reference (toward cup)
         Camera _cam; Vector3 _camVel;        // follow-camera state
         readonly List<Trap> _traps = new List<Trap>();   // player-planted HIDDEN traps (revealed only when a ball triggers them; cleared each hole)
         const float RevealTime = 0.32f;      // reveal-pop animation length
@@ -463,7 +463,10 @@ namespace MiniArcade.Bridge
             RefreshBalls();   // show only the active player's ball; their ball stays at its lie (GDD: play it where it lies)
             if (_active < 0) { _status = "…"; return; }
             var p = _players[_active];
-            _aimAngle = 0f; _aimPower = 0f;   // aim is camera-RELATIVE now: 0 = straight along the camera view (toward the cup)
+            // reset the per-turn reference + aim TOGETHER: neutral = toward the cup, aim = 0.
+            // => phone "up" == camera "forward" == toward the cup at the start of every turn (no drift).
+            if (p.ball != null) _neutralAngle = Mathf.Atan2(_cup.x - p.ball.position.x, _cup.z - p.ball.position.z) * Mathf.Rad2Deg;
+            _aimAngle = 0f; _aimPower = 0f;
             var ac = ArrowCol(p.color);
             if (_aimShaftR != null) _aimShaftR.material.color = ac;
             if (_aimHeadR != null) _aimHeadR.material.color = ac;
@@ -480,7 +483,7 @@ namespace MiniArcade.Bridge
             if (p.ball.linearVelocity.magnitude > 0.2f) return;            // never shoot while moving
             power01 = Mathf.Clamp01(power01); _aimAngle = angleDeg;
             float speed = Mathf.Lerp(3.5f, 15f, power01);
-            Vector3 dir = CamRelDir(angleDeg);   // CAMERA-relative: swipe maps to the TV camera's forward/right
+            Vector3 dir = WorldAim();   // neutral(toward cup) + phone swipe; the camera follows this same direction
             p.ball.linearVelocity = dir * speed; p.ball.angularVelocity = Vector3.zero;
             p.strokes++; p.inFlight = true; p.still = 0f; p.flight = 0f; p.enteredWell = false;
             _status = "Player " + (idx + 1) + " — stroke " + p.strokes + "…";
@@ -696,17 +699,13 @@ namespace MiniArcade.Bridge
             }
         }
 
-        // Map a phone swipe angle (0 = straight up) to a WORLD direction relative to the TV camera:
-        // dir = camForwardFlat*cos(angle) + camRightFlat*sin(angle). Pitch ignored (projected to the course plane).
-        Vector3 CamRelDir(float angleDeg)
+        // World shot direction = per-turn neutral (toward cup) + the phone's relative swipe angle.
+        // The camera FOLLOWS this same direction (UpdateCamera), so arrow / camera / shot stay in sync.
+        // No feedback spin: the aim is built from the fixed _neutralAngle + phone input, never from the live camera.
+        Vector3 WorldAim()
         {
-            Vector3 f = (_cam != null) ? _cam.transform.forward : Vector3.forward;
-            Vector3 fwd = new Vector3(f.x, 0f, f.z);
-            if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;   // camera looking straight down -> fall back
-            fwd.Normalize();
-            Vector3 right = Vector3.Cross(Vector3.up, fwd);          // flat right (unit, perpendicular to fwd)
-            float a = angleDeg * Mathf.Deg2Rad;
-            return (fwd * Mathf.Cos(a) + right * Mathf.Sin(a)).normalized;
+            float a = (_neutralAngle + _aimAngle) * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)).normalized;
         }
         void UpdateArrow()
         {
@@ -716,7 +715,7 @@ namespace MiniArcade.Bridge
             _aimShaft.gameObject.SetActive(show); _aimHead.gameObject.SetActive(show);
             if (show)
             {
-                Vector3 dir = CamRelDir(_aimAngle);   // arrow matches the camera-relative shot direction
+                Vector3 dir = WorldAim();   // arrow matches the shot + the camera forward
                 const float len = 1.05f;
                 Vector3 baseP = p.ball.position + Vector3.up * (0.03f - BallR);
                 _aimShaft.position = baseP + dir * (0.25f + len * 0.5f); _aimShaft.rotation = Quaternion.LookRotation(dir, Vector3.up);
@@ -736,11 +735,10 @@ namespace MiniArcade.Bridge
                 var p = _players[_active];
                 Vector3 vel = p.ball.linearVelocity; float speed = vel.magnitude;
                 speedT = Mathf.Clamp01(speed / 12f);
-                // At rest the camera looks from behind the ball TOWARD THE CUP (a STABLE reference, not the aim —
-                // so the aim can be camera-relative without a feedback loop). While rolling it follows the travel dir.
-                Vector3 toCup = new Vector3(_cup.x - p.ball.position.x, 0f, _cup.z - p.ball.position.z);
-                Vector3 restDir = (toCup.sqrMagnitude > 0.04f) ? toCup.normalized : new Vector3(_cam.transform.forward.x, 0f, _cam.transform.forward.z).normalized;
-                forward = (p.inFlight && speed > 0.6f) ? new Vector3(vel.x, 0f, vel.z).normalized : restDir;
+                // While the ball rolls, follow its travel direction. At rest, FOLLOW THE AIM (WorldAim) so the camera
+                // rotates smoothly with the player's aim. No feedback spin: WorldAim is the fixed per-turn neutral +
+                // the phone swipe, never the live camera. On turn change SetTurn resets neutral+aim => camera resets here.
+                forward = (p.inFlight && speed > 0.6f) ? new Vector3(vel.x, 0f, vel.z).normalized : WorldAim();
                 if (forward.sqrMagnitude < 1e-4f) forward = Vector3.forward;
                 target = p.ball.position;
             }
@@ -767,6 +765,7 @@ namespace MiniArcade.Bridge
                 _ver = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold }; _ver.normal.textColor = new Color(0.45f, 1f, 0.55f);
                 _col = new GUIStyle(GUI.skin.label) { fontSize = 28, fontStyle = FontStyle.Bold };
             }
+            if (!_showDebug) return;   // normal play: the Game-UI web HUD overlay shows the leaderboard/turn/power; no Unity debug text
             GUI.Label(new Rect(24, 12, 1500, 28), "COURSE BUILD: " + COURSE_BUILD, _ver);
 
             // active player banner (in their colour)
