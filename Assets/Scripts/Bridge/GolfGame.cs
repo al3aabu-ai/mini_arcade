@@ -10,7 +10,7 @@ namespace MiniArcade.Bridge
     public class GolfGame : MonoBehaviour
     {
         public static GolfGame Instance { get; private set; }
-        const string COURSE_BUILD = "L_SHAPE_V12_2026-06-20_accuratemap+hiddentraps+validplacement";
+        const string COURSE_BUILD = "MULTIMAP_V13_2026-06-20_Lshape+tikiguards";
         const string SCENE_NAME = "UnityGolfPolishedCourse";
 
         const float BallR = 0.18f;
@@ -19,11 +19,19 @@ namespace MiniArcade.Bridge
         const float RestSpeed = 0.12f;
         const float SettleTime = 0.40f;
         const int BallLayer = 30;        // balls ignore each other (no unfair knock-aways), still hit the course
-        static readonly Vector3 CupCenter = new Vector3(4.5f, 0f, 4f);
-        static readonly Vector3 TeePos = new Vector3(-4f, BallR + 0.20f, -8f);
-        static readonly Vector2 SandCenter = new Vector2(-3.7f, 4f);
-        const float SandRadius = 1.45f;
-        static readonly Vector2 BumperPos = new Vector2(1.0f, 4.2f);
+        // ---- course-specific state (set by LoadCourse; defaults = L-shape V12 so nothing breaks pre-load) ----
+        int _courseId = 0;
+        Vector3 _cup = new Vector3(4.5f, 0f, 4f);
+        Vector3 _tee = new Vector3(-4f, BallR + 0.20f, -8f);
+        Vector2 _sandC = new Vector2(-3.7f, 4f);
+        float _sandR = 1.45f;
+        float _oobAbsX = 8f, _oobZMin = -11f, _oobZMax = 7.5f;          // out-of-bounds box
+        readonly List<float[]> _turf = new List<float[]>();             // turf rects {xMin,zMin,xMax,zMax} for trap clamp
+        readonly List<float[]> _trapBlock = new List<float[]>();        // extra no-trap rects (island, guard paths) {xMin,zMin,xMax,zMax}
+        bool _buildingCourse;                                           // when true, builder helpers register objects for cleanup
+        readonly List<GameObject> _courseObjects = new List<GameObject>();
+        readonly List<Guard> _guards = new List<Guard>();
+        static readonly Vector2 BumperPos = new Vector2(1.0f, 4.2f);    // L-shape static bumper
         const float BumperR = 0.36f;
         const float BoostR = 0.55f;          // planted boost-pad radius
         const float MaxCamSpeed = 16f;       // follow-camera SmoothDamp clamp
@@ -53,6 +61,16 @@ namespace MiniArcade.Bridge
             public float cool, anim;     // re-trigger cooldown + reveal-pop timer
         }
 
+        // A moving tiki guard: a KINEMATIC obstacle the dynamic ball collides with reliably. Moves on a
+        // predictable sine path between two endpoints so players can learn the timing.
+        class Guard
+        {
+            public Transform tr;
+            public Rigidbody rb;         // kinematic (MovePosition) so the ContinuousDynamic ball never clips through
+            public Vector3 a, b;         // path endpoints
+            public float speed, phase;   // sine speed + phase offset (predictable, never random)
+        }
+
         readonly List<Player> _players = new List<Player>();
         int _active = -1;
         int _maxStrokes = 8;
@@ -76,8 +94,8 @@ namespace MiniArcade.Bridge
         static void Boot()
         {
             if (Instance != null) return;
-            var go = new GameObject("GolfGame"); DDOL(go); Instance = go.AddComponent<GolfGame>();
-            var bridge = new GameObject("UnityBridge"); DDOL(bridge); bridge.AddComponent<UnityBridge>();
+            var go = new GameObject("GolfGame"); DontDestroyOnLoad(go); Instance = go.AddComponent<GolfGame>();
+            var bridge = new GameObject("UnityBridge"); DontDestroyOnLoad(bridge); bridge.AddComponent<UnityBridge>();
         }
 #endif
 
@@ -102,8 +120,40 @@ namespace MiniArcade.Bridge
                 frictionCombine = PhysicsMaterialCombine.Average, bounceCombine = PhysicsMaterialCombine.Average };
             _bumperMat = new PhysicsMaterial("bumper") { bounciness = 0.92f, dynamicFriction = 0.05f, staticFriction = 0.05f,
                 frictionCombine = PhysicsMaterialCombine.Minimum, bounceCombine = PhysicsMaterialCombine.Maximum };
-            BuildCamera(); BuildLight(); BuildCourse(); BuildCup(); BuildAim();
+            BuildCamera(); BuildLight(); BuildAim();
+            LoadCourse(_courseId); BuildCourse();
             Debug.Log("[GOLF] COURSE=" + COURSE_BUILD + " SCENE=" + SCENE_NAME + " shader=" + _shaderName);
+        }
+
+        // Set the course-specific geometry params. L-shape (0) = exact V12 values; Tiki (1) = new compact course.
+        void LoadCourse(int id)
+        {
+            _courseId = id; _turf.Clear(); _trapBlock.Clear();
+            if (id == 1)
+            {
+                // ---- TIKI GUARD course (compact rectangle, central island, risky right lane) ----
+                _tee = new Vector3(0f, BallR + 0.20f, -7f);
+                _cup = new Vector3(1.5f, 0f, 3.5f);   // matches the floor cup-hole gap centre + phone marker
+                _sandC = new Vector2(3f, 0.6f); _sandR = 1.15f;          // rough on the risky right lane
+                _oobAbsX = 6.5f; _oobZMin = -9.5f; _oobZMax = 6f;
+                _turf.Add(new float[] { -4.5f, -7.5f, 4.5f, 3.95f });    // main field (below the cup row)
+                _turf.Add(new float[] { -4.5f, 3.0f, 1.0f, 4.0f });      // left of cup
+                _turf.Add(new float[] { 2.0f, 3.0f, 4.5f, 4.0f });       // right of cup
+                _trapBlock.Add(new float[] { -1.4f, -3.4f, 1.4f, 1.9f }); // central island (no traps)
+                _trapBlock.Add(new float[] { 1.2f, -2.4f, 4.6f, -0.6f }); // sliding-gate guard path
+                _trapBlock.Add(new float[] { 1.2f, 0.6f, 4.6f, 2.0f });   // patrol guard path
+            }
+            else
+            {
+                // ---- L-SHAPE course (V12, unchanged) ----
+                _tee = new Vector3(-4f, BallR + 0.20f, -8f);
+                _cup = new Vector3(4.5f, 0f, 4f);
+                _sandC = new Vector2(-3.7f, 4f); _sandR = 1.45f;
+                _oobAbsX = 8f; _oobZMin = -11f; _oobZMax = 7.5f;
+                _turf.Add(new float[] { -6f + 0.55f, -10f + 0.55f, -2f - 0.55f, 2.5f });   // vertical leg + corner
+                _turf.Add(new float[] { -6f + 0.55f, 2.7f, 6f - 0.55f, 6f - 0.55f });       // horizontal band
+                _trapBlock.Add(new float[] { -6f, -3.7f, -2f, -2.3f });                     // V12 gate row (no traps)
+            }
         }
 
         void ResolveShaders()
@@ -167,6 +217,23 @@ namespace MiniArcade.Bridge
 
         void BuildCourse()
         {
+            ClearCourse();
+            _buildingCourse = true;
+            if (_courseId == 1) BuildCourseTiki(); else BuildCourseLShape();
+            BuildCup();
+            BuildGuards();
+            _buildingCourse = false;
+        }
+        void ClearCourse()
+        {
+            foreach (var g in _courseObjects) if (g != null) Kill(g);
+            _courseObjects.Clear();
+            foreach (var gd in _guards) if (gd != null && gd.tr != null) Kill(gd.tr.gameObject);
+            _guards.Clear();
+        }
+        static void Kill(GameObject go) { if (Application.isPlaying) Destroy(go); else DestroyImmediate(go); }   // edit-mode preview needs Immediate
+        void BuildCourseLShape()
+        {
             BoxTurf("Floor_Vert", new Vector3(-4f, -0.25f, -4.2f), new Vector3(4.4f, 0.5f, 12.0f), _turfTex, _turfMat);
             BoxTurf("Floor_HoriL", new Vector3(-0.95f, -0.25f, 4f), new Vector3(10.1f, 0.5f, 4.4f), _turfTex, _turfMat);
             BoxTurf("Floor_HoriR", new Vector3(5.55f, -0.25f, 4f), new Vector3(1.3f, 0.5f, 4.4f), _turfTex, _turfMat);
@@ -188,9 +255,9 @@ namespace MiniArcade.Bridge
 
             // tan sand bunker (heavy slowdown applied in Update over this region)
             var sand = new GameObject("Sand"); DDOL(sand);
-            sand.AddComponent<MeshFilter>().sharedMesh = MakeDisk(SandRadius, 64);
+            sand.AddComponent<MeshFilter>().sharedMesh = MakeDisk(_sandR, 64);
             sand.AddComponent<MeshRenderer>().material = NewMatTrans(_sandTex);
-            sand.transform.position = new Vector3(SandCenter.x, 0.012f, SandCenter.y);
+            sand.transform.position = new Vector3(_sandC.x, 0.012f, _sandC.y);
 
             BuildBumper(BumperPos.x, BumperPos.y);   // permanent course furniture (visible obstacle, like the sand)
         }
@@ -209,24 +276,112 @@ namespace MiniArcade.Bridge
             cap.transform.localScale = new Vector3((BumperR + 0.04f) * 2f, 0.03f, (BumperR + 0.04f) * 2f);
         }
 
+        // ===================== TIKI GUARD course (map 1) =====================
+        // Compact rectangle x[-4.5,4.5] z[-7.5,4]; a central stone island splits a SAFE left lane from a
+        // RISKY right lane (sliding-gate + patrolling guards + rough). Cup top-right-of-centre at (1.5,3.5).
+        void BuildCourseTiki()
+        {
+            var stone = new Color(0.16f, 0.21f, 0.13f);   // dark jungle stone for the island
+            // floor: full field with ONLY the cup hole (x[1.15,1.85] z[3.15,3.85]) left open
+            BoxTurf("T_Floor", new Vector3(0f, -0.25f, -2.175f), new Vector3(9.0f, 0.5f, 10.65f), _turfTex, _turfMat);
+            BoxTurf("T_CupL", new Vector3(-1.675f, -0.25f, 3.575f), new Vector3(5.65f, 0.5f, 0.85f), _turfTex, _turfMat);
+            BoxTurf("T_CupR", new Vector3(3.175f, -0.25f, 3.575f), new Vector3(2.65f, 0.5f, 0.85f), _turfTex, _turfMat);
+            BoxTurf("T_CupB", new Vector3(1.5f, -0.25f, 3.925f), new Vector3(0.7f, 0.5f, 0.15f), _turfTex, _turfMat);
+
+            // bamboo perimeter walls
+            WallRail("TW_Bottom", new Vector3(0f, 0.35f, -7.5f), new Vector3(9.3f, 0.7f, 0.3f));
+            WallRail("TW_Top", new Vector3(0f, 0.35f, 4f), new Vector3(9.3f, 0.7f, 0.3f));
+            WallRail("TW_Left", new Vector3(-4.5f, 0.35f, -1.75f), new Vector3(0.3f, 0.7f, 11.8f));
+            WallRail("TW_Right", new Vector3(4.5f, 0.35f, -1.75f), new Vector3(0.3f, 0.7f, 11.8f));
+
+            // central stone island (the fork) + tiki totems guarding it
+            Box("T_Island", new Vector3(0f, 0.30f, -0.75f), new Vector3(2.0f, 0.6f, 4.9f), stone, _wallMat);
+            IslandTotem(new Vector3(0f, 0.6f, 1.1f), 1.0f);
+            IslandTotem(new Vector3(0f, 0.6f, -2.6f), 1.0f);
+
+            BambooPost(-4.5f, -7.5f); BambooPost(4.5f, -7.5f); BambooPost(-4.5f, 4f); BambooPost(4.5f, 4f);
+
+            // rough/sand on the risky right lane (slowdown handled in Update via OverSand)
+            var sand = new GameObject("T_Sand"); DDOL(sand);
+            sand.AddComponent<MeshFilter>().sharedMesh = MakeDisk(_sandR, 64);
+            sand.AddComponent<MeshRenderer>().material = NewMatTrans(_sandTex);
+            sand.transform.position = new Vector3(_sandC.x, 0.012f, _sandC.y);
+        }
+
+        // ---- moving tiki guards (Tiki course only) ----
+        void BuildGuards()
+        {
+            if (_courseId != 1) return;
+            // Guard 1 — SLIDING TIKI GATE across the risky right lane (z=-2): time the shot through the open side.
+            _guards.Add(MakeGuard(new Vector3(1.7f, 0f, -2f), new Vector3(3.7f, 0f, -2f), 1.1f, 0f, 1.1f));
+            // Guard 2 — PATROLLING TIKI STATUE across the upper right lane (z=1.5): the safe LEFT route avoids it.
+            _guards.Add(MakeGuard(new Vector3(1.7f, 0f, 1.5f), new Vector3(4.0f, 0f, 1.5f), 0.8f, 1.6f, 0.85f));
+        }
+        Guard MakeGuard(Vector3 a, Vector3 b, float speed, float phase, float w)
+        {
+            var root = new GameObject("TikiGuard"); if (Application.isPlaying) DontDestroyOnLoad(root);   // tracked via _guards, not _courseObjects
+            var rb = root.AddComponent<Rigidbody>(); rb.isKinematic = true; rb.useGravity = false;
+            rb.interpolation = RigidbodyInterpolation.Interpolate; rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            var col = root.AddComponent<BoxCollider>(); col.center = new Vector3(0f, 0.45f, 0f);
+            col.size = new Vector3(0.55f * w + 0.12f, 0.9f, 0.55f); col.material = _bumperMat;   // reliable bouncy box
+            BuildTikiTotem(root.transform, w);
+            root.transform.position = a;
+            return new Guard { tr = root.transform, rb = rb, a = a, b = b, speed = speed, phase = phase };
+        }
+        // physics-synced movement (MovePosition in FixedUpdate) so the ContinuousDynamic ball never clips through
+        void FixedUpdate()
+        {
+            for (int i = 0; i < _guards.Count; i++)
+            {
+                var g = _guards[i]; if (g.rb == null) continue;
+                float t = Mathf.Sin(Time.time * g.speed + g.phase) * 0.5f + 0.5f;   // smooth, predictable ping-pong
+                g.rb.MovePosition(Vector3.Lerp(g.a, g.b, t));
+            }
+        }
+
+        // a standalone tiki totem at a world position (course object, cleaned on map switch)
+        void IslandTotem(Vector3 worldPos, float w)
+        {
+            var holder = new GameObject("TikiTotem"); DDOL(holder); holder.transform.position = worldPos;
+            BuildTikiTotem(holder.transform, w);
+        }
+        // a carved tiki totem (stacked wood blocks + a painted face), parented under `holder` (rides with it)
+        void BuildTikiTotem(Transform holder, float w)
+        {
+            var wood = new Color(0.40f, 0.26f, 0.14f); var wood2 = new Color(0.29f, 0.18f, 0.10f);
+            var paint = new Color(0.85f, 0.64f, 0.20f); var thatch = new Color(0.20f, 0.30f, 0.13f);
+            Prim(holder, new Vector3(0f, 0.42f, 0f), new Vector3(0.55f * w, 0.84f, 0.45f * w), wood);          // body
+            Prim(holder, new Vector3(0f, 0.74f, 0f), new Vector3(0.63f * w, 0.16f, 0.52f * w), wood2);         // brow ledge
+            Prim(holder, new Vector3(-0.13f * w, 0.58f, -0.23f * w), new Vector3(0.12f * w, 0.12f, 0.05f), paint);  // L eye
+            Prim(holder, new Vector3(0.13f * w, 0.58f, -0.23f * w), new Vector3(0.12f * w, 0.12f, 0.05f), paint);   // R eye
+            Prim(holder, new Vector3(0f, 0.36f, -0.23f * w), new Vector3(0.28f * w, 0.09f, 0.05f), wood2);     // mouth
+            Prim(holder, new Vector3(0f, 0.92f, 0f), new Vector3(0.5f * w, 0.16f, 0.42f * w), thatch);         // thatch cap
+        }
+        void Prim(Transform holder, Vector3 localPos, Vector3 scale, Color c)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube); Destroy(go.GetComponent<Collider>());
+            go.transform.SetParent(holder, false); go.transform.localPosition = localPos; go.transform.localScale = scale;
+            go.GetComponent<MeshRenderer>().material = NewMat(c);
+        }
+
         void BuildCup()
         {
             var dark = new Color(0.02f, 0.025f, 0.025f);
             float wy = -CupDepth * 0.5f;
-            InvisBox("Cup_X+", new Vector3(CupCenter.x + CupHalf, wy, CupCenter.z), new Vector3(0.08f, CupDepth, 1.1f), _wallMat);
-            InvisBox("Cup_X-", new Vector3(CupCenter.x - CupHalf, wy, CupCenter.z), new Vector3(0.08f, CupDepth, 1.1f), _wallMat);
-            InvisBox("Cup_Z+", new Vector3(CupCenter.x, wy, CupCenter.z + CupHalf), new Vector3(1.1f, CupDepth, 0.08f), _wallMat);
-            InvisBox("Cup_Z-", new Vector3(CupCenter.x, wy, CupCenter.z - CupHalf), new Vector3(1.1f, CupDepth, 0.08f), _wallMat);
-            InvisBox("Cup_Floor", new Vector3(CupCenter.x, -CupDepth, CupCenter.z), new Vector3(1.1f, 0.08f, 1.1f), null);
+            InvisBox("Cup_X+", new Vector3(_cup.x + CupHalf, wy, _cup.z), new Vector3(0.08f, CupDepth, 1.1f), _wallMat);
+            InvisBox("Cup_X-", new Vector3(_cup.x - CupHalf, wy, _cup.z), new Vector3(0.08f, CupDepth, 1.1f), _wallMat);
+            InvisBox("Cup_Z+", new Vector3(_cup.x, wy, _cup.z + CupHalf), new Vector3(1.1f, CupDepth, 0.08f), _wallMat);
+            InvisBox("Cup_Z-", new Vector3(_cup.x, wy, _cup.z - CupHalf), new Vector3(1.1f, CupDepth, 0.08f), _wallMat);
+            InvisBox("Cup_Floor", new Vector3(_cup.x, -CupDepth, _cup.z), new Vector3(1.1f, 0.08f, 1.1f), null);
 
-            AnnulusTex("Cup_Collar", new Vector3(CupCenter.x, 0.012f, CupCenter.z), _turfTex, 0.62f, 0.365f);
-            Annulus("Cup_Lip", new Vector3(CupCenter.x, 0.026f, CupCenter.z), new Color(0.82f, 0.80f, 0.70f), 0.365f, 0.33f);
-            Tube("Cup_Tube", CupCenter, 0.33f, 0.03f, -0.50f, dark);
-            Cyl("Cup_Bottom", new Vector3(CupCenter.x, -0.52f, CupCenter.z), 0.33f, 0.04f, new Color(0.01f, 0.012f, 0.012f));
+            AnnulusTex("Cup_Collar", new Vector3(_cup.x, 0.012f, _cup.z), _turfTex, 0.62f, 0.365f);
+            Annulus("Cup_Lip", new Vector3(_cup.x, 0.026f, _cup.z), new Color(0.82f, 0.80f, 0.70f), 0.365f, 0.33f);
+            Tube("Cup_Tube", _cup, 0.33f, 0.03f, -0.50f, dark);
+            Cyl("Cup_Bottom", new Vector3(_cup.x, -0.52f, _cup.z), 0.33f, 0.04f, new Color(0.01f, 0.012f, 0.012f));
 
-            var pole = Box("FlagPole", new Vector3(CupCenter.x, 0.69f, CupCenter.z), new Vector3(0.05f, 1.82f, 0.05f), new Color(0.93f, 0.93f, 0.93f));
+            var pole = Box("FlagPole", new Vector3(_cup.x, 0.69f, _cup.z), new Vector3(0.05f, 1.82f, 0.05f), new Color(0.93f, 0.93f, 0.93f));
             Destroy(pole.GetComponent<Collider>());
-            var flag = Box("FlagCloth", new Vector3(CupCenter.x + 0.26f, 1.44f, CupCenter.z), new Vector3(0.5f, 0.30f, 0.02f), new Color(0.84f, 0.20f, 0.24f));
+            var flag = Box("FlagCloth", new Vector3(_cup.x + 0.26f, 1.44f, _cup.z), new Vector3(0.5f, 0.30f, 0.02f), new Color(0.84f, 0.20f, 0.24f));
             Destroy(flag.GetComponent<Collider>());
         }
 
@@ -258,12 +413,12 @@ namespace MiniArcade.Bridge
         // Single SHARED fair tee for every player (GDD: all drive from the same Tee Box). The old
         // per-index fan made each player start from a different x — unfair. Non-active balls are
         // hidden (RefreshBalls) so they never visually stack on this one spot.
-        Vector3 TeeFor(int i) => TeePos;
+        Vector3 TeeFor(int i) => _tee;
 
         public void OnHostMessage(string json)
         {
             string t = JStr(json, "t");
-            if (t == "newHole") NewHole(JStr(json, "players"), Mathf.RoundToInt(JNum(json, "max")));
+            if (t == "newHole") NewHole(JStr(json, "players"), Mathf.RoundToInt(JNum(json, "max")), Mathf.RoundToInt(JNum(json, "map")));
             else if (t == "setTurn") SetTurn(JStr(json, "id"));
             else if (t == "shoot") Shoot(JStr(json, "id"), JNum(json, "angle"), JNum(json, "power"));
             else if (t == "aim") { _aimAngle = JNum(json, "angle"); _aimPower = JNum(json, "power"); }
@@ -272,9 +427,10 @@ namespace MiniArcade.Bridge
             else if (t == "debug") _showDebug = !_showDebug;
         }
 
-        void NewHole(string playersStr, int max)
+        void NewHole(string playersStr, int max, int map)
         {
             _maxStrokes = max > 0 ? max : 8;
+            if (map != _courseId) { LoadCourse(map); BuildCourse(); }   // switch maps: rebuild geometry + guards
             foreach (var p in _players) if (p.ball != null) Destroy(p.ball.gameObject);
             _players.Clear(); _active = -1;
             ClearTraps();   // no trap may carry over from the previous round
@@ -307,9 +463,7 @@ namespace MiniArcade.Bridge
             RefreshBalls();   // show only the active player's ball; their ball stays at its lie (GDD: play it where it lies)
             if (_active < 0) { _status = "…"; return; }
             var p = _players[_active];
-            // start the new player's aim pointed at the cup — don't inherit the previous player's angle (camera + arrow)
-            if (p.ball != null) _aimAngle = Mathf.Atan2(CupCenter.x - p.ball.position.x, CupCenter.z - p.ball.position.z) * Mathf.Rad2Deg;
-            _aimPower = 0f;
+            _aimAngle = 0f; _aimPower = 0f;   // aim is camera-RELATIVE now: 0 = straight along the camera view (toward the cup)
             var ac = ArrowCol(p.color);
             if (_aimShaftR != null) _aimShaftR.material.color = ac;
             if (_aimHeadR != null) _aimHeadR.material.color = ac;
@@ -326,7 +480,7 @@ namespace MiniArcade.Bridge
             if (p.ball.linearVelocity.magnitude > 0.2f) return;            // never shoot while moving
             power01 = Mathf.Clamp01(power01); _aimAngle = angleDeg;
             float speed = Mathf.Lerp(3.5f, 15f, power01);
-            float a = angleDeg * Mathf.Deg2Rad; Vector3 dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)).normalized;
+            Vector3 dir = CamRelDir(angleDeg);   // CAMERA-relative: swipe maps to the TV camera's forward/right
             p.ball.linearVelocity = dir * speed; p.ball.angularVelocity = Vector3.zero;
             p.strokes++; p.inFlight = true; p.still = 0f; p.flight = 0f; p.enteredWell = false;
             _status = "Player " + (idx + 1) + " — stroke " + p.strokes + "…";
@@ -449,22 +603,34 @@ namespace MiniArcade.Bridge
             }
         }
         static float EaseOutBack(float p) { float c1 = 1.70158f, c3 = c1 + 1f, x = p - 1f; return 1f + c3 * x * x * x + c1 * x * x; }
-        // world-space placement clamp (phone validates first; this just guarantees on-turf + clear of gate/cup/tee)
+        // world-space placement clamp (phone validates first; this guarantees on-turf + clear of blocks/cup/tee)
         Vector2 SafePlace(float x, float z)
         {
             Vector2 p = ClampTurf(new Vector2(x, z));
-            if (p.x <= -2f && p.y > -3.7f && p.y < -2.3f) p.y = (p.y > -3f) ? -2.3f : -3.7f;   // out of the z=-3 gate row
-            p = PushFrom(p, new Vector2(CupCenter.x, CupCenter.z), 1.8f);
-            p = PushFrom(p, new Vector2(TeePos.x, TeePos.z), 2.5f);
-            return ClampTurf(p);   // re-project so a push can't leave the turf
+            foreach (var b in _trapBlock) p = PushOutRect(p, b);     // out of island / gate / guard paths
+            p = PushFrom(p, new Vector2(_cup.x, _cup.z), 1.8f);
+            p = PushFrom(p, new Vector2(_tee.x, _tee.z), 2.5f);
+            return ClampTurf(p);                                    // re-project so the pushes can't leave the turf
         }
-        // left column = vertical leg + corner (no W_HoriBottom wall here); right band sits above that wall (z=2.15)
+        // snap onto the nearest per-course turf rect {xMin,zMin,xMax,zMax}
         Vector2 ClampTurf(Vector2 p)
         {
-            const float m = 0.55f;
-            Vector2 a = new Vector2(Mathf.Clamp(p.x, -6f + m, -2f - m), Mathf.Clamp(p.y, -10f + m, 6f - m));
-            Vector2 b = new Vector2(Mathf.Clamp(p.x, -2f + m, 6f - m), Mathf.Clamp(p.y, 2.7f, 6f - m));
-            return ((a - p).sqrMagnitude <= (b - p).sqrMagnitude) ? a : b;
+            if (_turf.Count == 0) return p;
+            Vector2 best = p; float bestD = float.MaxValue;
+            foreach (var r in _turf)
+            {
+                Vector2 c = new Vector2(Mathf.Clamp(p.x, r[0], r[2]), Mathf.Clamp(p.y, r[1], r[3]));
+                float d = (c - p).sqrMagnitude; if (d < bestD) { bestD = d; best = c; }
+            }
+            return best;
+        }
+        static Vector2 PushOutRect(Vector2 p, float[] r)            // push p just outside rect r if inside
+        {
+            if (p.x < r[0] || p.x > r[2] || p.y < r[1] || p.y > r[3]) return p;
+            float dl = p.x - r[0], dr = r[2] - p.x, db = p.y - r[1], dt = r[3] - p.y;
+            float m = Mathf.Min(Mathf.Min(dl, dr), Mathf.Min(db, dt));
+            if (m == dl) p.x = r[0] - 0.1f; else if (m == dr) p.x = r[2] + 0.1f; else if (m == db) p.y = r[1] - 0.1f; else p.y = r[3] + 0.1f;
+            return p;
         }
         static Vector2 PushFrom(Vector2 p, Vector2 c, float minD)
         {
@@ -477,7 +643,7 @@ namespace MiniArcade.Bridge
             float.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v); return v;
         }
 
-        bool OverSand(Vector3 p) => new Vector2(p.x - SandCenter.x, p.z - SandCenter.y).sqrMagnitude < SandRadius * SandRadius;
+        bool OverSand(Vector3 p) => new Vector2(p.x - _sandC.x, p.z - _sandC.y).sqrMagnitude < _sandR * _sandR;
         Color ArrowCol(Color c) => new Color(c.r, c.g, c.b, 0.72f);
 
         void Update()
@@ -502,7 +668,7 @@ namespace MiniArcade.Bridge
 
             CheckTraps(p, pos);   // spring any hidden trap the ball reaches (reveal + bounce/boost)
 
-            bool inWellColumn = Mathf.Abs(pos.x - CupCenter.x) < CupHalf && Mathf.Abs(pos.z - CupCenter.z) < CupHalf;
+            bool inWellColumn = Mathf.Abs(pos.x - _cup.x) < CupHalf && Mathf.Abs(pos.z - _cup.z) < CupHalf;
             bool downInWell = inWellColumn && pos.y < -0.22f;
             if (downInWell && !p.enteredWell) { p.enteredWell = true; }
             if (speed < RestSpeed) p.still += Time.deltaTime; else p.still = 0f;
@@ -515,7 +681,7 @@ namespace MiniArcade.Bridge
                 Debug.Log("[GOLF] P" + (_active + 1) + " HOLED in " + p.strokes);
                 Send("{\"t\":\"holed\",\"id\":\"" + p.id + "\",\"strokes\":" + p.strokes + "}"); return;
             }
-            if (pos.y < -CupDepth - 3f || Mathf.Abs(pos.x) > 8f || pos.z < -11f || pos.z > 7.5f)
+            if (pos.y < -CupDepth - 3f || Mathf.Abs(pos.x) > _oobAbsX || pos.z < _oobZMin || pos.z > _oobZMax)
             {
                 p.ball.linearVelocity = Vector3.zero; p.ball.angularVelocity = Vector3.zero; p.ball.position = TeeFor(_active);
                 p.inFlight = false; Debug.Log("[GOLF] P" + (_active + 1) + " OOB -> re-tee");
@@ -530,6 +696,18 @@ namespace MiniArcade.Bridge
             }
         }
 
+        // Map a phone swipe angle (0 = straight up) to a WORLD direction relative to the TV camera:
+        // dir = camForwardFlat*cos(angle) + camRightFlat*sin(angle). Pitch ignored (projected to the course plane).
+        Vector3 CamRelDir(float angleDeg)
+        {
+            Vector3 f = (_cam != null) ? _cam.transform.forward : Vector3.forward;
+            Vector3 fwd = new Vector3(f.x, 0f, f.z);
+            if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;   // camera looking straight down -> fall back
+            fwd.Normalize();
+            Vector3 right = Vector3.Cross(Vector3.up, fwd);          // flat right (unit, perpendicular to fwd)
+            float a = angleDeg * Mathf.Deg2Rad;
+            return (fwd * Mathf.Cos(a) + right * Mathf.Sin(a)).normalized;
+        }
         void UpdateArrow()
         {
             if (_aimShaft == null) return;
@@ -538,7 +716,7 @@ namespace MiniArcade.Bridge
             _aimShaft.gameObject.SetActive(show); _aimHead.gameObject.SetActive(show);
             if (show)
             {
-                float a = _aimAngle * Mathf.Deg2Rad; Vector3 dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)).normalized;
+                Vector3 dir = CamRelDir(_aimAngle);   // arrow matches the camera-relative shot direction
                 const float len = 1.05f;
                 Vector3 baseP = p.ball.position + Vector3.up * (0.03f - BallR);
                 _aimShaft.position = baseP + dir * (0.25f + len * 0.5f); _aimShaft.rotation = Quaternion.LookRotation(dir, Vector3.up);
@@ -558,9 +736,12 @@ namespace MiniArcade.Bridge
                 var p = _players[_active];
                 Vector3 vel = p.ball.linearVelocity; float speed = vel.magnitude;
                 speedT = Mathf.Clamp01(speed / 12f);
-                float a = _aimAngle * Mathf.Deg2Rad;
-                Vector3 aimDir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)).normalized;     // same convention as Shoot/UpdateArrow
-                forward = (p.inFlight && speed > 0.6f) ? new Vector3(vel.x, 0f, vel.z).normalized : aimDir;
+                // At rest the camera looks from behind the ball TOWARD THE CUP (a STABLE reference, not the aim —
+                // so the aim can be camera-relative without a feedback loop). While rolling it follows the travel dir.
+                Vector3 toCup = new Vector3(_cup.x - p.ball.position.x, 0f, _cup.z - p.ball.position.z);
+                Vector3 restDir = (toCup.sqrMagnitude > 0.04f) ? toCup.normalized : new Vector3(_cam.transform.forward.x, 0f, _cam.transform.forward.z).normalized;
+                forward = (p.inFlight && speed > 0.6f) ? new Vector3(vel.x, 0f, vel.z).normalized : restDir;
+                if (forward.sqrMagnitude < 1e-4f) forward = Vector3.forward;
                 target = p.ball.position;
             }
             else { target = new Vector3(0f, 0f, -2f); forward = Vector3.forward; speedT = 0f; }   // establishing shot between turns
@@ -617,7 +798,8 @@ namespace MiniArcade.Bridge
 
         void Send(string json) { if (UnityBridge.Instance != null) UnityBridge.Instance.SendToHost(json); }
 
-        static void DDOL(GameObject go) { if (Application.isPlaying) DontDestroyOnLoad(go); }
+        // Persists the object across scene load AND, while a course is building, registers it for map-switch cleanup.
+        void DDOL(GameObject go) { if (Application.isPlaying) DontDestroyOnLoad(go); if (_buildingCourse && go != null) _courseObjects.Add(go); }
 
         static Color HexColor(string hex)
         {

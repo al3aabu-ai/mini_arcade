@@ -36,6 +36,15 @@ namespace MiniArcade.Editor
             Shot(cam, "/tmp/golf-sand.png", sand + new Vector3(0f, 3.2f, -3.6f), sand, 44f);
             Shot(cam, "/tmp/golf-wall.png", gate + new Vector3(2.8f, 2.4f, -2.6f), gate, 44f);
             Debug.Log("[GolfPreview] wrote /tmp/golf-preview.png, -cup, -tee, -sand, -wall");
+
+            // ---- Tiki Guard course (map 1) ----
+            gg.OnHostMessage("{\"t\":\"newHole\",\"players\":\"p1|#FF5DA2;p2|#38E1FF\",\"max\":8,\"map\":1}");
+            gg.OnHostMessage("{\"t\":\"setTurn\",\"id\":\"p1\"}");
+            gg.OnHostMessage("{\"t\":\"aim\",\"angle\":0,\"power\":0}");
+            gg.PreviewArrow();
+            Shot(cam, "/tmp/golf-tiki.png", new Vector3(0f, 16.5f, -10.5f), new Vector3(0f, 0f, -1.5f), 56f);
+            Shot(cam, "/tmp/golf-tiki-guard.png", new Vector3(2.8f, 3.6f, -5.6f), new Vector3(2.8f, 0.3f, -2f), 44f);
+            Debug.Log("[GolfPreview] wrote /tmp/golf-tiki.png + -tiki-guard.png");
         }
 
         static void Shot(Camera cam, string path, Vector3 pos, Vector3 look, float fov)
