@@ -2,12 +2,11 @@ using UnityEngine;
 
 namespace MiniArcade.Bridge
 {
-    /// First playable Unity golf slice — RELIABLE box-primitive course (stabilization build).
-    /// Solid floor + walls + a real recessed SQUARE well, all from CreatePrimitive cubes.
-    /// Materials use a FORCED built-in shader (Always-Included in the build) so they never fall
-    /// back to the magenta error shader on device. The ball spawns ON the floor, rests, rolls,
-    /// hits edges, slows, and DROPS into the well by gravity. "Holed" only after it physically
-    /// settles in the well — no pull, no teleport, no absorb.
+    /// Unity golf slice — polish pass on the proven box-primitive baseline.
+    /// Same reliable approach (CreatePrimitive cubes, forced built-in shader, real colliders,
+    /// real square well). This pass: darker arcade palette, bouncier fence walls (separate physics
+    /// material), and a more interesting course — a diagonal bank (a turn), a speed-bump, a sand
+    /// hazard, and a cup in the far corner. Ball/shot feel and the well behavior are kept.
     public class GolfGame : MonoBehaviour
     {
         public static GolfGame Instance { get; private set; }
@@ -15,13 +14,17 @@ namespace MiniArcade.Bridge
         const float BallR = 0.18f;
         const float CupHalf = 0.7f;
         const float CupDepth = 1.4f;
-        static readonly Vector3 CupCenter = new Vector3(0f, 0f, 0f);
-        static readonly Vector3 TeePos = new Vector3(0f, BallR + 0.20f, -7f);   // spawn clearly ABOVE the floor
+        static readonly Vector3 CupCenter = new Vector3(4f, 0f, 3f);
+        static readonly Vector3 TeePos = new Vector3(-3.5f, BallR + 0.20f, -8.5f);
+        // sand hazard rectangle (XZ) — the ball slows here
+        static readonly Vector2 SandMin = new Vector2(0.5f, -0.25f);
+        static readonly Vector2 SandMax = new Vector2(3.5f, 2.25f);
 
         Rigidbody _ball;
         Transform _aim;
         Shader _shader;
         string _shaderName = "?";
+        PhysicsMaterial _wallMat;
         float _aimAngle;
         int _strokes;
         bool _inFlight, _holed, _grounded, _enteredWell, _loggedGround;
@@ -47,8 +50,12 @@ namespace MiniArcade.Bridge
         {
             Instance = this;
             Physics.gravity = new Vector3(0f, -16f, 0f);
-            RenderSettings.ambientLight = new Color(0.42f, 0.44f, 0.46f);
+            RenderSettings.ambientLight = new Color(0.28f, 0.30f, 0.32f);   // darker, less neon
             ResolveShader();
+            _wallMat = new PhysicsMaterial("wall") {
+                bounciness = 0.72f, dynamicFriction = 0.15f, staticFriction = 0.15f,
+                frictionCombine = PhysicsMaterialCombine.Minimum, bounceCombine = PhysicsMaterialCombine.Maximum
+            };
             BuildCamera();
             BuildLight();
             BuildCourse();
@@ -61,11 +68,7 @@ namespace MiniArcade.Bridge
         void ResolveShader()
         {
             string[] names = { "Legacy Shaders/Diffuse", "Unlit/Color", "Sprites/Default", "Standard" };
-            foreach (var n in names)
-            {
-                var s = Shader.Find(n);
-                if (s != null) { _shader = s; _shaderName = n; return; }
-            }
+            foreach (var n in names) { var s = Shader.Find(n); if (s != null) { _shader = s; _shaderName = n; return; } }
             _shader = null; _shaderName = "NONE-MAGENTA";
             Debug.LogError("[GOLF] no built-in shader found -> materials will be magenta!");
         }
@@ -83,10 +86,10 @@ namespace MiniArcade.Bridge
             DontDestroyOnLoad(go);
             var cam = go.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.07f, 0.10f, 0.16f);
-            cam.fieldOfView = 50f;
-            go.transform.position = new Vector3(0f, 7f, -13.5f);
-            go.transform.LookAt(new Vector3(0f, 0f, -1f));
+            cam.backgroundColor = new Color(0.06f, 0.08f, 0.11f);   // darker bg
+            cam.fieldOfView = 54f;
+            go.transform.position = new Vector3(0f, 13f, -17f);
+            go.transform.LookAt(new Vector3(0f, 0f, -2.5f));
         }
 
         void BuildLight()
@@ -95,35 +98,51 @@ namespace MiniArcade.Bridge
             DontDestroyOnLoad(go);
             var l = go.AddComponent<Light>();
             l.type = LightType.Directional;
-            l.intensity = 1.1f;
+            l.intensity = 1.0f;
             go.transform.rotation = Quaternion.Euler(50f, -28f, 0f);
         }
 
         void BuildCourse()
         {
-            var grass = new Color(0.24f, 0.52f, 0.30f);
-            var wall = new Color(0.52f, 0.40f, 0.28f);
-            var dark = new Color(0.05f, 0.06f, 0.06f);
+            var grass = new Color(0.13f, 0.32f, 0.18f);   // darker forest green
+            var grass2 = new Color(0.16f, 0.38f, 0.22f);  // hump (slightly lighter)
+            var wall = new Color(0.30f, 0.20f, 0.12f);    // dark warm brown
+            var sand = new Color(0.45f, 0.39f, 0.24f);    // muted khaki
+            var dark = new Color(0.04f, 0.05f, 0.05f);
 
-            Box("Floor_Back", new Vector3(0f, -0.25f, -5.35f), new Vector3(14f, 0.5f, 9.3f), grass);
-            Box("Floor_Front", new Vector3(0f, -0.25f, 3.35f), new Vector3(14f, 0.5f, 5.3f), grass);
-            Box("Floor_Left", new Vector3(-3.85f, -0.25f, 0f), new Vector3(6.3f, 0.5f, 1.4f), grass);
-            Box("Floor_Right", new Vector3(3.85f, -0.25f, 0f), new Vector3(6.3f, 0.5f, 1.4f), grass);
+            // floor (rectangle x[-6.5,6.5] z[-10.5,5.5]) split around the cup gap at (4,3)
+            Box("Floor_A", new Vector3(0f, -0.25f, -4.1f), new Vector3(13f, 0.5f, 12.8f), grass);
+            Box("Floor_B", new Vector3(0f, -0.25f, 4.6f), new Vector3(13f, 0.5f, 1.8f), grass);
+            Box("Floor_C", new Vector3(-1.6f, -0.25f, 3f), new Vector3(9.8f, 0.5f, 1.4f), grass);
+            Box("Floor_D", new Vector3(5.6f, -0.25f, 3f), new Vector3(1.8f, 0.5f, 1.4f), grass);
 
-            Box("Wall_Back", new Vector3(0f, 0.3f, -10f), new Vector3(14.4f, 0.6f, 0.3f), wall);
-            Box("Wall_Front", new Vector3(0f, 0.3f, 6f), new Vector3(14.4f, 0.6f, 0.3f), wall);
-            Box("Wall_Left", new Vector3(-7f, 0.3f, -2f), new Vector3(0.3f, 0.6f, 16.3f), wall);
-            Box("Wall_Right", new Vector3(7f, 0.3f, -2f), new Vector3(0.3f, 0.6f, 16.3f), wall);
+            // perimeter fence (bouncy)
+            Box("Wall_Bottom", new Vector3(0f, 0.3f, -10.5f), new Vector3(13.3f, 0.6f, 0.3f), wall, _wallMat);
+            Box("Wall_Top", new Vector3(0f, 0.3f, 5.5f), new Vector3(13.3f, 0.6f, 0.3f), wall, _wallMat);
+            Box("Wall_Left", new Vector3(-6.5f, 0.3f, -2.5f), new Vector3(0.3f, 0.6f, 16.3f), wall, _wallMat);
+            Box("Wall_Right", new Vector3(6.5f, 0.3f, -2.5f), new Vector3(0.3f, 0.6f, 16.3f), wall, _wallMat);
 
-            Box("Cup_X+", new Vector3(CupHalf, -0.7f, 0f), new Vector3(0.08f, 1.4f, 1.5f), dark);
-            Box("Cup_X-", new Vector3(-CupHalf, -0.7f, 0f), new Vector3(0.08f, 1.4f, 1.5f), dark);
-            Box("Cup_Z+", new Vector3(0f, -0.7f, CupHalf), new Vector3(1.5f, 1.4f, 0.08f), dark);
-            Box("Cup_Z-", new Vector3(0f, -0.7f, -CupHalf), new Vector3(1.5f, 1.4f, 0.08f), dark);
-            Box("Cup_Floor", new Vector3(0f, -CupDepth, 0f), new Vector3(1.4f, 0.08f, 1.4f), dark);
+            // diagonal bank (the "turn") — ball goes around it or banks off it
+            var bank = Box("Bank", new Vector3(0.5f, 0.3f, -2f), new Vector3(5.5f, 0.6f, 0.35f), wall, _wallMat);
+            bank.transform.rotation = Quaternion.Euler(0f, 32f, 0f);
 
-            var pole = Box("FlagPole", new Vector3(0f, 0.85f, 0f), new Vector3(0.04f, 1.7f, 0.04f), new Color(0.9f, 0.9f, 0.9f));
+            // speed bump (gentle hump in the lower lane)
+            Box("Hump", new Vector3(-2f, 0f, -5.5f), new Vector3(3.5f, 0.22f, 0.7f), grass2);
+
+            // sand hazard (visual; slowdown applied in Update)
+            Box("Sand", new Vector3((SandMin.x + SandMax.x) / 2f, 0.01f, (SandMin.y + SandMax.y) / 2f),
+                new Vector3(SandMax.x - SandMin.x, 0.04f, SandMax.y - SandMin.y), sand);
+
+            // recessed square well
+            Box("Cup_X+", new Vector3(CupCenter.x + CupHalf, -0.7f, CupCenter.z), new Vector3(0.08f, 1.4f, 1.5f), dark, _wallMat);
+            Box("Cup_X-", new Vector3(CupCenter.x - CupHalf, -0.7f, CupCenter.z), new Vector3(0.08f, 1.4f, 1.5f), dark, _wallMat);
+            Box("Cup_Z+", new Vector3(CupCenter.x, -0.7f, CupCenter.z + CupHalf), new Vector3(1.5f, 1.4f, 0.08f), dark, _wallMat);
+            Box("Cup_Z-", new Vector3(CupCenter.x, -0.7f, CupCenter.z - CupHalf), new Vector3(1.5f, 1.4f, 0.08f), dark, _wallMat);
+            Box("Cup_Floor", new Vector3(CupCenter.x, -CupDepth, CupCenter.z), new Vector3(1.4f, 0.08f, 1.4f), dark);
+
+            var pole = Box("FlagPole", new Vector3(CupCenter.x, 0.85f, CupCenter.z), new Vector3(0.04f, 1.7f, 0.04f), new Color(0.85f, 0.85f, 0.85f));
             Destroy(pole.GetComponent<Collider>());
-            var pennant = Box("FlagPennant", new Vector3(0.28f, 1.5f, 0f), new Vector3(0.5f, 0.32f, 0.02f), new Color(0.92f, 0.22f, 0.27f));
+            var pennant = Box("FlagPennant", new Vector3(CupCenter.x + 0.28f, 1.5f, CupCenter.z), new Vector3(0.5f, 0.32f, 0.02f), new Color(0.80f, 0.20f, 0.24f));
             Destroy(pennant.GetComponent<Collider>());
         }
 
@@ -136,7 +155,7 @@ namespace MiniArcade.Bridge
             go.GetComponent<MeshRenderer>().material = NewMat(Color.white);
 
             var pm = new PhysicsMaterial("ball") {
-                bounciness = 0.38f, dynamicFriction = 0.45f, staticFriction = 0.55f,
+                bounciness = 0.42f, dynamicFriction = 0.40f, staticFriction = 0.50f,
                 frictionCombine = PhysicsMaterialCombine.Average, bounceCombine = PhysicsMaterialCombine.Average
             };
             go.GetComponent<SphereCollider>().material = pm;
@@ -197,12 +216,18 @@ namespace MiniArcade.Bridge
             Debug.Log("[GOLF] ball spawned at " + TeePos);
         }
 
+        bool OverSand(Vector3 p) =>
+            p.x >= SandMin.x && p.x <= SandMax.x && p.z >= SandMin.y && p.z <= SandMax.y;
+
         void Update()
         {
             if (_ball != null)
             {
                 _grounded = Physics.Raycast(_ball.position, Vector3.down, BallR + 0.10f);
                 if (_grounded && !_loggedGround && !_inFlight) { _loggedGround = true; Debug.Log("[GOLF] ball grounded (resting on course)"); }
+                // sand hazard: extra drag while grounded over the patch
+                if (_grounded && OverSand(_ball.position))
+                    _ball.linearVelocity = Vector3.MoveTowards(_ball.linearVelocity, Vector3.zero, 6f * Time.deltaTime);
             }
 
             if (_aim != null)
@@ -267,7 +292,6 @@ namespace MiniArcade.Bridge
             GUI.Label(new Rect(28, 22, 800, 40), "Strokes: " + _strokes, _hud);
             GUI.Label(new Rect(28, 60, 1100, 56), _status, _holed ? _hudBig : _hud);
 
-            // debug panel (you asked for this)
             float vel = _ball != null ? _ball.linearVelocity.magnitude : 0f;
             float y = _ball != null ? _ball.position.y : 0f;
             string[] lines = {
@@ -292,7 +316,7 @@ namespace MiniArcade.Bridge
             if (UnityBridge.Instance != null) UnityBridge.Instance.SendToHost(json);
         }
 
-        GameObject Box(string name, Vector3 center, Vector3 size, Color color)
+        GameObject Box(string name, Vector3 center, Vector3 size, Color color, PhysicsMaterial pm = null)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             DontDestroyOnLoad(go);
@@ -300,6 +324,7 @@ namespace MiniArcade.Bridge
             go.transform.position = center;
             go.transform.localScale = size;
             go.GetComponent<MeshRenderer>().material = NewMat(color);
+            if (pm != null) go.GetComponent<BoxCollider>().material = pm;
             return go;
         }
 
