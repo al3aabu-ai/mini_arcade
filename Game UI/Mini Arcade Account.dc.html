@@ -32,7 +32,7 @@
           <div style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.4) 0%, rgba(216,112,255,0) 70%); animation: ma-pulse 6s ease-in-out infinite; pointer-events: none; z-index: 0;"></div>
 
           <div style="position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; margin-bottom: 24px;">
-            <button style="width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ noop }}">
+            <button style="width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ goBack }}">
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <div style="font-size: 30px; font-weight: 700; color: #fff; letter-spacing: -0.6px;">Account</div>
@@ -98,7 +98,7 @@
           <div style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.4) 0%, rgba(216,112,255,0) 70%); animation: ma-pulse 6s ease-in-out infinite; pointer-events: none; z-index: 0;"></div>
 
           <div style="position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; margin-bottom: 24px;">
-            <button style="width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ noop }}">
+            <button style="width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ goBack }}">
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <div style="font-size: 30px; font-weight: 700; color: #fff; letter-spacing: -0.6px;">Account</div>
@@ -181,7 +181,7 @@
                 <div style="font-size: 15px; font-weight: 700; color: #3b0d73;">Premium · active</div>
                 <div style="font-size: 12.5px; font-weight: 600; color: rgba(59,13,115,0.7);">8 players · renews Jul 12, 2026</div>
               </div>
-              <button style="height: 36px; padding: 0 15px; border: none; border-radius: 18px; background: #3b0d73; color: #FFD23F; font-family: 'Fredoka', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;" onClick="{{ noop }}">Manage</button>
+              <button style="height: 36px; padding: 0 15px; border: none; border-radius: 18px; background: #3b0d73; color: #FFD23F; font-family: 'Fredoka', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;" onClick="{{ goPremium }}">Manage</button>
             </div>
           </div>
 
@@ -218,6 +218,8 @@ class Component extends DCLogic {
     const s = this.state;
     return {
       darkMode: true,
+      goBack: () => { window.location.href = 'Mini%20Arcade%20Settings.dc.html'; },
+      goPremium: () => { window.location.href = 'Mini%20Arcade%20Manage%20Premium.dc.html'; },
       g: this.build(s.gName, s.gColor),
       u: this.build(s.uName, s.uColor),
       gOnName: (e) => this.setState({ gName: e.target.value }),

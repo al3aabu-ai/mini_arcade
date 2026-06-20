@@ -33,7 +33,7 @@
 
           <!-- close -->
           <div style="position: relative; z-index: 1; display: flex; justify-content: flex-end; margin-bottom: 6px;">
-            <button style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ noop }}">
+            <button style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ goBack }}">
               <svg width="15" height="15" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
             </button>
           </div>
@@ -129,7 +129,7 @@
 
           <!-- header -->
           <div style="position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; margin-bottom: 24px;">
-            <button style="width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ noop }}">
+            <button style="width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ goBack }}">
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <div style="font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.5px;">Manage plan</div>
@@ -213,6 +213,7 @@ class Component extends DCLogic {
     const yearly = s.plan === 'yearly';
     return {
       darkMode: true,
+      goBack: () => { window.location.href = 'Mini%20Arcade%20Settings.dc.html'; },
       planCard: { yearly: planCardStyle('yearly'), monthly: planCardStyle('monthly') },
       radio: { yearly: radioStyle('yearly'), monthly: radioStyle('monthly') },
       tickYearly: yearly ? '✓' : '',

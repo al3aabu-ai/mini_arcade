@@ -13,66 +13,57 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  @keyframes ma-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
-  @keyframes ma-bob2 { 0%,100% { transform: translateY(0) rotate(-12deg); } 50% { transform: translateY(-18px) rotate(8deg); } }
-  @keyframes ma-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes ma-pulse { 0%,100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.14); opacity: 0.8; } }
   @keyframes ma-pop { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
-  @keyframes ma-dot { 0%,100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-4px); } }
-  @keyframes ma-ring { 0% { transform: scale(0.8); opacity: 0.7; } 100% { transform: scale(1.6); opacity: 0; } }
 </style>
 </helmet>
 
-<div style="width: max-content; min-width: 100%; min-height: 100vh; box-sizing: border-box; padding: 56px; background: #e7e5df; font-family: 'Fredoka', system-ui, sans-serif;">
+<div style="width: max-content; min-width: 100%; min-height: 100vh; box-sizing: border-box; padding: 48px 56px; background: #e7e5df; font-family: 'Fredoka', system-ui, sans-serif;">
   <div style="margin-bottom: 8px; font-size: 22px; font-weight: 700; color: #2b2b30; letter-spacing: -0.3px;">Mini Arcade — Lobby</div>
-  <div style="margin-bottom: 40px; font-size: 14px; font-weight: 500; color: #8a8a92;">Gathering players · host controls + player waiting view</div>
+  <div style="margin-bottom: 36px; font-size: 14px; font-weight: 500; color: #8a8a92;">Host's lobby · Free caps at 2 players · Premium opens all 8</div>
 
   <div style="display: flex; gap: 64px; align-items: flex-start;">
 
-    <!-- ================= HOST PHONE ================= -->
+    <!-- ============ FREE HOST ============ -->
     <div style="flex: none; width: 402px;">
-      <div style="margin-bottom: 16px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">Host phone · master controls</div>
+      <div style="margin-bottom: 16px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">Free host · 2-player cap</div>
       <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ darkMode }}" hint-size="402px,874px">
-
-        <div style="position: relative; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(135% 95% at 50% -12%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%); display: flex; flex-direction: column; box-sizing: border-box; padding: 64px 24px 36px;">
+        <div data-screen-label="Lobby · Free" style="position: relative; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(135% 95% at 50% -12%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%); display: flex; flex-direction: column; box-sizing: border-box; padding: 64px 24px 36px;">
           <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.4) 0%, rgba(216,112,255,0) 70%); animation: ma-pulse 6s ease-in-out infinite; pointer-events: none;"></div>
 
-          <!-- top row -->
           <div style="position: relative; display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px;">
-            <button style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.24); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ onLeave }}">
+            <button style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.24); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ goBack }}">
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <div style="font-size: 17px; font-weight: 600; color: #fff;">Game Lobby</div>
-            <div style="width: 40px; height: 40px;"></div>
+            <span style="height: 26px; padding: 0 11px; border-radius: 13px; background: rgba(255,255,255,0.14); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center;">FREE</span>
           </div>
 
-          <!-- room code card -->
+          <!-- room code -->
           <div style="position: relative; border-radius: 22px; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.18); padding: 18px; text-align: center;">
             <div style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.6); letter-spacing: 2px;">ROOM CODE</div>
             <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin: 8px 0 14px;">
               <span style="font-size: 46px; font-weight: 700; color: #FFD23F; letter-spacing: 8px; text-shadow: 0 4px 0 rgba(0,0,0,0.18); padding-left: 8px;">ABCD</span>
             </div>
             <div style="display: flex; gap: 10px;">
-              <button style="flex: 1; height: 44px; border: none; border-radius: 13px; background: rgba(255,255,255,0.14); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;" onClick="{{ onShare }}">
+              <button style="flex: 1; height: 44px; border: none; border-radius: 13px; background: rgba(255,255,255,0.14); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;" onClick="{{ noop }}">
                 <svg width="15" height="17" viewBox="0 0 16 18" fill="none"><path d="M8 11V2.5M8 2.5L5.2 5.3M8 2.5l2.8 2.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 8H2.5v8h11V8h-1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Share
               </button>
-              <button style="flex: 1; height: 44px; border: none; border-radius: 13px; background: rgba(255,255,255,0.14); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;" onClick="{{ onQR }}">
+              <button style="flex: 1; height: 44px; border: none; border-radius: 13px; background: rgba(255,255,255,0.14); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;" onClick="{{ noop }}">
                 <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" stroke="#fff" stroke-width="1.5"/><rect x="10" y="1" width="5" height="5" rx="1" stroke="#fff" stroke-width="1.5"/><rect x="1" y="10" width="5" height="5" rx="1" stroke="#fff" stroke-width="1.5"/><rect x="10.5" y="10.5" width="4" height="4" fill="#fff"/></svg>
                 QR Code
               </button>
             </div>
           </div>
 
-          <!-- players -->
+          <!-- players (free: 2 cap, locked) -->
           <div style="position: relative; margin-top: 24px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
               <div style="font-size: 16px; font-weight: 700; color: #fff;">Players</div>
-              <div style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6);">5 / 8 joined</div>
+              <div style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6);">2 / 2 joined</div>
             </div>
-
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 6px;">
-              <!-- host -->
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
                 <div style="position: relative; width: 56px; height: 56px;">
                   <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #FFE27A, #FFB300); display: flex; align-items: center; justify-content: center; color: #3b0d73; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.3);">Y</div>
@@ -85,7 +76,6 @@
                   <div style="font-size: 10px; font-weight: 600; color: #FFD23F; letter-spacing: 0.5px;">HOST</div>
                 </div>
               </div>
-              <!-- Maya -->
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
                 <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #FF5DA2, #a435ee); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.25); animation: ma-pop 4s ease-in-out infinite;">M</div>
                 <div style="text-align: center; line-height: 1.1;">
@@ -93,55 +83,52 @@
                   <div style="font-size: 10px; font-weight: 500; color: #B6FF4B; letter-spacing: 0.3px;">Ready</div>
                 </div>
               </div>
-              <!-- Leo -->
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #38E1FF, #2563eb); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.25);">L</div>
-                <div style="text-align: center; line-height: 1.1;">
-                  <div style="font-size: 12.5px; font-weight: 600; color: #fff;">Leo</div>
-                  <div style="font-size: 10px; font-weight: 500; color: #B6FF4B; letter-spacing: 0.3px;">Ready</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="4.5" y="9.5" width="13" height="9" rx="2" stroke="rgba(255,255,255,0.4)" stroke-width="1.8"/><path d="M7 9.5V7a4 4 0 0 1 8 0v2.5" stroke="rgba(255,255,255,0.4)" stroke-width="1.8" stroke-linecap="round"/></svg>
                 </div>
+                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.4);">Premium</div>
               </div>
-              <!-- Priya -->
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #B6FF4B, #4fbf2e); display: flex; align-items: center; justify-content: center; color: #1c4d12; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.25);">P</div>
-                <div style="text-align: center; line-height: 1.1;">
-                  <div style="font-size: 12.5px; font-weight: 600; color: #fff;">Priya</div>
-                  <div style="font-size: 10px; font-weight: 500; color: #B6FF4B; letter-spacing: 0.3px;">Ready</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="4.5" y="9.5" width="13" height="9" rx="2" stroke="rgba(255,255,255,0.4)" stroke-width="1.8"/><path d="M7 9.5V7a4 4 0 0 1 8 0v2.5" stroke="rgba(255,255,255,0.4)" stroke-width="1.8" stroke-linecap="round"/></svg>
                 </div>
+                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.4);">Premium</div>
               </div>
-              <!-- Sam (joining) -->
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #FFB85C, #f97316); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.25); animation: ma-pop 3.2s ease-in-out infinite;">S</div>
-                <div style="text-align: center; line-height: 1.1;">
-                  <div style="font-size: 12.5px; font-weight: 600; color: #fff;">Sam</div>
-                  <div style="font-size: 10px; font-weight: 500; color: #FFD23F; letter-spacing: 0.3px;">Joining…</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="4.5" y="9.5" width="13" height="9" rx="2" stroke="rgba(255,255,255,0.4)" stroke-width="1.8"/><path d="M7 9.5V7a4 4 0 0 1 8 0v2.5" stroke="rgba(255,255,255,0.4)" stroke-width="1.8" stroke-linecap="round"/></svg>
                 </div>
-              </div>
-              <!-- open slots -->
-              <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.26); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.42); font-size: 26px; font-weight: 600;">+</div>
-                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.42);">Open</div>
+                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.4);">Premium</div>
               </div>
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.26); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.42); font-size: 26px; font-weight: 600;">+</div>
-                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.42);">Open</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="4.5" y="9.5" width="13" height="9" rx="2" stroke="rgba(255,255,255,0.4)" stroke-width="1.8"/><path d="M7 9.5V7a4 4 0 0 1 8 0v2.5" stroke="rgba(255,255,255,0.4)" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </div>
+                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.4);">Premium</div>
               </div>
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.26); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.42); font-size: 26px; font-weight: 600;">+</div>
-                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.42);">Open</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="4.5" y="9.5" width="13" height="9" rx="2" stroke="rgba(255,255,255,0.4)" stroke-width="1.8"/><path d="M7 9.5V7a4 4 0 0 1 8 0v2.5" stroke="rgba(255,255,255,0.4)" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </div>
+                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.4);">Premium</div>
+              </div>
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="4.5" y="9.5" width="13" height="9" rx="2" stroke="rgba(255,255,255,0.4)" stroke-width="1.8"/><path d="M7 9.5V7a4 4 0 0 1 8 0v2.5" stroke="rgba(255,255,255,0.4)" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </div>
+                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.4);">Premium</div>
               </div>
             </div>
-
-            <div style="margin-top: 16px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border: 1px solid rgba(255,255,255,0.16); border-radius: 13px; background: rgba(255,255,255,0.06);">
-              <svg width="15" height="15" viewBox="0 0 20 20" fill="none"><path d="M10 4v12M4 10h12" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round"/></svg>
-              <span style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.7);">3 seats open — share the room code to fill up</span>
-            </div>
+            <button style="margin-top: 16px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid rgba(255,210,63,0.35); border-radius: 13px; background: rgba(255,210,63,0.1); cursor: pointer; font-family: 'Fredoka', sans-serif;" onClick="{{ goPremium }}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="#FFD23F"><path d="M12 1l2.4 7.6L22 11l-7.6 2.4L12 21l-2.4-7.6L2 11l7.6-2.4z"/></svg>
+              <span style="font-size: 13px; font-weight: 600; color: #FFD23F;">Unlock up to 8 players with Premium</span>
+            </button>
           </div>
 
-          <!-- start -->
           <div style="position: relative; margin-top: auto; padding-top: 22px;">
             <div style="text-align: center; font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.6); margin-bottom: 12px;">Everyone in? Choose your 3 mini-games next.</div>
-            <button style="width: 100%; height: 66px; border: none; border-radius: 20px; background: linear-gradient(180deg, #FFE27A, #FFC21A); color: #3b0d73; font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 7px 0 #D99700, 0 16px 24px rgba(0,0,0,0.26);" onClick="{{ onPick }}">
+            <button style="width: 100%; height: 66px; border: none; border-radius: 20px; background: linear-gradient(180deg, #FFE27A, #FFC21A); color: #3b0d73; font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 7px 0 #D99700, 0 16px 24px rgba(0,0,0,0.26);" onClick="{{ goGames }}">
               Pick Mini-Games
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4l7 6-7 6" stroke="#3b0d73" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -150,108 +137,112 @@
       </x-import>
     </div>
 
-    <!-- ================= PLAYER PHONE ================= -->
+    <!-- ============ PREMIUM HOST ============ -->
     <div style="flex: none; width: 402px;">
-      <div style="margin-bottom: 16px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">Player phone · waiting</div>
+      <div style="margin-bottom: 16px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">Premium host · up to 8</div>
       <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ darkMode }}" hint-size="402px,874px">
+        <div data-screen-label="Lobby · Premium" style="position: relative; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(135% 95% at 50% -12%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%); display: flex; flex-direction: column; box-sizing: border-box; padding: 64px 24px 36px;">
+          <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(255,210,63,0.3) 0%, rgba(255,210,63,0) 70%); animation: ma-pulse 6s ease-in-out infinite; pointer-events: none;"></div>
 
-        <div style="position: relative; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(135% 95% at 50% -12%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%); display: flex; flex-direction: column; box-sizing: border-box; padding: 64px 24px 36px;">
-          <div style="position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.4) 0%, rgba(216,112,255,0) 70%); animation: ma-pulse 6s ease-in-out infinite; pointer-events: none;"></div>
-
-          <!-- top row -->
-          <div style="position: relative; display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px;">
-            <button style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.24); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ onLeave }}">
+          <div style="position: relative; display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px;">
+            <button style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.24); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ goBack }}">
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <div style="font-size: 17px; font-weight: 600; color: #fff;">Lobby</div>
-            <div style="width: 40px; height: 40px;"></div>
+            <div style="font-size: 17px; font-weight: 600; color: #fff;">Game Lobby</div>
+            <span style="height: 26px; padding: 0 10px; border-radius: 13px; background: linear-gradient(150deg, #FFE27A, #FFB300); color: #3b0d73; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center; gap: 3px;">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="#3b0d73"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>PREMIUM</span>
           </div>
 
-          <!-- you're in -->
-          <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 26px;">
-            <div style="position: relative; width: 84px; height: 84px;">
-              <div style="position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(182,255,75,0.5); animation: ma-ring 2.2s ease-out infinite;"></div>
-              <div style="width: 84px; height: 84px; border-radius: 50%; background: linear-gradient(150deg, #B6FF4B, #4fbf2e); display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 22px rgba(0,0,0,0.28); animation: ma-pop 3.5s ease-in-out infinite;">
-                <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><path d="M11 20.5l6 6 12-13" stroke="#1c4d12" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </div>
+          <!-- room code -->
+          <div style="position: relative; border-radius: 22px; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.18); padding: 18px; text-align: center;">
+            <div style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.6); letter-spacing: 2px;">ROOM CODE</div>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin: 8px 0 14px;">
+              <span style="font-size: 46px; font-weight: 700; color: #FFD23F; letter-spacing: 8px; text-shadow: 0 4px 0 rgba(0,0,0,0.18); padding-left: 8px;">ABCD</span>
             </div>
-            <div style="text-align: center;">
-              <div style="font-size: 28px; font-weight: 700; color: #fff; letter-spacing: -0.3px;">You're in!</div>
-              <div style="font-size: 14.5px; font-weight: 500; color: rgba(255,255,255,0.7); margin-top: 3px;">Hosted by <span style="color: #FFD23F; font-weight: 600;">Guest</span> · Room <span style="color: #fff; font-weight: 600; letter-spacing: 1px;">ABCD</span></div>
+            <div style="display: flex; gap: 10px;">
+              <button style="flex: 1; height: 44px; border: none; border-radius: 13px; background: rgba(255,255,255,0.14); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;" onClick="{{ noop }}">
+                <svg width="15" height="17" viewBox="0 0 16 18" fill="none"><path d="M8 11V2.5M8 2.5L5.2 5.3M8 2.5l2.8 2.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 8H2.5v8h11V8h-1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Share
+              </button>
+              <button style="flex: 1; height: 44px; border: none; border-radius: 13px; background: rgba(255,255,255,0.14); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;" onClick="{{ noop }}">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" stroke="#fff" stroke-width="1.5"/><rect x="10" y="1" width="5" height="5" rx="1" stroke="#fff" stroke-width="1.5"/><rect x="1" y="10" width="5" height="5" rx="1" stroke="#fff" stroke-width="1.5"/><rect x="10.5" y="10.5" width="4" height="4" fill="#fff"/></svg>
+                QR Code
+              </button>
             </div>
           </div>
 
-          <!-- in the room -->
-          <div style="position: relative; border-radius: 22px; background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.16); padding: 20px 18px;">
+          <!-- players (premium: 5/8 open) -->
+          <div style="position: relative; margin-top: 24px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-              <div style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6); letter-spacing: 0.5px;">IN THE ROOM</div>
-              <div style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.6);">5 / 8</div>
+              <div style="font-size: 16px; font-weight: 700; color: #fff;">Players</div>
+              <div style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6);">5 / 8 joined</div>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 6px;">
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 6px;">
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="position: relative; width: 50px; height: 50px;">
-                  <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(150deg, #FFE27A, #FFB300); display: flex; align-items: center; justify-content: center; color: #3b0d73; font-size: 20px; font-weight: 700; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.3);">G</div>
-                  <div style="position: absolute; top: -6px; right: -4px; width: 20px; height: 20px; border-radius: 50%; background: #3b0d73; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="#FFD23F"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+                <div style="position: relative; width: 56px; height: 56px;">
+                  <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #FFE27A, #FFB300); display: flex; align-items: center; justify-content: center; color: #3b0d73; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.3);">Y</div>
+                  <div style="position: absolute; top: -6px; right: -4px; width: 22px; height: 22px; border-radius: 50%; background: #3b0d73; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="#FFD23F"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
                   </div>
                 </div>
                 <div style="text-align: center; line-height: 1.1;">
-                  <div style="font-size: 11.5px; font-weight: 600; color: #fff;">Guest</div>
-                  <div style="font-size: 9.5px; font-weight: 600; color: #FFD23F;">HOST</div>
+                  <div style="font-size: 12.5px; font-weight: 600; color: #fff;">You</div>
+                  <div style="font-size: 10px; font-weight: 600; color: #FFD23F; letter-spacing: 0.5px;">HOST</div>
                 </div>
               </div>
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(150deg, #FF5DA2, #a435ee); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 700; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25); border: 2px solid #B6FF4B;">M</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #FF5DA2, #a435ee); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.25); animation: ma-pop 4s ease-in-out infinite;">M</div>
                 <div style="text-align: center; line-height: 1.1;">
-                  <div style="font-size: 11.5px; font-weight: 600; color: #fff;">Maya</div>
-                  <div style="font-size: 9.5px; font-weight: 600; color: #B6FF4B;">YOU</div>
+                  <div style="font-size: 12.5px; font-weight: 600; color: #fff;">Maya</div>
+                  <div style="font-size: 10px; font-weight: 500; color: #B6FF4B; letter-spacing: 0.3px;">Ready</div>
                 </div>
               </div>
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(150deg, #38E1FF, #2563eb); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 700; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25);">L</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #38E1FF, #2563eb); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.25);">L</div>
                 <div style="text-align: center; line-height: 1.1;">
-                  <div style="font-size: 11.5px; font-weight: 600; color: #fff;">Leo</div>
+                  <div style="font-size: 12.5px; font-weight: 600; color: #fff;">Leo</div>
+                  <div style="font-size: 10px; font-weight: 500; color: #B6FF4B; letter-spacing: 0.3px;">Ready</div>
                 </div>
               </div>
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(150deg, #B6FF4B, #4fbf2e); display: flex; align-items: center; justify-content: center; color: #1c4d12; font-size: 20px; font-weight: 700; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25);">P</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #B6FF4B, #4fbf2e); display: flex; align-items: center; justify-content: center; color: #1c4d12; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.25);">P</div>
                 <div style="text-align: center; line-height: 1.1;">
-                  <div style="font-size: 11.5px; font-weight: 600; color: #fff;">Priya</div>
+                  <div style="font-size: 12.5px; font-weight: 600; color: #fff;">Priya</div>
+                  <div style="font-size: 10px; font-weight: 500; color: #B6FF4B; letter-spacing: 0.3px;">Ready</div>
                 </div>
               </div>
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(150deg, #FFB85C, #f97316); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 700; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25); animation: ma-pop 3.2s ease-in-out infinite;">S</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(150deg, #FFB85C, #f97316); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 700; box-shadow: 0 6px 14px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(255,255,255,0.25); animation: ma-pop 3.2s ease-in-out infinite;">S</div>
                 <div style="text-align: center; line-height: 1.1;">
-                  <div style="font-size: 11.5px; font-weight: 600; color: #fff;">Sam</div>
+                  <div style="font-size: 12.5px; font-weight: 600; color: #fff;">Sam</div>
+                  <div style="font-size: 10px; font-weight: 500; color: #FFD23F; letter-spacing: 0.3px;">Joining…</div>
                 </div>
               </div>
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.26); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.42); font-size: 22px; font-weight: 600;">+</div>
-                <div style="font-size: 9.5px; font-weight: 500; color: rgba(255,255,255,0.42);">Open</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.26); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.42); font-size: 26px; font-weight: 600;">+</div>
+                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.42);">Open</div>
               </div>
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.26); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.42); font-size: 22px; font-weight: 600;">+</div>
-                <div style="font-size: 9.5px; font-weight: 500; color: rgba(255,255,255,0.42);">Open</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.26); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.42); font-size: 26px; font-weight: 600;">+</div>
+                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.42);">Open</div>
               </div>
               <div style="display: flex; flex-direction: column; align-items: center; gap: 7px;">
-                <div style="width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.26); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.42); font-size: 22px; font-weight: 600;">+</div>
-                <div style="font-size: 9.5px; font-weight: 500; color: rgba(255,255,255,0.42);">Open</div>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1.5px dashed rgba(255,255,255,0.26); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.42); font-size: 26px; font-weight: 600;">+</div>
+                <div style="font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.42);">Open</div>
               </div>
+            </div>
+            <div style="margin-top: 16px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border: 1px solid rgba(255,255,255,0.16); border-radius: 13px; background: rgba(255,255,255,0.06);">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none"><path d="M10 4v12M4 10h12" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round"/></svg>
+              <span style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.7);">3 seats open — share the room code to fill up</span>
             </div>
           </div>
 
-          <!-- waiting -->
-          <div style="position: relative; margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 22px;">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <div style="width: 9px; height: 9px; border-radius: 50%; background: #FFD23F; animation: ma-dot 1.4s ease-in-out infinite;"></div>
-              <div style="width: 9px; height: 9px; border-radius: 50%; background: #FFD23F; animation: ma-dot 1.4s ease-in-out infinite; animation-delay: 0.2s;"></div>
-              <div style="width: 9px; height: 9px; border-radius: 50%; background: #FFD23F; animation: ma-dot 1.4s ease-in-out infinite; animation-delay: 0.4s;"></div>
-            </div>
-            <div style="text-align: center; font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.78); line-height: 1.4;">Waiting for the host to<br>start the games…</div>
-            <div style="display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-radius: 14px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);">
-              <svg width="17" height="17" viewBox="0 0 20 20" fill="none"><rect x="6" y="2.5" width="8" height="15" rx="2.5" stroke="#38E1FF" stroke-width="1.8"/><circle cx="10" cy="14.5" r="1" fill="#38E1FF"/></svg>
-              <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.72);">Keep this open — your phone is the controller.</span>
-            </div>
+          <div style="position: relative; margin-top: auto; padding-top: 22px;">
+            <div style="text-align: center; font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.6); margin-bottom: 12px;">Everyone in? Choose your 3 mini-games next.</div>
+            <button style="width: 100%; height: 66px; border: none; border-radius: 20px; background: linear-gradient(180deg, #FFE27A, #FFC21A); color: #3b0d73; font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 7px 0 #D99700, 0 16px 24px rgba(0,0,0,0.26);" onClick="{{ goGames }}">
+              Pick Mini-Games
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4l7 6-7 6" stroke="#3b0d73" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
           </div>
         </div>
       </x-import>
@@ -260,16 +251,16 @@
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 980, &quot;height&quot;: 1000}}">
+<script type="text/x-dc" data-dc-script>
 class Component extends DCLogic {
   renderVals() {
+    const go = (f) => () => { window.location.href = f; };
     return {
       darkMode: true,
-      onLeave: () => {},
-      onShare: () => {},
-      onQR: () => {},
-      onPremium: () => {},
-      onPick: () => {},
+      noop: () => {},
+      goBack: go('Mini%20Arcade%20Home.dc.html'),
+      goGames: go('Mini%20Arcade%20Pick%20Games.dc.html'),
+      goPremium: go('Mini%20Arcade%20Manage%20Premium.dc.html'),
     };
   }
 }

@@ -18,20 +18,21 @@ namespace MiniArcade.Editor
             var gg = root.AddComponent<GolfGame>();
             gg.BuildAll();
 
-            // place the aim arrow sensibly (Update doesn't run in edit mode)
-            var ball = GameObject.Find("Ball");
-            if (ball != null) ball.transform.position = new Vector3(-4f, 0.18f, -8f);   // Rigidbody.position doesn't move the transform in edit mode
-            var shaft = GameObject.Find("AimShaft"); var head = GameObject.Find("AimHead");
-            var tee = new Vector3(-4f, 0.02f, -8f);
-            if (shaft != null) { shaft.transform.position = tee + Vector3.forward * 0.78f; shaft.transform.rotation = Quaternion.identity; }
-            if (head != null) { head.transform.position = tee + Vector3.forward * 1.38f; head.transform.rotation = Quaternion.identity; }
+            // simulate a multiplayer hole so the render shows colour-matched balls + the active arrow
+            gg.OnHostMessage("{\"t\":\"newHole\",\"players\":\"p1|#FF5DA2;p2|#38E1FF;p3|#B6FF4B;p4|#FFD23F\",\"max\":8}");
+            gg.OnHostMessage("{\"t\":\"setTurn\",\"id\":\"p1\"}");
+            gg.OnHostMessage("{\"t\":\"aim\",\"angle\":0,\"power\":0}");
+            gg.PreviewArrow();   // pose the active (pink) arrow on Ball_0
+
+            var b0 = GameObject.Find("Ball_0");
+            var bp = b0 != null ? b0.transform.position : new Vector3(-4f, 0.18f, -8f);
 
             var cam = GameObject.Find("Main Camera").GetComponent<Camera>();
             var sand = new Vector3(-3.7f, 0f, 4f);
             var gate = new Vector3(-4f, 0.3f, -3f);
             Shot(cam, "/tmp/golf-preview.png", new Vector3(0f, 18f, -13f), new Vector3(0f, 0f, -1.5f), 54f);
             Shot(cam, "/tmp/golf-cup.png", Cup + new Vector3(-1.6f, 3.0f, -3.2f), Cup, 38f);
-            Shot(cam, "/tmp/golf-tee.png", tee + new Vector3(0f, 3.4f, -3.6f), tee + Vector3.forward * 1.5f, 46f);
+            Shot(cam, "/tmp/golf-tee.png", bp + new Vector3(0f, 3.4f, -3.6f), bp + Vector3.forward * 1.5f, 46f);
             Shot(cam, "/tmp/golf-sand.png", sand + new Vector3(0f, 3.2f, -3.6f), sand, 44f);
             Shot(cam, "/tmp/golf-wall.png", gate + new Vector3(2.8f, 2.4f, -2.6f), gate, 44f);
             Debug.Log("[GolfPreview] wrote /tmp/golf-preview.png, -cup, -tee, -sand, -wall");
