@@ -10,7 +10,7 @@ namespace MiniArcade.Bridge
     public class GolfGame : MonoBehaviour
     {
         public static GolfGame Instance { get; private set; }
-        const string COURSE_BUILD = "MULTIMAP_V13_2026-06-20_Lshape+tikiguards";
+        const string COURSE_BUILD = "MULTIMAP_V14_2026-06-21_Lshape+tikiguards+windrun";
         const string SCENE_NAME = "UnityGolfPolishedCourse";
 
         const float BallR = 0.18f;
@@ -32,6 +32,12 @@ namespace MiniArcade.Bridge
         readonly List<GameObject> _courseObjects = new List<GameObject>();
         readonly List<Guard> _guards = new List<Guard>();
         static readonly Vector2 BumperPos = new Vector2(1.0f, 4.2f);    // L-shape static bumper
+        // ---- map-3 fan/wind hazard (null/0 on the other courses, so they are untouched) ----
+        float[] _windRect;                   // {xMin,zMin,xMax,zMax} push zone; null = no wind
+        Vector2 _windDir = Vector2.zero;     // normalized push direction (xz plane)
+        float _windAccel;                    // push strength (units/s^2); 0 = off
+        float _windMax;                      // cap on wind-aligned carry speed (m/s) so dwell time can't pile up
+        Transform _fanBlades;                // spinning fan blades (visual only), rotated each frame
         const float BumperR = 0.36f;
         const float BoostR = 0.55f;          // planted boost-pad radius
         const float MaxCamSpeed = 16f;       // follow-camera SmoothDamp clamp
@@ -67,8 +73,10 @@ namespace MiniArcade.Bridge
         {
             public Transform tr;
             public Rigidbody rb;         // kinematic (MovePosition) so the ContinuousDynamic ball never clips through
-            public Vector3 a, b;         // path endpoints
+            public Vector3 a, b;         // path endpoints (slide guards)
             public float speed, phase;   // sine speed + phase offset (predictable, never random)
+            public bool rot;             // true = rotating blocker (spins instead of sliding)
+            public float rotSpeed;       // constant deg/s for rotating blockers (predictable)
         }
 
         readonly List<Player> _players = new List<Player>();
@@ -129,7 +137,27 @@ namespace MiniArcade.Bridge
         void LoadCourse(int id)
         {
             _courseId = id; _turf.Clear(); _trapBlock.Clear();
-            if (id == 1)
+            _windRect = null; _windDir = Vector2.zero; _windAccel = 0f; _windMax = 0f; _fanBlades = null;   // off unless a course sets it
+            if (id == 2)
+            {
+                // ---- TIKI WIND RUN (map 3): 3 lanes — SAFE left, SKILL middle (sliding gate),
+                // RISKY right (raised ramp/bridge over a sand pit + a fan that blows toward the cup).
+                _tee = new Vector3(0f, BallR + 0.20f, -7.5f);
+                _cup = new Vector3(0f, 0f, 3.2f);                       // top-centre; all 3 lanes converge here
+                _sandC = new Vector2(3.6f, 0.8f); _sandR = 1.7f;        // sand pit the risky bridge crosses
+                _oobAbsX = 7f; _oobZMin = -10.5f; _oobZMax = 6f;
+                _turf.Add(new float[] { -5.5f, -9f, 5.5f, 2.85f });     // main field (below cup row)
+                _turf.Add(new float[] { -5.5f, 2.85f, -0.35f, 4.5f });  // left of cup
+                _turf.Add(new float[] { 0.35f, 2.85f, 5.5f, 4.5f });    // right of cup
+                _trapBlock.Add(new float[] { -1.9f, -4.3f, -1.5f, 1.7f });  // left lane divider
+                _trapBlock.Add(new float[] { 1.5f, -4.3f, 1.9f, 1.7f });    // right lane divider
+                _trapBlock.Add(new float[] { 2.0f, -3.7f, 5.3f, 2.7f });    // risky bridge + sand + rotating guard + fan (no traps)
+                _trapBlock.Add(new float[] { -1.3f, -1.7f, 1.3f, -0.3f });  // sliding-gate guard path (skill lane)
+                _trapBlock.Add(new float[] { -1.4f, 1.8f, 1.4f, 2.9f });    // patrol guard path near the cup
+                _windRect = new float[] { 1.9f, 0.4f, 5.3f, 2.4f };     // upper risky lane (releases BEFORE the cup row)
+                _windDir = new Vector2(-1f, 0f); _windAccel = 7f; _windMax = 2.5f;   // blow LEFT toward cup; capped carry speed
+            }
+            else if (id == 1)
             {
                 // ---- TIKI GUARD course (compact rectangle, central island, risky right lane) ----
                 _tee = new Vector3(0f, BallR + 0.20f, -7f);
@@ -219,7 +247,7 @@ namespace MiniArcade.Bridge
         {
             ClearCourse();
             _buildingCourse = true;
-            if (_courseId == 1) BuildCourseTiki(); else BuildCourseLShape();
+            if (_courseId == 2) BuildCourseWindRun(); else if (_courseId == 1) BuildCourseTiki(); else BuildCourseLShape();
             BuildCup();
             BuildGuards();
             _buildingCourse = false;
@@ -308,14 +336,131 @@ namespace MiniArcade.Bridge
             sand.transform.position = new Vector3(_sandC.x, 0.012f, _sandC.y);
         }
 
-        // ---- moving tiki guards (Tiki course only) ----
+        // ===================== TIKI WIND RUN course (map 3) =====================
+        // Compact rectangle x[-5.5,5.5] z[-9,4.5]. Two free-standing dividers split THREE lanes that
+        // converge at the top-centre cup (0,3.2): SAFE left (clear, indirect) / SKILL middle (sliding gate) /
+        // RISKY right (a raised ramp+bridge over a sand pit + a fan blowing the ball left toward the cup).
+        void BuildCourseWindRun()
+        {
+            // floor: full field with ONLY the cup hole (x[-0.35,0.35] z[2.85,3.55]) left open
+            BoxTurf("WR_Floor", new Vector3(0f, -0.25f, -3.075f), new Vector3(11.0f, 0.5f, 11.85f), _turfTex, _turfMat);
+            BoxTurf("WR_CupL", new Vector3(-2.925f, -0.25f, 3.675f), new Vector3(5.15f, 0.5f, 1.65f), _turfTex, _turfMat);
+            BoxTurf("WR_CupR", new Vector3(2.925f, -0.25f, 3.675f), new Vector3(5.15f, 0.5f, 1.65f), _turfTex, _turfMat);
+            BoxTurf("WR_CupB", new Vector3(0f, -0.25f, 4.025f), new Vector3(0.7f, 0.5f, 0.95f), _turfTex, _turfMat);
+
+            // bamboo perimeter
+            WallRail("WRW_Bottom", new Vector3(0f, 0.35f, -9f), new Vector3(11.3f, 0.7f, 0.3f));
+            WallRail("WRW_Top", new Vector3(0f, 0.35f, 4.5f), new Vector3(11.3f, 0.7f, 0.3f));
+            WallRail("WRW_Left", new Vector3(-5.5f, 0.35f, -2.25f), new Vector3(0.3f, 0.7f, 13.8f));
+            WallRail("WRW_Right", new Vector3(5.5f, 0.35f, -2.25f), new Vector3(0.3f, 0.7f, 13.8f));
+
+            // lane dividers (free-standing; the tee mouth z<-4.2 stays OPEN so nothing blocks the first shot)
+            WallRail("WR_DivL", new Vector3(-1.7f, 0.35f, -1.3f), new Vector3(0.3f, 0.7f, 5.8f));
+            WallRail("WR_DivR", new Vector3(1.7f, 0.35f, -1.3f), new Vector3(0.3f, 0.7f, 5.8f));
+
+            // RISKY shortcut: a sand pit crossed by a raised ramp + flat bridge with a drop-off near the cup
+            var sand = new GameObject("WR_Sand"); DDOL(sand);
+            sand.AddComponent<MeshFilter>().sharedMesh = MakeDisk(_sandR, 64);
+            sand.AddComponent<MeshRenderer>().material = NewMatTrans(_sandTex);
+            sand.transform.position = new Vector3(_sandC.x, 0.012f, _sandC.y);
+            var plank = new Color(0.52f, 0.37f, 0.19f);                                                              // wood: reads clearly as a BRIDGE (not green-on-green)
+            RampBox("WR_Ramp", 3.6f, -1.4f, 0f, 0.1f, 0.4f, 1.5f, 0.30f, plank);                                     // up-ramp (surface 0 -> 0.4)
+            Box("WR_Deck", new Vector3(3.6f, 0.15f, 0.95f), new Vector3(1.5f, 0.5f, 1.9f), plank, _turfMat);         // flat bridge top y=0.4 -> drop-off at z=1.9 (sides OPEN: off-centre = into the sand)
+
+            // FAN: a carved tiki wind totem against the right wall that blows LEFT across the upper risky lane
+            BuildFan(new Vector3(5.15f, 0f, 2.2f));
+
+            // tiki dressing (all collider-free decoration)
+            BambooPost(-5.5f, -9f); BambooPost(5.5f, -9f); BambooPost(-5.5f, 4.5f); BambooPost(5.5f, 4.5f);
+            BambooPost(-1.7f, 1.9f); BambooPost(1.7f, 1.9f); BambooPost(-1.7f, -4.3f); BambooPost(1.7f, -4.3f);
+            IslandTotem(new Vector3(-1.2f, 0f, 4.05f), 0.8f); IslandTotem(new Vector3(1.2f, 0f, 4.05f), 0.8f);
+        }
+
+        // a tilted ramp whose TOP SURFACE runs from (z0,ys0) up to (z1,ys1) at column x (solid roll surface)
+        void RampBox(string name, float x, float z0, float ys0, float z1, float ys1, float width, float thick, Color color)
+        {
+            float dz = z1 - z0, dy = ys1 - ys0;
+            float ang = Mathf.Atan2(dy, dz);                            // radians
+            float len = Mathf.Sqrt(dz * dz + dy * dy);
+            float drop = (thick * 0.5f) / Mathf.Cos(ang);              // lower the centreline so the TOP hits ys0..ys1
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube); DDOL(go);
+            go.name = name;
+            go.transform.position = new Vector3(x, (ys0 + ys1) * 0.5f - drop, (z0 + z1) * 0.5f);
+            go.transform.rotation = Quaternion.Euler(-ang * Mathf.Rad2Deg, 0f, 0f);   // raise the +z end
+            go.transform.localScale = new Vector3(width, thick, len);
+            go.GetComponent<MeshRenderer>().material = NewMat(color);
+            go.GetComponent<BoxCollider>().material = _turfMat;
+        }
+
+        // a carved tiki wind fan: trunk + 4 palm-leaf blades that spin around the x-axis (blow direction = -x)
+        void BuildFan(Vector3 pos)
+        {
+            var wood = new Color(0.40f, 0.26f, 0.14f); var wood2 = new Color(0.29f, 0.18f, 0.10f);
+            var leaf = new Color(0.22f, 0.34f, 0.14f);
+            Cyl("Fan_Post", new Vector3(pos.x, 0.5f, pos.z), 0.14f, 1.0f, wood2);          // trunk
+            Cyl("Fan_Collar", new Vector3(pos.x, 1.0f, pos.z), 0.17f, 0.14f, wood);        // collar
+            var hub = new GameObject("Fan_Hub"); DDOL(hub);
+            hub.transform.position = new Vector3(pos.x - 0.10f, 1.0f, pos.z);
+            hub.transform.rotation = Quaternion.Euler(0f, 90f, 0f);                        // spin axis (local z) -> world x
+            for (int b = 0; b < 4; b++)
+            {
+                var bl = GameObject.CreatePrimitive(PrimitiveType.Cube); DDOL(bl); Destroy(bl.GetComponent<Collider>());
+                bl.name = "Fan_Blade" + b; bl.transform.SetParent(hub.transform, false);
+                bl.transform.localRotation = Quaternion.Euler(0f, 0f, b * 90f);
+                bl.transform.localPosition = bl.transform.localRotation * new Vector3(0f, 0.42f, 0f);
+                bl.transform.localScale = new Vector3(0.16f, 0.80f, 0.04f);
+                bl.GetComponent<MeshRenderer>().material = NewMat(leaf);
+            }
+            var cap = GameObject.CreatePrimitive(PrimitiveType.Sphere); DDOL(cap); Destroy(cap.GetComponent<Collider>());
+            cap.name = "Fan_HubCap"; cap.transform.SetParent(hub.transform, false); cap.transform.localScale = Vector3.one * 0.22f;
+            cap.GetComponent<MeshRenderer>().material = NewMat(wood);
+            _fanBlades = hub.transform;
+        }
+
+        // a ROTATING tiki blocker: a kinematic bar spinning at a constant (predictable) rate around a pivot
+        Guard MakeRotGuard(Vector3 pivot, float barLen, float rotSpeed)
+        {
+            var root = new GameObject("TikiRotGuard"); if (Application.isPlaying) DontDestroyOnLoad(root);
+            var rb = root.AddComponent<Rigidbody>(); rb.isKinematic = true; rb.useGravity = false;
+            rb.interpolation = RigidbodyInterpolation.Interpolate; rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            var col = root.AddComponent<BoxCollider>(); col.center = new Vector3(0f, 0.45f, 0f);
+            col.size = new Vector3(barLen, 0.9f, 0.42f); col.material = _bumperMat;   // long bouncy bar
+            BuildRotBar(root.transform, barLen);
+            root.transform.position = pivot;
+            return new Guard { tr = root.transform, rb = rb, a = pivot, b = pivot, rot = true, rotSpeed = rotSpeed };
+        }
+        void BuildRotBar(Transform holder, float barLen)
+        {
+            var wood = new Color(0.40f, 0.26f, 0.14f); var wood2 = new Color(0.29f, 0.18f, 0.10f); var paint = new Color(0.85f, 0.64f, 0.20f);
+            Prim(holder, new Vector3(0f, 0.45f, 0f), new Vector3(barLen, 0.34f, 0.30f), wood);    // bar
+            Prim(holder, new Vector3(0f, 0.45f, 0f), new Vector3(0.28f, 0.5f, 0.42f), wood2);     // hub
+            float e = barLen * 0.5f - 0.18f;
+            for (int s = -1; s <= 1; s += 2)
+            {
+                Prim(holder, new Vector3(e * s, 0.55f, 0f), new Vector3(0.34f, 0.5f, 0.40f), wood2);       // end head
+                Prim(holder, new Vector3(e * s, 0.55f, -0.21f), new Vector3(0.22f, 0.12f, 0.04f), paint);  // face paint
+            }
+        }
+
+        // ---- moving tiki guards (Tiki + Wind Run courses) ----
         void BuildGuards()
         {
-            if (_courseId != 1) return;
-            // Guard 1 — SLIDING TIKI GATE across the risky right lane (z=-2): time the shot through the open side.
-            _guards.Add(MakeGuard(new Vector3(1.7f, 0f, -2f), new Vector3(3.7f, 0f, -2f), 1.1f, 0f, 1.1f));
-            // Guard 2 — PATROLLING TIKI STATUE across the upper right lane (z=1.5): the safe LEFT route avoids it.
-            _guards.Add(MakeGuard(new Vector3(1.7f, 0f, 1.5f), new Vector3(4.0f, 0f, 1.5f), 0.8f, 1.6f, 0.85f));
+            if (_courseId == 1)
+            {
+                // Guard 1 — SLIDING TIKI GATE across the risky right lane (z=-2): time the shot through the open side.
+                _guards.Add(MakeGuard(new Vector3(1.7f, 0f, -2f), new Vector3(3.7f, 0f, -2f), 1.1f, 0f, 1.1f));
+                // Guard 2 — PATROLLING TIKI STATUE across the upper right lane (z=1.5): the safe LEFT route avoids it.
+                _guards.Add(MakeGuard(new Vector3(1.7f, 0f, 1.5f), new Vector3(4.0f, 0f, 1.5f), 0.8f, 1.6f, 0.85f));
+                return;
+            }
+            if (_courseId == 2)
+            {
+                // Wind Run: SLIDING gate (skill lane) + ROTATING blocker (risky lane) + PATROL near the cup.
+                _guards.Add(MakeGuard(new Vector3(-1.0f, 0f, -1.0f), new Vector3(1.0f, 0f, -1.0f), 1.0f, 0f, 1.0f));   // sliding gate, middle
+                _guards.Add(MakeRotGuard(new Vector3(3.6f, 0f, -2.6f), 2.0f, 55f));                                    // rotating blocker, risky lane
+                _guards.Add(MakeGuard(new Vector3(-1.2f, 0f, 2.4f), new Vector3(1.2f, 0f, 2.4f), 0.7f, 1.0f, 0.9f));   // patrol near the cup
+                return;
+            }
         }
         Guard MakeGuard(Vector3 a, Vector3 b, float speed, float phase, float w)
         {
@@ -334,6 +479,11 @@ namespace MiniArcade.Bridge
             for (int i = 0; i < _guards.Count; i++)
             {
                 var g = _guards[i]; if (g.rb == null) continue;
+                if (g.rot)   // rotating blocker: constant, predictable spin (kinematic MoveRotation)
+                {
+                    g.rb.MoveRotation(Quaternion.Euler(0f, Time.time * g.rotSpeed, 0f));
+                    continue;
+                }
                 float t = Mathf.Sin(Time.time * g.speed + g.phase) * 0.5f + 0.5f;   // smooth, predictable ping-pong
                 g.rb.MovePosition(Vector3.Lerp(g.a, g.b, t));
             }
@@ -654,6 +804,7 @@ namespace MiniArcade.Bridge
             UpdateArrow();
             UpdateCamera(Time.deltaTime);
             AnimateTraps(Time.deltaTime);   // tick trap cooldowns + play reveal pops every frame
+            if (_fanBlades != null) _fanBlades.Rotate(0f, 0f, 150f * Time.deltaTime, Space.Self);   // map-3 fan spins always
             if (_active < 0 || _active >= _players.Count) return;
             var p = _players[_active];
             if (p.ball == null || p.ball.isKinematic) return;
@@ -662,7 +813,8 @@ namespace MiniArcade.Bridge
             if (grounded)
             {
                 float sp = p.ball.linearVelocity.magnitude;
-                if (OverSand(p.ball.position)) p.ball.linearVelocity = Vector3.MoveTowards(p.ball.linearVelocity, Vector3.zero, 7f * Time.deltaTime);
+                // sand slows the ball — but ONLY at ground level, so the raised map-3 bridge above the sand is fast.
+                if (OverSand(p.ball.position) && p.ball.position.y < 0.35f) p.ball.linearVelocity = Vector3.MoveTowards(p.ball.linearVelocity, Vector3.zero, 7f * Time.deltaTime);
                 else if (sp < 0.25f) p.ball.linearVelocity = Vector3.MoveTowards(p.ball.linearVelocity, Vector3.zero, 1.5f * Time.deltaTime);
             }
 
@@ -670,6 +822,20 @@ namespace MiniArcade.Bridge
             p.flight += Time.deltaTime; Vector3 pos = p.ball.position; float speed = p.ball.linearVelocity.magnitude;
 
             CheckTraps(p, pos);   // spring any hidden trap the ball reaches (reveal + bounce/boost)
+
+            // map-3 fan: bend the ball sideways while it crosses the wind zone. Predictable + modest:
+            // the push only accelerates the ball UP TO _windMax along the wind dir, so dwell time can't pile up.
+            if (_windAccel > 0f && _windRect != null &&
+                pos.x >= _windRect[0] && pos.x <= _windRect[2] && pos.z >= _windRect[1] && pos.z <= _windRect[3])
+            {
+                Vector3 wdir = new Vector3(_windDir.x, 0f, _windDir.y);
+                float along = Vector3.Dot(p.ball.linearVelocity, wdir);      // current speed along the wind
+                if (along < _windMax)
+                {
+                    float add = Mathf.Min(_windAccel * Time.deltaTime, _windMax - along);
+                    p.ball.linearVelocity += wdir * add;
+                }
+            }
 
             bool inWellColumn = Mathf.Abs(pos.x - _cup.x) < CupHalf && Mathf.Abs(pos.z - _cup.z) < CupHalf;
             bool downInWell = inWellColumn && pos.y < -0.22f;

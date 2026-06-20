@@ -13,7 +13,7 @@ namespace MiniArcade.Editor
     {
         private const string BootScenePath = "Assets/Scenes/Boot.unity";
         private const string DefaultXcodeProjectPath = "Builds/iOS/MiniArcade-iOS";
-        private const string BundleIdentifier = "com.al3aabu.miniarcade";
+        private const string BundleIdentifier = "com.al3aa.miniArcade";
         private const string MinimumIosVersion = "15.0";
 
         [MenuItem("Mini Arcade/Export iOS Xcode Project")]
