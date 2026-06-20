@@ -66,6 +66,7 @@ namespace MiniArcade.Editor
         // error shader. Force them into the build via Always Included Shaders.
         private static readonly string[] GuaranteedShaders = {
             "Legacy Shaders/Diffuse",
+            "Legacy Shaders/Transparent/Diffuse",   // semi-transparent aim arrow
             "Unlit/Color",
             "Sprites/Default",
         };

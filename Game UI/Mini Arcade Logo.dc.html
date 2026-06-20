@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+</style>
+</helmet>
+
+<div style="width: max-content; min-width: 100%; min-height: 100vh; box-sizing: border-box; padding: 56px; background: #e7e5df; font-family: 'Fredoka', system-ui, sans-serif;">
+  <div style="margin-bottom: 8px; font-size: 22px; font-weight: 700; color: #2b2b30; letter-spacing: -0.3px;">Mini Arcade — App Logo</div>
+  <div style="margin-bottom: 40px; font-size: 14px; font-weight: 500; color: #8a8a92;">Three icon directions · wordmark lock-up · light + dark</div>
+
+  <div style="display: flex; gap: 48px; align-items: flex-start;">
+
+    <!-- ============ DIRECTION A: Joystick ============ -->
+    <div style="flex: none; width: 300px;">
+      <div style="margin-bottom: 14px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">A · Joystick</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 36px; display: flex; flex-direction: column; align-items: center; gap: 30px;">
+        <!-- icon -->
+        <div style="position: relative; width: 200px; height: 200px; border-radius: 46px; background: radial-gradient(125% 120% at 28% 18%, #a435ee 0%, #6d28d9 52%, #3b0d73 100%); box-shadow: 0 18px 36px rgba(59,13,115,0.32), inset 0 2px 0 rgba(255,255,255,0.22), inset 0 -8px 18px rgba(0,0,0,0.25); overflow: hidden;">
+          <div style="position: absolute; top: -36px; left: -10px; width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.5), rgba(216,112,255,0) 68%);"></div>
+          <!-- stick -->
+          <div style="position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); width: 18px; height: 70px; border-radius: 9px; background: linear-gradient(90deg, #c98a00, #FFD23F 45%, #fff4cf 55%, #FFB300); box-shadow: 0 6px 12px rgba(0,0,0,0.3);"></div>
+          <!-- ball top -->
+          <div style="position: absolute; left: 50%; top: 44px; transform: translateX(-50%); width: 74px; height: 74px; border-radius: 50%; background: radial-gradient(circle at 36% 30%, #ff9ecb, #FF5DA2 55%, #d8327c); box-shadow: 0 10px 20px rgba(0,0,0,0.32), inset 0 -6px 10px rgba(0,0,0,0.2), inset 0 4px 8px rgba(255,255,255,0.45);"></div>
+          <!-- highlight -->
+          <div style="position: absolute; left: 50%; top: 54px; transform: translateX(-50%); width: 22px; height: 16px; border-radius: 50%; background: rgba(255,255,255,0.65); margin-left: -12px; filter: blur(1px);"></div>
+          <!-- base -->
+          <div style="position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: 110px; height: 30px; border-radius: 999px; background: linear-gradient(180deg, #2a0a55, #1b0738); box-shadow: 0 6px 14px rgba(0,0,0,0.35), inset 0 2px 0 rgba(255,255,255,0.12);"></div>
+          <!-- spark -->
+          <div style="position: absolute; right: 34px; top: 34px; width: 12px; height: 12px; border-radius: 50%; background: #B6FF4B; box-shadow: 0 0 12px #B6FF4B;"></div>
+        </div>
+        <!-- name -->
+        <div style="display: flex; align-items: flex-end; line-height: 0.85;">
+          <span style="font-size: 24px; font-weight: 600; color: #3b0d73; letter-spacing: 3px;">MINI</span>
+          <span style="font-size: 26px; font-weight: 700; font-style: italic; color: #FF5DA2; margin-left: 7px; text-shadow: 1.5px 1.5px 0 #d8327c;">ARCADE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ DIRECTION B: Cabinet screen ============ -->
+    <div style="flex: none; width: 300px;">
+      <div style="margin-bottom: 14px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">B · Cabinet (mark)</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 36px; display: flex; flex-direction: column; align-items: center; gap: 30px;">
+        <div style="position: relative; width: 200px; height: 200px; border-radius: 46px; background: radial-gradient(125% 120% at 72% 20%, #FFE27A 0%, #FFB300 55%, #d98c00 100%); box-shadow: 0 18px 36px rgba(217,140,0,0.3), inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -8px 18px rgba(0,0,0,0.18); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+          <!-- screen -->
+          <div style="position: relative; width: 132px; height: 132px; border-radius: 28px; background: radial-gradient(120% 120% at 50% 0%, #6d28d9, #3b0d73); box-shadow: inset 0 0 0 5px rgba(255,255,255,0.9), inset 0 6px 22px rgba(0,0,0,0.4);">
+            <!-- three pucks = three games -->
+            <div style="position: absolute; left: 28px; top: 34px; width: 30px; height: 30px; border-radius: 50%; background: #FF5DA2; box-shadow: 0 0 10px rgba(255,93,162,0.7);"></div>
+            <div style="position: absolute; right: 26px; top: 30px; width: 26px; height: 26px; border-radius: 8px; background: #38E1FF; transform: rotate(16deg); box-shadow: 0 0 10px rgba(56,225,255,0.6);"></div>
+            <div style="position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: 0; height: 0; border-left: 17px solid transparent; border-right: 17px solid transparent; border-bottom: 28px solid #B6FF4B; filter: drop-shadow(0 0 8px rgba(182,255,75,0.6));"></div>
+          </div>
+          <!-- coin slot -->
+          <div style="position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); width: 46px; height: 8px; border-radius: 4px; background: rgba(59,13,115,0.55);"></div>
+        </div>
+        <div style="display: flex; align-items: flex-end; line-height: 0.85;">
+          <span style="font-size: 24px; font-weight: 600; color: #3b0d73; letter-spacing: 3px;">MINI</span>
+          <span style="font-size: 26px; font-weight: 700; font-style: italic; color: #FFB300; margin-left: 7px; text-shadow: 1.5px 1.5px 0 #d98c00;">ARCADE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ DIRECTION C: Monogram ============ -->
+    <div style="flex: none; width: 300px;">
+      <div style="margin-bottom: 14px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">C · Monogram</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 36px; display: flex; flex-direction: column; align-items: center; gap: 30px;">
+        <div style="position: relative; width: 200px; height: 200px; border-radius: 46px; background: radial-gradient(125% 120% at 30% 16%, #FF7AB8 0%, #FF5DA2 46%, #b81f6e 100%); box-shadow: 0 18px 36px rgba(184,31,110,0.32), inset 0 2px 0 rgba(255,255,255,0.32), inset 0 -8px 18px rgba(0,0,0,0.2); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+          <div style="position: absolute; bottom: -40px; right: -16px; width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle, rgba(255,210,63,0.5), rgba(255,210,63,0) 68%);"></div>
+          <!-- A built from a joystick -->
+          <div style="position: relative; width: 120px; height: 130px;">
+            <!-- left leg -->
+            <div style="position: absolute; left: 22px; bottom: 0; width: 22px; height: 118px; border-radius: 11px; background: linear-gradient(180deg, #fff, #ffe9f4); transform: rotate(15deg); transform-origin: bottom center; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"></div>
+            <!-- right leg -->
+            <div style="position: absolute; right: 22px; bottom: 0; width: 22px; height: 118px; border-radius: 11px; background: linear-gradient(180deg, #fff, #ffe9f4); transform: rotate(-15deg); transform-origin: bottom center; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"></div>
+            <!-- crossbar -->
+            <div style="position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); width: 58px; height: 18px; border-radius: 9px; background: #B6FF4B; box-shadow: 0 0 12px rgba(182,255,75,0.5);"></div>
+            <!-- ball on top -->
+            <div style="position: absolute; left: 50%; top: -6px; transform: translateX(-50%); width: 46px; height: 46px; border-radius: 50%; background: radial-gradient(circle at 36% 30%, #fff4cf, #FFD23F 55%, #d99700); box-shadow: 0 6px 14px rgba(0,0,0,0.28), inset 0 3px 6px rgba(255,255,255,0.5);"></div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-end; line-height: 0.85;">
+          <span style="font-size: 24px; font-weight: 600; color: #3b0d73; letter-spacing: 3px;">MINI</span>
+          <span style="font-size: 26px; font-weight: 700; font-style: italic; color: #FF5DA2; margin-left: 7px; text-shadow: 1.5px 1.5px 0 #d8327c;">ARCADE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ USAGE: dark + sizes ============ -->
+    <div style="flex: none; width: 260px;">
+      <div style="margin-bottom: 14px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">On device · scale</div>
+      <div style="background: #16161c; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 26px;">
+        <!-- home-screen tile (dir A) -->
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 9px;">
+          <div style="position: relative; width: 120px; height: 120px; border-radius: 27px; background: radial-gradient(125% 120% at 28% 18%, #a435ee 0%, #6d28d9 52%, #3b0d73 100%); box-shadow: 0 10px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.22); overflow: hidden;">
+            <div style="position: absolute; left: 50%; top: 27px; transform: translateX(-50%); width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 36% 30%, #ff9ecb, #FF5DA2 55%, #d8327c); box-shadow: inset 0 3px 6px rgba(255,255,255,0.4);"></div>
+            <div style="position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: 11px; height: 40px; border-radius: 6px; background: linear-gradient(90deg, #c98a00, #FFD23F 50%, #FFB300);"></div>
+            <div style="position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: 66px; height: 18px; border-radius: 999px; background: #1b0738;"></div>
+          </div>
+          <span style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85);">Mini Arcade</span>
+        </div>
+        <!-- small sizes -->
+        <div style="display: flex; align-items: flex-end; gap: 16px;">
+          <div style="position: relative; width: 60px; height: 60px; border-radius: 14px; background: radial-gradient(125% 120% at 28% 18%, #a435ee, #3b0d73); overflow: hidden;">
+            <div style="position: absolute; left: 50%; top: 13px; transform: translateX(-50%); width: 22px; height: 22px; border-radius: 50%; background: #FF5DA2;"></div>
+            <div style="position: absolute; left: 50%; bottom: 13px; transform: translateX(-50%); width: 6px; height: 20px; border-radius: 3px; background: #FFD23F;"></div>
+            <div style="position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); width: 34px; height: 10px; border-radius: 999px; background: #1b0738;"></div>
+          </div>
+          <div style="position: relative; width: 38px; height: 38px; border-radius: 10px; background: radial-gradient(125% 120% at 28% 18%, #a435ee, #3b0d73); overflow: hidden;">
+            <div style="position: absolute; left: 50%; top: 8px; transform: translateX(-50%); width: 15px; height: 15px; border-radius: 50%; background: #FF5DA2;"></div>
+            <div style="position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); width: 4px; height: 13px; border-radius: 2px; background: #FFD23F;"></div>
+            <div style="position: absolute; left: 50%; bottom: 5px; transform: translateX(-50%); width: 22px; height: 7px; border-radius: 999px; background: #1b0738;"></div>
+          </div>
+        </div>
+        <div style="font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.4); letter-spacing: 0.5px;">120 · 60 · 38 px</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @keyframes ma-pulse { 0%,100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.14); opacity: 0.8; } }
+  .acct-name-input::placeholder { color: rgba(255,255,255,0.4); }
+</style>
+</helmet>
+
+<div style="width: max-content; min-width: 100%; min-height: 100vh; box-sizing: border-box; padding: 48px 56px; background: #e7e5df; font-family: 'Fredoka', system-ui, sans-serif;">
+  <div style="margin-bottom: 8px; font-size: 22px; font-weight: 700; color: #2b2b30; letter-spacing: -0.3px;">Mini Arcade — Account</div>
+  <div style="margin-bottom: 36px; font-size: 14px; font-weight: 500; color: #8a8a92;">Two states · guest (not signed in) and a signed-in member · reached from Settings → Edit</div>
+
+  <div style="display: flex; gap: 64px; align-items: flex-start;">
+
+    <!-- ============ GUEST ============ -->
+    <div style="flex: none; width: 402px;">
+      <div style="margin-bottom: 16px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">Guest · not signed in</div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ darkMode }}" hint-size="402px,874px">
+        <div data-screen-label="Account · Guest" style="position: relative; width: 100%; height: 100%; overflow-x: hidden; overflow-y: auto; background: radial-gradient(135% 90% at 50% -10%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%); display: flex; flex-direction: column; box-sizing: border-box; padding: 56px 18px 28px;">
+          <div style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.4) 0%, rgba(216,112,255,0) 70%); animation: ma-pulse 6s ease-in-out infinite; pointer-events: none; z-index: 0;"></div>
+
+          <div style="position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; margin-bottom: 24px;">
+            <button style="width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ noop }}">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div style="font-size: 30px; font-weight: 700; color: #fff; letter-spacing: -0.6px;">Account</div>
+          </div>
+
+          <div style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 26px;">
+            <div style="position: relative; width: 104px; height: 104px;">
+              <div style="width: 104px; height: 104px; border-radius: 30px; background: {{ g.avatarBg }}; display: flex; align-items: center; justify-content: center; color: {{ g.avatarFg }}; font-size: 44px; font-weight: 700; box-shadow: 0 12px 26px rgba(0,0,0,0.3), inset 0 0 0 3px rgba(255,255,255,0.35);">{{ g.initial }}</div>
+              <button style="position: absolute; bottom: -6px; right: -6px; width: 36px; height: 36px; border-radius: 50%; border: 3px solid #4a1a8f; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ noop }}">
+                <svg width="17" height="17" viewBox="0 0 22 22" fill="none"><path d="M4 8.5h3l1.4-2h5.2L18 8.5h0v8.5H4V8.5z" stroke="#6d28d9" stroke-width="1.8" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.6" stroke="#6d28d9" stroke-width="1.8"/></svg>
+              </button>
+            </div>
+            <div style="display: flex; gap: 12px;">
+              <button onClick="{{ gPickColor }}" data-color="gold" style="{{ g.swatch.gold }}"></button>
+              <button onClick="{{ gPickColor }}" data-color="pink" style="{{ g.swatch.pink }}"></button>
+              <button onClick="{{ gPickColor }}" data-color="cyan" style="{{ g.swatch.cyan }}"></button>
+              <button onClick="{{ gPickColor }}" data-color="green" style="{{ g.swatch.green }}"></button>
+              <button onClick="{{ gPickColor }}" data-color="purple" style="{{ g.swatch.purple }}"></button>
+            </div>
+            <div style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.55);">Pick your character color</div>
+          </div>
+
+          <div style="position: relative; z-index: 1; font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.3px; margin: 0 2px 10px;">Display name</div>
+          <div style="position: relative; z-index: 1; height: 56px; border-radius: 16px; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.2); display: flex; align-items: center; padding: 0 16px; margin-bottom: 26px;">
+            <input class="acct-name-input" type="text" value="{{ g.name }}" onInput="{{ gOnName }}" maxlength="16" placeholder="Your name" style="flex: 1; background: none; border: none; outline: none; color: #fff; font-family: 'Fredoka', sans-serif; font-size: 16px; font-weight: 600;">
+            <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.4);">{{ g.nameCount }}/16</span>
+          </div>
+
+          <div style="position: relative; z-index: 1; font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.3px; margin: 0 2px 10px;">Sign in &amp; sync</div>
+          <div style="position: relative; z-index: 1; border-radius: 20px; background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.14); padding: 16px; margin-bottom: 26px;">
+            <div style="display: flex; align-items: center; gap: 11px; margin-bottom: 14px;">
+              <div style="width: 34px; height: 34px; border-radius: 10px; background: rgba(255,210,63,0.18); display: flex; align-items: center; justify-content: center; flex: none;">
+                <svg width="17" height="17" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="7" r="4" stroke="#FFD23F" stroke-width="1.8"/><path d="M3.5 18c1.2-3.6 4-5 7.5-5s6.3 1.4 7.5 5" stroke="#FFD23F" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 14.5px; font-weight: 600; color: #fff;">You're playing as a guest</div>
+                <div style="font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.55);">Sign in to save coins, characters &amp; progress.</div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 9px;">
+              <button style="height: 48px; border: none; border-radius: 13px; background: #000; color: #fff; font-family: 'Fredoka', sans-serif; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 9px;" onClick="{{ noop }}">
+                <svg width="16" height="16" viewBox="0 0 18 18" fill="#fff"><path d="M12.9 9.6c0-1.7 1.4-2.6 1.5-2.6-.8-1.2-2-1.4-2.5-1.4-1-.1-2 .6-2.6.6s-1.4-.6-2.3-.6c-1.2 0-2.3.7-2.9 1.8-1.2 2.2-.3 5.4.9 7.2.6.9 1.3 1.8 2.2 1.8.9 0 1.2-.6 2.3-.6s1.4.6 2.3.6 1.5-.9 2.1-1.7c.7-1 .9-1.9.9-2-.02 0-1.8-.7-1.8-2.7zM11.2 4.3c.5-.6.8-1.4.7-2.3-.7 0-1.6.5-2.1 1.1-.5.5-.9 1.4-.8 2.2.8.06 1.6-.4 2.2-1z"/></svg>
+                Continue with Apple
+              </button>
+              <button style="height: 48px; border: 1.5px solid rgba(255,255,255,0.22); border-radius: 13px; background: rgba(255,255,255,0.06); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 9px;" onClick="{{ noop }}">
+                <svg width="17" height="17" viewBox="0 0 22 22" fill="none"><rect x="3" y="5" width="16" height="12" rx="2.5" stroke="#fff" stroke-width="1.8"/><path d="M4 6.5l7 5 7-5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Use email instead
+              </button>
+            </div>
+          </div>
+
+          <div style="position: relative; z-index: 1; text-align: center; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.4); margin-bottom: 22px;">Guest progress is kept on this device only.</div>
+          <div style="position: relative; z-index: 1; text-align: center; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.3);">Mini Arcade · Version 1.0.0</div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ SIGNED IN ============ -->
+    <div style="flex: none; width: 402px;">
+      <div style="margin-bottom: 16px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">Member · signed in</div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ darkMode }}" hint-size="402px,874px">
+        <div data-screen-label="Account · Signed in" style="position: relative; width: 100%; height: 100%; overflow-x: hidden; overflow-y: auto; background: radial-gradient(135% 90% at 50% -10%, #a435ee 0%, #6d28d9 44%, #3b0d73 100%); display: flex; flex-direction: column; box-sizing: border-box; padding: 56px 18px 28px;">
+          <div style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.4) 0%, rgba(216,112,255,0) 70%); animation: ma-pulse 6s ease-in-out infinite; pointer-events: none; z-index: 0;"></div>
+
+          <div style="position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; margin-bottom: 24px;">
+            <button style="width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ noop }}">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div style="font-size: 30px; font-weight: 700; color: #fff; letter-spacing: -0.6px;">Account</div>
+          </div>
+
+          <div style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 26px;">
+            <div style="position: relative; width: 104px; height: 104px;">
+              <div style="width: 104px; height: 104px; border-radius: 30px; background: {{ u.avatarBg }}; display: flex; align-items: center; justify-content: center; color: {{ u.avatarFg }}; font-size: 44px; font-weight: 700; box-shadow: 0 12px 26px rgba(0,0,0,0.3), inset 0 0 0 3px rgba(255,255,255,0.35);">{{ u.initial }}</div>
+              <button style="position: absolute; bottom: -6px; right: -6px; width: 36px; height: 36px; border-radius: 50%; border: 3px solid #4a1a8f; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;" onClick="{{ noop }}">
+                <svg width="17" height="17" viewBox="0 0 22 22" fill="none"><path d="M4 8.5h3l1.4-2h5.2L18 8.5h0v8.5H4V8.5z" stroke="#6d28d9" stroke-width="1.8" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.6" stroke="#6d28d9" stroke-width="1.8"/></svg>
+              </button>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 3px;">
+              <div style="display: flex; align-items: center; gap: 7px;">
+                <span style="font-size: 19px; font-weight: 700; color: #fff;">{{ u.name }}</span>
+                <span style="display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px; border-radius: 11px; background: rgba(255,210,63,0.18);">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#FFD23F"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+                  <span style="font-size: 10.5px; font-weight: 700; color: #FFD23F; letter-spacing: 0.5px;">PREMIUM</span>
+                </span>
+              </div>
+              <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.55);">@mayar · 12,480 coins earned</span>
+            </div>
+            <div style="display: flex; gap: 12px;">
+              <button onClick="{{ uPickColor }}" data-color="gold" style="{{ u.swatch.gold }}"></button>
+              <button onClick="{{ uPickColor }}" data-color="pink" style="{{ u.swatch.pink }}"></button>
+              <button onClick="{{ uPickColor }}" data-color="cyan" style="{{ u.swatch.cyan }}"></button>
+              <button onClick="{{ uPickColor }}" data-color="green" style="{{ u.swatch.green }}"></button>
+              <button onClick="{{ uPickColor }}" data-color="purple" style="{{ u.swatch.purple }}"></button>
+            </div>
+          </div>
+
+          <div style="position: relative; z-index: 1; font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.3px; margin: 0 2px 10px;">Display name</div>
+          <div style="position: relative; z-index: 1; height: 56px; border-radius: 16px; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.2); display: flex; align-items: center; padding: 0 16px; margin-bottom: 26px;">
+            <input class="acct-name-input" type="text" value="{{ u.name }}" onInput="{{ uOnName }}" maxlength="16" placeholder="Your name" style="flex: 1; background: none; border: none; outline: none; color: #fff; font-family: 'Fredoka', sans-serif; font-size: 16px; font-weight: 600;">
+            <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.4);">{{ u.nameCount }}/16</span>
+          </div>
+
+          <div style="position: relative; z-index: 1; font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.3px; margin: 0 2px 10px;">Account</div>
+          <div style="position: relative; z-index: 1; border-radius: 20px; background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.14); padding: 4px 16px; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+              <div style="width: 34px; height: 34px; border-radius: 10px; background: rgba(56,225,255,0.18); display: flex; align-items: center; justify-content: center; flex: none;">
+                <svg width="17" height="17" viewBox="0 0 22 22" fill="none"><rect x="3" y="5" width="16" height="12" rx="2.5" stroke="#38E1FF" stroke-width="1.8"/><path d="M4 6.5l7 5 7-5" stroke="#38E1FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 14.5px; font-weight: 600; color: #fff;">maya.r@email.com</div>
+                <div style="font-size: 11.5px; font-weight: 500; color: #B6FF4B;">Verified</div>
+              </div>
+              <svg width="8" height="13" viewBox="0 0 9 15" fill="none"><path d="M1.5 1.5l6 6-6 6" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <button style="display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: none; cursor: pointer; padding: 14px 0; font-family: 'Fredoka', sans-serif; border-bottom: 1px solid rgba(255,255,255,0.1);" onClick="{{ noop }}">
+              <div style="width: 34px; height: 34px; border-radius: 10px; background: rgba(182,255,75,0.16); display: flex; align-items: center; justify-content: center; flex: none;">
+                <svg width="16" height="16" viewBox="0 0 22 22" fill="none"><rect x="4.5" y="9.5" width="13" height="9" rx="2" stroke="#B6FF4B" stroke-width="1.8"/><path d="M7 9.5V7a4 4 0 0 1 8 0v2.5" stroke="#B6FF4B" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </div>
+              <span style="flex: 1; text-align: left; font-size: 14.5px; font-weight: 600; color: #fff;">Change password</span>
+              <svg width="8" height="13" viewBox="0 0 9 15" fill="none"><path d="M1.5 1.5l6 6-6 6" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 14px 0;">
+              <div style="width: 34px; height: 34px; border-radius: 10px; background: #000; display: flex; align-items: center; justify-content: center; flex: none;">
+                <svg width="15" height="15" viewBox="0 0 18 18" fill="#fff"><path d="M12.9 9.6c0-1.7 1.4-2.6 1.5-2.6-.8-1.2-2-1.4-2.5-1.4-1-.1-2 .6-2.6.6s-1.4-.6-2.3-.6c-1.2 0-2.3.7-2.9 1.8-1.2 2.2-.3 5.4.9 7.2.6.9 1.3 1.8 2.2 1.8.9 0 1.2-.6 2.3-.6s1.4.6 2.3.6 1.5-.9 2.1-1.7c.7-1 .9-1.9.9-2-.02 0-1.8-.7-1.8-2.7zM11.2 4.3c.5-.6.8-1.4.7-2.3-.7 0-1.6.5-2.1 1.1-.5.5-.9 1.4-.8 2.2.8.06 1.6-.4 2.2-1z"/></svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 14.5px; font-weight: 600; color: #fff;">Apple</div>
+                <div style="font-size: 11.5px; font-weight: 500; color: rgba(255,255,255,0.5);">Linked</div>
+              </div>
+              <span style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.55);">Unlink</span>
+            </div>
+          </div>
+          <div style="position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 0 4px; margin-bottom: 26px;">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-9" stroke="#B6FF4B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.6);">Progress synced · last backup just now</span>
+          </div>
+
+          <div style="position: relative; z-index: 1; font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.3px; margin: 0 2px 10px;">Subscription</div>
+          <div style="position: relative; z-index: 1; border-radius: 20px; background: linear-gradient(150deg, #FFE27A, #FFB300); padding: 16px; margin-bottom: 26px; box-shadow: 0 10px 24px rgba(217,140,0,0.3);">
+            <div style="display: flex; align-items: center; gap: 13px;">
+              <div style="width: 42px; height: 42px; border-radius: 13px; background: rgba(59,13,115,0.16); display: flex; align-items: center; justify-content: center; flex: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#3b0d73"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 15px; font-weight: 700; color: #3b0d73;">Premium · active</div>
+                <div style="font-size: 12.5px; font-weight: 600; color: rgba(59,13,115,0.7);">8 players · renews Jul 12, 2026</div>
+              </div>
+              <button style="height: 36px; padding: 0 15px; border: none; border-radius: 18px; background: #3b0d73; color: #FFD23F; font-family: 'Fredoka', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;" onClick="{{ noop }}">Manage</button>
+            </div>
+          </div>
+
+          <button style="position: relative; z-index: 1; width: 100%; height: 52px; border: 1.5px solid rgba(255,255,255,0.18); border-radius: 16px; background: rgba(255,255,255,0.06); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 15.5px; font-weight: 600; cursor: pointer; margin-bottom: 12px;" onClick="{{ noop }}">Sign out</button>
+          <button style="position: relative; z-index: 1; width: 100%; height: 52px; border: 1.5px solid rgba(255,93,162,0.4); border-radius: 16px; background: rgba(255,93,162,0.12); color: #FF8FC0; font-family: 'Fredoka', sans-serif; font-size: 15.5px; font-weight: 600; cursor: pointer; margin-bottom: 16px;" onClick="{{ noop }}">Delete account</button>
+          <div style="position: relative; z-index: 1; text-align: center; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.3);">Mini Arcade · Version 1.0.0</div>
+        </div>
+      </x-import>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { gName: 'You', gColor: 'gold', uName: 'Maya R.', uColor: 'pink' };
+  build(name, color) {
+    const COLORS = {
+      gold:   { bg: 'linear-gradient(150deg, #FFE27A, #FFB300)', fg: '#3b0d73' },
+      pink:   { bg: 'linear-gradient(150deg, #FF8FC0, #FF5DA2)', fg: '#fff'    },
+      cyan:   { bg: 'linear-gradient(150deg, #8defff, #38E1FF)', fg: '#0b3a45' },
+      green:  { bg: 'linear-gradient(150deg, #d4ff8f, #B6FF4B)', fg: '#1c4d12' },
+      purple: { bg: 'linear-gradient(150deg, #c98bff, #8a2be2)', fg: '#fff'    },
+    };
+    const swatch = {};
+    Object.keys(COLORS).forEach((k) => {
+      const on = color === k;
+      swatch[k] = `width: 40px; height: 40px; border-radius: 50%; cursor: pointer; padding: 0; background: ${COLORS[k].bg}; border: 3px solid ${on ? '#fff' : 'rgba(255,255,255,0.25)'}; box-shadow: ${on ? '0 0 0 3px rgba(255,255,255,0.35), 0 4px 10px rgba(0,0,0,0.3)' : 'none'}; transform: ${on ? 'scale(1.08)' : 'scale(1)'}; transition: all 0.15s;`;
+    });
+    const nm = (name || '').trim();
+    return { name, nameCount: (name || '').length, initial: (nm ? nm[0] : '?').toUpperCase(), avatarBg: COLORS[color].bg, avatarFg: COLORS[color].fg, swatch };
+  }
+  renderVals() {
+    const s = this.state;
+    return {
+      darkMode: true,
+      g: this.build(s.gName, s.gColor),
+      u: this.build(s.uName, s.uColor),
+      gOnName: (e) => this.setState({ gName: e.target.value }),
+      uOnName: (e) => this.setState({ uName: e.target.value }),
+      gPickColor: (e) => this.setState({ gColor: e.currentTarget.dataset.color }),
+      uPickColor: (e) => this.setState({ uColor: e.currentTarget.dataset.color }),
+      noop: () => {},
+    };
+  }
+}
+</script>
+</body>
+</html>

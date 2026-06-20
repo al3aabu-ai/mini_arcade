@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @keyframes ga-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes ga-flag { 0%,100% { transform: scaleX(1) skewY(0deg); } 50% { transform: scaleX(0.86) skewY(-4deg); } }
+  @keyframes ga-shimmer { 0%,100% { opacity: 0.35; transform: translateX(-6px); } 50% { opacity: 0.7; transform: translateX(6px); } }
+  @keyframes ga-pulse { 0%,100% { transform: scale(1); opacity: 0.55; } 50% { transform: scale(1.18); opacity: 0.95; } }
+  @keyframes ga-reticle { 0%,100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.16); opacity: 0.4; } }
+  @keyframes ga-ball { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  @keyframes ga-dash { to { background-position: 0 -30px; } }
+  @keyframes ga-power { 0%,100% { width: 26%; } 50% { width: 84%; } }
+  @keyframes ga-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+</style>
+</helmet>
+
+<div style="width: max-content; min-width: 100%; min-height: 100vh; box-sizing: border-box; padding: 56px; background: #e7e5df; font-family: 'Fredoka', system-ui, sans-serif;">
+  <div style="margin-bottom: 8px; font-size: 22px; font-weight: 700; color: #2b2b30; letter-spacing: -0.3px;">Mini Arcade — Golf Map</div>
+  <div style="margin-bottom: 40px; font-size: 14px; font-weight: 500; color: #8a8a92;">Big screen · top-down course · Hole 3 in play</div>
+
+  <!-- TV -->
+  <div style="display: inline-flex; flex-direction: column; align-items: center;">
+    <div style="flex: none; padding: 16px; border-radius: 30px; background: linear-gradient(160deg, #2a2a30, #161619); box-shadow: 0 30px 60px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08);">
+      <div style="position: relative; width: 1280px; height: 720px; border-radius: 16px; overflow: hidden; background: #2f7d4f; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.3);">
+
+        <!-- ============ ROUGH (textured grass base) ============ -->
+        <div style="position: absolute; inset: 0; background:
+            radial-gradient(120% 90% at 50% -10%, #3f9a63 0%, #2c7349 55%, #235e3c 100%);"></div>
+        <div style="position: absolute; inset: 0; opacity: 0.5; background-image:
+            repeating-linear-gradient(135deg, rgba(255,255,255,0.04) 0 14px, transparent 14px 28px);"></div>
+
+        <!-- ============ COURSE RIM / WALLS (sandy curb) ============ -->
+        <div style="position: absolute; left: 102px; top: 42px; width: 366px; height: 636px; border-radius: 108px; background: linear-gradient(160deg, #e3c187, #c39a59); box-shadow: 0 10px 22px rgba(0,0,0,0.22);"></div>
+        <div style="position: absolute; left: 102px; top: 42px; width: 1046px; height: 356px; border-radius: 108px; background: linear-gradient(160deg, #e3c187, #c39a59); box-shadow: 0 10px 22px rgba(0,0,0,0.22);"></div>
+
+        <!-- ============ FAIRWAY (bright green play surface) ============ -->
+        <div style="position: absolute; left: 120px; top: 60px; width: 330px; height: 600px; border-radius: 90px; background: linear-gradient(165deg, #62cd7c, #45b466);"></div>
+        <div style="position: absolute; left: 120px; top: 60px; width: 1010px; height: 320px; border-radius: 90px; background: linear-gradient(165deg, #62cd7c, #45b466);"></div>
+        <!-- mowing stripes -->
+        <div style="position: absolute; left: 120px; top: 60px; width: 330px; height: 600px; border-radius: 90px; opacity: 0.5; background: repeating-linear-gradient(180deg, rgba(255,255,255,0.07) 0 26px, transparent 26px 52px);"></div>
+        <div style="position: absolute; left: 450px; top: 60px; width: 680px; height: 320px; border-radius: 0 90px 90px 0; opacity: 0.5; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0 26px, transparent 26px 52px);"></div>
+
+        <!-- putting green (lighter, near hole) -->
+        <div style="position: absolute; left: 800px; top: 90px; width: 300px; height: 260px; border-radius: 80px; background: radial-gradient(circle at 55% 45%, #8fe6a3, #6cd286);"></div>
+
+        <!-- ============ WATER HAZARD ============ -->
+        <div style="position: absolute; left: 500px; top: 150px; width: 250px; height: 150px; border-radius: 50%; background: linear-gradient(160deg, #4fc6ee, #2a9ed1); box-shadow: inset 0 0 0 6px rgba(255,255,255,0.18), inset 0 8px 20px rgba(0,0,0,0.18);"></div>
+        <div style="position: absolute; left: 520px; top: 175px; width: 210px; height: 70px; border-radius: 50%; background: rgba(255,255,255,0.4); filter: blur(3px); animation: ga-shimmer 3.6s ease-in-out infinite;"></div>
+
+        <!-- ============ SAND TRAPS ============ -->
+        <div style="position: absolute; left: 830px; top: 250px; width: 170px; height: 115px; border-radius: 50%; background: radial-gradient(circle at 45% 40%, #f3e2b6, #e3c98a); box-shadow: inset 0 0 0 5px rgba(255,255,255,0.25);"></div>
+        <div style="position: absolute; left: 230px; top: 400px; width: 150px; height: 100px; border-radius: 50%; background: radial-gradient(circle at 45% 40%, #f3e2b6, #e3c98a); box-shadow: inset 0 0 0 5px rgba(255,255,255,0.25);"></div>
+
+        <!-- ============ BUMPERS (neon pegs on the green) ============ -->
+        <div style="position: absolute; left: 392px; top: 470px; width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ff8fc4, #FF5DA2); box-shadow: 0 4px 8px rgba(0,0,0,0.25), inset 0 0 0 3px rgba(255,255,255,0.4);"></div>
+        <div style="position: absolute; left: 700px; top: 110px; width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ff8fc4, #FF5DA2); box-shadow: 0 4px 8px rgba(0,0,0,0.25), inset 0 0 0 3px rgba(255,255,255,0.4);"></div>
+        <div style="position: absolute; left: 770px; top: 300px; width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #9be7ff, #38E1FF); box-shadow: 0 4px 8px rgba(0,0,0,0.25), inset 0 0 0 3px rgba(255,255,255,0.4);"></div>
+
+        <!-- ============ WINDMILL (dogleg corner obstacle) ============ -->
+        <div style="position: absolute; left: 250px; top: 150px; width: 90px; height: 90px;">
+          <!-- base -->
+          <div style="position: absolute; left: 23px; top: 28px; width: 44px; height: 56px; border-radius: 8px 8px 6px 6px; background: linear-gradient(160deg, #f3f1ec, #d9d4c8); box-shadow: 0 6px 14px rgba(0,0,0,0.3);"></div>
+          <div style="position: absolute; left: 23px; top: 22px; width: 44px; height: 16px; border-radius: 8px; background: #FF5DA2;"></div>
+          <!-- blades -->
+          <div style="position: absolute; left: 50%; top: 26px; width: 70px; height: 70px; transform: translate(-50%, 0); animation: ga-spin 7s linear infinite;">
+            <div style="position: absolute; left: 31px; top: 4px; width: 8px; height: 31px; border-radius: 4px; background: #FFD23F; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>
+            <div style="position: absolute; left: 35px; top: 31px; width: 31px; height: 8px; border-radius: 4px; background: #FFD23F; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>
+            <div style="position: absolute; left: 31px; top: 35px; width: 8px; height: 31px; border-radius: 4px; background: #FFD23F; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>
+            <div style="position: absolute; left: 4px; top: 31px; width: 31px; height: 8px; border-radius: 4px; background: #FFD23F; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>
+            <div style="position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: #6d28d9; transform: translate(-50%,-50%);"></div>
+          </div>
+        </div>
+
+        <!-- ============ TREES / BUSHES on the rough ============ -->
+        <div style="position: absolute; left: 40px; top: 120px; width: 50px; height: 50px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #4eae6a, #2f7d49); box-shadow: 0 8px 14px rgba(0,0,0,0.25), inset -6px -6px 0 rgba(0,0,0,0.12);"></div>
+        <div style="position: absolute; left: 60px; top: 520px; width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #4eae6a, #2f7d49); box-shadow: 0 8px 14px rgba(0,0,0,0.25), inset -6px -6px 0 rgba(0,0,0,0.12);"></div>
+        <div style="position: absolute; left: 1180px; top: 440px; width: 70px; height: 70px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #4eae6a, #2f7d49); box-shadow: 0 8px 14px rgba(0,0,0,0.25), inset -6px -6px 0 rgba(0,0,0,0.12);"></div>
+        <div style="position: absolute; left: 1150px; top: 60px; width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #4eae6a, #2f7d49); box-shadow: 0 8px 14px rgba(0,0,0,0.25), inset -6px -6px 0 rgba(0,0,0,0.12);"></div>
+        <div style="position: absolute; left: 540px; top: 470px; width: 58px; height: 58px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #4eae6a, #2f7d49); box-shadow: 0 8px 14px rgba(0,0,0,0.25), inset -6px -6px 0 rgba(0,0,0,0.12);"></div>
+
+        <!-- ============ TEE PAD ============ -->
+        <div style="position: absolute; left: 232px; top: 560px; width: 108px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.16); border: 2px dashed rgba(255,255,255,0.6);"></div>
+        <div style="position: absolute; left: 246px; top: 622px; padding: 3px 10px; border-radius: 999px; background: rgba(0,0,0,0.4); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px;">TEE</div>
+
+        <!-- ============ AIM TRAJECTORY (active player) ============ -->
+        <sc-if value="{{ showTrajectory }}" hint-placeholder-val="{{ true }}">
+          <div style="position: absolute; left: 283px; top: 320px; width: 6px; height: 260px; border-radius: 4px; background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.95) 0 12px, transparent 12px 24px); animation: ga-dash 0.9s linear infinite; box-shadow: 0 0 8px rgba(255,255,255,0.5);"></div>
+          <!-- reticle target -->
+          <div style="position: absolute; left: 262px; top: 300px; width: 48px; height: 48px; border-radius: 50%; border: 3px solid #FFD23F; animation: ga-reticle 1.8s ease-in-out infinite;"></div>
+          <div style="position: absolute; left: 282px; top: 320px; width: 8px; height: 8px; border-radius: 50%; background: #FFD23F;"></div>
+        </sc-if>
+
+        <!-- ============ PLAYER BALLS ============ -->
+        <!-- Sam (yellow) -->
+        <div style="position: absolute; left: 312px; top: 588px; width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #fff0bd, #FFC21A); box-shadow: 0 4px 7px rgba(0,0,0,0.3), inset 0 0 0 2px rgba(255,255,255,0.5);"></div>
+        <!-- Liam (cyan) -->
+        <div style="position: absolute; left: 250px; top: 600px; width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #c3f3ff, #2bb6e0); box-shadow: 0 4px 7px rgba(0,0,0,0.3), inset 0 0 0 2px rgba(255,255,255,0.5);"></div>
+        <!-- Maya (active, pink) -->
+        <div style="position: absolute; left: 274px; top: 568px; animation: ga-ball 1.6s ease-in-out infinite;">
+          <div style="position: absolute; left: -10px; top: -10px; width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.7); animation: ga-pulse 2s ease-in-out infinite;"></div>
+          <div style="width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #ffd0e6, #FF5DA2); box-shadow: 0 5px 9px rgba(0,0,0,0.34), inset 0 0 0 2px rgba(255,255,255,0.55);"></div>
+        </div>
+
+        <!-- ============ HOLE + FLAG ============ -->
+        <div style="position: absolute; left: 940px; top: 200px;">
+          <!-- hole cup -->
+          <div style="position: absolute; left: 0; top: 26px; width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #0c1f14, #000); box-shadow: inset 0 3px 6px rgba(0,0,0,0.8), 0 0 0 4px rgba(255,255,255,0.22);"></div>
+          <!-- pole -->
+          <div style="position: absolute; left: 17px; top: -64px; width: 4px; height: 96px; background: linear-gradient(#f5f5f5, #c9c9c9); border-radius: 3px;"></div>
+          <!-- flag -->
+          <div style="position: absolute; left: 21px; top: -64px; width: 46px; height: 30px; background: linear-gradient(160deg, #FF5DA2, #d8327c); border-radius: 0 4px 4px 0; transform-origin: left center; animation: ga-flag 2.4s ease-in-out infinite; box-shadow: 0 4px 8px rgba(0,0,0,0.25);"></div>
+          <div style="position: absolute; left: 6px; top: 22px; width: 26px; height: 8px; border-radius: 50%; background: rgba(0,0,0,0.18); filter: blur(1px);"></div>
+        </div>
+
+        <!-- ====================== HUD ====================== -->
+        <!-- top-left: hole + course -->
+        <div style="position: absolute; left: 28px; top: 26px; display: flex; align-items: center; gap: 14px;">
+          <div style="width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(160deg, #FFE27A, #FFB300); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; box-shadow: 0 8px 18px rgba(0,0,0,0.3), inset 0 -4px 0 rgba(0,0,0,0.12);">
+            <span style="font-size: 9px; font-weight: 600; color: rgba(59,13,115,0.65); letter-spacing: 1.5px; margin-bottom: 2px;">HOLE</span>
+            <span style="font-size: 30px; font-weight: 700; color: #3b0d73;">3</span>
+          </div>
+          <div style="background: rgba(20,8,40,0.5); backdrop-filter: blur(6px); padding: 10px 18px; border-radius: 16px; box-shadow: 0 6px 14px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.12);">
+            <div style="font-size: 22px; font-weight: 700; color: #fff; letter-spacing: -0.3px;">Sunset Links</div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 2px;">
+              <span style="font-size: 14px; font-weight: 600; color: #FFD23F;">Par 4</span>
+              <span style="width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.4);"></span>
+              <span style="font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.7);">340 ft</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- top-right: leaderboard -->
+        <sc-if value="{{ showLeaderboard }}" hint-placeholder-val="{{ true }}">
+        <div style="position: absolute; right: 28px; top: 26px; width: 270px; background: rgba(20,8,40,0.55); backdrop-filter: blur(8px); border-radius: 20px; border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 12px 28px rgba(0,0,0,0.3); overflow: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px 9px;">
+            <span style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.55); letter-spacing: 1.5px;">LEADERBOARD</span>
+            <span style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.45);">vs PAR</span>
+          </div>
+          <!-- rows -->
+          <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 8px 8px;">
+            <div style="display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 12px; background: rgba(255,210,63,0.16); border: 1px solid rgba(255,210,63,0.3);">
+              <span style="font-size: 13px; font-weight: 700; color: #FFD23F; width: 14px;">1</span>
+              <div style="width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(150deg, #FF5DA2, #a435ee); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #B6FF4B;">
+                <svg width="18" height="18" viewBox="0 0 48 48" fill="none"><circle cx="18" cy="20" r="3" fill="#fff"/><circle cx="30" cy="20" r="3" fill="#fff"/><path d="M16 29q8 7 16 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+              </div>
+              <span style="flex: 1; font-size: 16px; font-weight: 600; color: #fff;">Maya</span>
+              <span style="font-size: 17px; font-weight: 700; color: #B6FF4B;">−2</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 12px;">
+              <span style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.5); width: 14px;">2</span>
+              <div style="width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(150deg, #38E1FF, #0e9fc4); display: flex; align-items: center; justify-content: center;">
+                <svg width="18" height="18" viewBox="0 0 48 48" fill="none"><rect x="11" y="18" width="26" height="6" rx="3" fill="#fff"/><path d="M18 30q6 5 12 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+              </div>
+              <span style="flex: 1; font-size: 16px; font-weight: 600; color: #fff;">Liam</span>
+              <span style="font-size: 17px; font-weight: 700; color: #fff;">E</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 12px;">
+              <span style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.5); width: 14px;">3</span>
+              <div style="width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(150deg, #FFE27A, #FFB300); display: flex; align-items: center; justify-content: center;">
+                <svg width="18" height="18" viewBox="0 0 48 48" fill="none"><circle cx="18" cy="20" r="3" fill="#3b0d73"/><circle cx="30" cy="20" r="3" fill="#3b0d73"/><path d="M16 29q8 8 16 0" stroke="#3b0d73" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+              </div>
+              <span style="flex: 1; font-size: 16px; font-weight: 600; color: #fff;">Sam</span>
+              <span style="font-size: 17px; font-weight: 700; color: #FF8F6B;">+3</span>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- bottom-center: turn + power banner -->
+        <div style="position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; padding: 14px 22px; border-radius: 22px; background: rgba(20,8,40,0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 16px 34px rgba(0,0,0,0.34); animation: ga-bob 4s ease-in-out infinite;">
+          <div style="display: flex; align-items: center; gap: 11px;">
+            <div style="position: relative; width: 46px; height: 46px;">
+              <div style="position: absolute; inset: -4px; border-radius: 50%; border: 2px solid #B6FF4B; animation: ga-pulse 1.8s ease-in-out infinite;"></div>
+              <div style="width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(150deg, #FF5DA2, #a435ee); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.3);">
+                <svg width="26" height="26" viewBox="0 0 48 48" fill="none"><circle cx="18" cy="20" r="3" fill="#fff"/><circle cx="30" cy="20" r="3" fill="#fff"/><path d="M16 29q8 7 16 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+              </div>
+            </div>
+            <div style="line-height: 1.1;">
+              <div style="font-size: 20px; font-weight: 700; color: #fff;">Maya&rsquo;s turn</div>
+              <div style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.6);">Stroke 2 &middot; aim on your phone</div>
+            </div>
+          </div>
+
+          <div style="width: 1px; height: 44px; background: rgba(255,255,255,0.16);"></div>
+
+          <!-- power gauge -->
+          <div style="width: 230px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <span style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.55); letter-spacing: 1px;">POWER</span>
+              <span style="font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.45);">release in the band</span>
+            </div>
+            <div style="position: relative; height: 26px; border-radius: 10px; background: rgba(0,0,0,0.3); border: 1.5px solid rgba(255,255,255,0.18); overflow: hidden;">
+              <div style="position: absolute; top: 0; bottom: 0; left: 0; background: linear-gradient(90deg, #B6FF4B, #FFD23F 60%, #FF5DA2); animation: ga-power 1.6s ease-in-out infinite;"></div>
+              <div style="position: absolute; top: 0; bottom: 0; left: 64%; width: 13%; background: rgba(255,255,255,0.14); border-left: 2px dashed rgba(255,255,255,0.8); border-right: 2px dashed rgba(255,255,255,0.8);"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- cast badge -->
+        <div style="position: absolute; left: 50%; top: 22px; transform: translateX(-50%); display: flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 999px; background: rgba(20,8,40,0.5); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.12);">
+          <svg width="16" height="14" viewBox="0 0 22 18" fill="none"><path d="M3 7a12 12 0 0 1 16 0" stroke="#B6FF4B" stroke-width="2" stroke-linecap="round"/><path d="M6.5 10.5a7 7 0 0 1 9 0" stroke="#B6FF4B" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="15" r="1.5" fill="#B6FF4B"/></svg>
+          <span style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.85); letter-spacing: 0.5px;">Casting &middot; Living Room TV</span>
+        </div>
+
+        <!-- subtle screen vignette -->
+        <div style="position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px rgba(0,0,0,0.28); border-radius: 16px;"></div>
+
+      </div>
+    </div>
+    <!-- TV stand -->
+    <div style="width: 150px; height: 16px; background: linear-gradient(#23232a, #161619); border-radius: 0 0 8px 8px;"></div>
+    <div style="width: 320px; height: 12px; background: linear-gradient(#2a2a30, #161619); border-radius: 8px; box-shadow: 0 14px 24px rgba(0,0,0,0.28);"></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1424, &quot;height&quot;: 880}, &quot;showLeaderboard&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;}, &quot;showTrajectory&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showLeaderboard: this.props.showLeaderboard ?? true,
+      showTrajectory: this.props.showTrajectory ?? true,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+</style>
+</helmet>
+
+<div style="width: max-content; min-width: 100%; min-height: 100vh; box-sizing: border-box; padding: 56px; background: #e7e5df; font-family: 'Fredoka', system-ui, sans-serif;">
+  <div style="margin-bottom: 8px; font-size: 22px; font-weight: 700; color: #2b2b30; letter-spacing: -0.3px;">Mini Arcade — App Icon</div>
+  <div style="margin-bottom: 40px; font-size: 14px; font-weight: 500; color: #8a8a92;">Eight directions · same palette · pick the best</div>
+
+  <!-- ============ ICON GRID ============ -->
+  <div style="display: flex; flex-wrap: wrap; gap: 28px; width: 1008px;">
+
+    <!-- 1 · CABINET -->
+    <div style="flex: none; width: 224px;">
+      <div style="margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.2px;">01 · Cabinet</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 22px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 180px; height: 180px; border-radius: 40px; background: radial-gradient(125% 120% at 72% 20%, #FFE27A 0%, #FFB300 55%, #d98c00 100%); box-shadow: 0 14px 28px rgba(217,140,0,0.32), inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -8px 18px rgba(0,0,0,0.18); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+          <div style="position: relative; width: 118px; height: 118px; border-radius: 26px; background: radial-gradient(120% 120% at 50% 0%, #6d28d9, #3b0d73); box-shadow: inset 0 0 0 5px rgba(255,255,255,0.92), inset 0 6px 20px rgba(0,0,0,0.4);">
+            <div style="position: absolute; left: 25px; top: 30px; width: 27px; height: 27px; border-radius: 50%; background: #FF5DA2; box-shadow: 0 0 10px rgba(255,93,162,0.7);"></div>
+            <div style="position: absolute; right: 23px; top: 26px; width: 24px; height: 24px; border-radius: 8px; background: #38E1FF; transform: rotate(16deg); box-shadow: 0 0 10px rgba(56,225,255,0.6);"></div>
+            <div style="position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-bottom: 25px solid #B6FF4B; filter: drop-shadow(0 0 8px rgba(182,255,75,0.6));"></div>
+          </div>
+          <div style="position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); width: 42px; height: 8px; border-radius: 4px; background: rgba(59,13,115,0.5);"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 · SCREEN -->
+    <div style="flex: none; width: 224px;">
+      <div style="margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.2px;">02 · Screen</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 22px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 180px; height: 180px; border-radius: 40px; background: radial-gradient(130% 120% at 50% 8%, #a435ee 0%, #6d28d9 46%, #3b0d73 100%); box-shadow: 0 14px 28px rgba(59,13,115,0.34), inset 0 2px 0 rgba(255,255,255,0.18); overflow: hidden;">
+          <div style="position: absolute; top: 24px; left: 50%; transform: translateX(-50%); width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.45) 0%, rgba(216,112,255,0) 68%);"></div>
+          <div style="position: absolute; left: 40px; top: 44px; width: 40px; height: 40px; border-radius: 50%; background: #FF5DA2; box-shadow: 0 0 18px rgba(255,93,162,0.7);"></div>
+          <div style="position: absolute; right: 34px; top: 38px; width: 36px; height: 36px; border-radius: 11px; background: #38E1FF; transform: rotate(16deg); box-shadow: 0 0 18px rgba(56,225,255,0.6);"></div>
+          <div style="position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); width: 0; height: 0; border-left: 24px solid transparent; border-right: 24px solid transparent; border-bottom: 40px solid #B6FF4B; filter: drop-shadow(0 0 14px rgba(182,255,75,0.6));"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 · JOYSTICK -->
+    <div style="flex: none; width: 224px;">
+      <div style="margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.2px;">03 · Joystick</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 22px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 180px; height: 180px; border-radius: 40px; background: radial-gradient(130% 120% at 50% 8%, #a435ee 0%, #6d28d9 46%, #3b0d73 100%); box-shadow: 0 14px 28px rgba(59,13,115,0.34), inset 0 2px 0 rgba(255,255,255,0.18); overflow: hidden; display: flex; align-items: flex-end; justify-content: center;">
+          <!-- base -->
+          <div style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: 110px; height: 36px; border-radius: 50%; background: radial-gradient(120% 130% at 50% 18%, #2a0a55, #170535); box-shadow: inset 0 3px 0 rgba(255,255,255,0.12), 0 8px 16px rgba(0,0,0,0.4);"></div>
+          <!-- shaft -->
+          <div style="position: absolute; bottom: 38px; left: 50%; transform: translateX(-50%); width: 22px; height: 74px; border-radius: 11px; background: linear-gradient(90deg, #c9c9d4, #f2f2f7 45%, #a9a9b6); box-shadow: 0 4px 10px rgba(0,0,0,0.3);"></div>
+          <!-- ball -->
+          <div style="position: absolute; top: 34px; left: 50%; transform: translateX(-50%); width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(125% 120% at 35% 25%, #FF8FC0, #FF5DA2 55%, #d62d7e); box-shadow: 0 0 20px rgba(255,93,162,0.55), inset 0 3px 0 rgba(255,255,255,0.5), inset 0 -8px 14px rgba(0,0,0,0.22);"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 · D-PAD -->
+    <div style="flex: none; width: 224px;">
+      <div style="margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.2px;">04 · Controller</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 22px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 180px; height: 180px; border-radius: 40px; background: radial-gradient(130% 120% at 50% 8%, #a435ee 0%, #6d28d9 46%, #3b0d73 100%); box-shadow: 0 14px 28px rgba(59,13,115,0.34), inset 0 2px 0 rgba(255,255,255,0.18); overflow: hidden;">
+          <!-- d-pad -->
+          <div style="position: absolute; left: 32px; top: 50%; transform: translateY(-50%); width: 58px; height: 58px;">
+            <div style="position: absolute; left: 19px; top: 0; width: 20px; height: 58px; border-radius: 6px; background: linear-gradient(180deg, #fff, #d7d7e0); box-shadow: 0 3px 7px rgba(0,0,0,0.3);"></div>
+            <div style="position: absolute; top: 19px; left: 0; width: 58px; height: 20px; border-radius: 6px; background: linear-gradient(180deg, #fff, #d7d7e0); box-shadow: 0 3px 7px rgba(0,0,0,0.3);"></div>
+            <div style="position: absolute; left: 23px; top: 23px; width: 12px; height: 12px; border-radius: 50%; background: rgba(59,13,115,0.35);"></div>
+          </div>
+          <!-- buttons -->
+          <div style="position: absolute; right: 40px; top: 48px; width: 36px; height: 36px; border-radius: 50%; background: radial-gradient(125% 120% at 35% 25%, #FF8FC0, #FF5DA2 60%, #d62d7e); box-shadow: 0 0 12px rgba(255,93,162,0.5), inset 0 2px 0 rgba(255,255,255,0.45);"></div>
+          <div style="position: absolute; right: 30px; bottom: 44px; width: 36px; height: 36px; border-radius: 50%; background: radial-gradient(125% 120% at 35% 25%, #8defff, #38E1FF 60%, #14a8cc); box-shadow: 0 0 12px rgba(56,225,255,0.5), inset 0 2px 0 rgba(255,255,255,0.45);"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5 · MONOGRAM -->
+    <div style="flex: none; width: 224px;">
+      <div style="margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.2px;">05 · Monogram</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 22px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 180px; height: 180px; border-radius: 40px; background: radial-gradient(130% 120% at 50% 8%, #a435ee 0%, #6d28d9 46%, #3b0d73 100%); box-shadow: 0 14px 28px rgba(59,13,115,0.34), inset 0 2px 0 rgba(255,255,255,0.18); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+          <span style="font-size: 132px; font-weight: 700; font-style: italic; color: #FFB300; text-shadow: 4px 5px 0 #d98c00, 0 0 26px rgba(255,179,0,0.4); letter-spacing: -4px; transform: translateX(2px);">A</span>
+          <div style="position: absolute; left: 26px; bottom: 24px; width: 14px; height: 14px; border-radius: 50%; background: #FF5DA2; box-shadow: 0 0 8px rgba(255,93,162,0.7);"></div>
+          <div style="position: absolute; right: 26px; top: 26px; width: 13px; height: 13px; border-radius: 4px; background: #38E1FF; transform: rotate(16deg); box-shadow: 0 0 8px rgba(56,225,255,0.6);"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6 · COLOR QUAD -->
+    <div style="flex: none; width: 224px;">
+      <div style="margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.2px;">06 · Quad</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 22px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 180px; height: 180px; border-radius: 40px; background: #2a0a55; box-shadow: 0 14px 28px rgba(59,13,115,0.34), inset 0 2px 0 rgba(255,255,255,0.14); overflow: hidden; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; padding: 26px;">
+            <div style="border-radius: 20px; background: radial-gradient(120% 120% at 30% 20%, #FFE27A, #FFB300); box-shadow: inset 0 2px 0 rgba(255,255,255,0.4);"></div>
+            <div style="border-radius: 20px; background: radial-gradient(120% 120% at 30% 20%, #FF8FC0, #FF5DA2); box-shadow: inset 0 2px 0 rgba(255,255,255,0.4);"></div>
+            <div style="border-radius: 20px; background: radial-gradient(120% 120% at 30% 20%, #8defff, #38E1FF); box-shadow: inset 0 2px 0 rgba(255,255,255,0.4);"></div>
+            <div style="border-radius: 20px; background: radial-gradient(120% 120% at 30% 20%, #d4ff8f, #B6FF4B); box-shadow: inset 0 2px 0 rgba(255,255,255,0.4);"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7 · PLAY -->
+    <div style="flex: none; width: 224px;">
+      <div style="margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.2px;">07 · Play</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 22px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 180px; height: 180px; border-radius: 40px; background: radial-gradient(130% 120% at 50% 8%, #a435ee 0%, #6d28d9 46%, #3b0d73 100%); box-shadow: 0 14px 28px rgba(59,13,115,0.34), inset 0 2px 0 rgba(255,255,255,0.18); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+          <div style="width: 116px; height: 116px; border-radius: 50%; border: 9px solid #B6FF4B; box-shadow: 0 0 22px rgba(182,255,75,0.5), inset 0 0 16px rgba(182,255,75,0.18); display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+            <div style="width: 0; height: 0; border-top: 26px solid transparent; border-bottom: 26px solid transparent; border-left: 42px solid #B6FF4B; filter: drop-shadow(0 0 8px rgba(182,255,75,0.6)); margin-left: 10px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8 · TOKEN -->
+    <div style="flex: none; width: 224px;">
+      <div style="margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.2px;">08 · Token</div>
+      <div style="background: #fff; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 22px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 180px; height: 180px; border-radius: 40px; background: radial-gradient(130% 120% at 50% 8%, #a435ee 0%, #6d28d9 46%, #3b0d73 100%); box-shadow: 0 14px 28px rgba(59,13,115,0.34), inset 0 2px 0 rgba(255,255,255,0.18); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+          <div style="position: relative; width: 122px; height: 122px; border-radius: 50%; background: radial-gradient(125% 120% at 35% 22%, #FFE27A, #FFB300 58%, #d98c00); box-shadow: 0 8px 18px rgba(0,0,0,0.35), inset 0 3px 0 rgba(255,255,255,0.55), inset 0 -8px 16px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;">
+            <div style="width: 92px; height: 92px; border-radius: 50%; border: 4px dashed rgba(59,13,115,0.3); display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+              <svg width="58" height="58" viewBox="0 0 24 24" fill="#3b0d73"><path d="M12 2l2.6 7.2L22 9.6l-6 4.7L18 22l-6-4.2L6 22l2-7.7L2 9.6l7.4-0.4z"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ ON DEVICE ============ -->
+  <div style="margin-top: 48px;">
+    <div style="margin-bottom: 14px; font-size: 13px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 1.5px;">On the home screen · at scale</div>
+    <div style="display: inline-flex; gap: 40px; background: #16161c; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 40px 48px;">
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 11px;">
+        <div style="position: relative; width: 116px; height: 116px; border-radius: 26px; background: radial-gradient(125% 120% at 72% 20%, #FFE27A, #FFB300 55%, #d98c00); box-shadow: 0 10px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.5); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+          <div style="position: relative; width: 76px; height: 76px; border-radius: 17px; background: radial-gradient(120% 120% at 50% 0%, #6d28d9, #3b0d73); box-shadow: inset 0 0 0 4px rgba(255,255,255,0.92);">
+            <div style="position: absolute; left: 16px; top: 20px; width: 17px; height: 17px; border-radius: 50%; background: #FF5DA2;"></div>
+            <div style="position: absolute; right: 14px; top: 17px; width: 15px; height: 15px; border-radius: 5px; background: #38E1FF; transform: rotate(16deg);"></div>
+            <div style="position: absolute; left: 50%; bottom: 15px; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 16px solid #B6FF4B;"></div>
+          </div>
+        </div>
+        <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.85);">Mini Arcade</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 11px;">
+        <div style="position: relative; width: 116px; height: 116px; border-radius: 26px; background: radial-gradient(130% 120% at 50% 8%, #a435ee 0%, #6d28d9 46%, #3b0d73 100%); box-shadow: 0 10px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18); overflow: hidden;">
+          <div style="position: absolute; left: 26px; top: 28px; width: 26px; height: 26px; border-radius: 50%; background: #FF5DA2; box-shadow: 0 0 12px rgba(255,93,162,0.7);"></div>
+          <div style="position: absolute; right: 22px; top: 24px; width: 23px; height: 23px; border-radius: 7px; background: #38E1FF; transform: rotate(16deg); box-shadow: 0 0 12px rgba(56,225,255,0.6);"></div>
+          <div style="position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-bottom: 26px solid #B6FF4B; filter: drop-shadow(0 0 9px rgba(182,255,75,0.6));"></div>
+        </div>
+        <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.85);">Mini Arcade</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 11px;">
+        <div style="position: relative; width: 116px; height: 116px; border-radius: 26px; background: radial-gradient(130% 120% at 50% 8%, #a435ee 0%, #6d28d9 46%, #3b0d73 100%); box-shadow: 0 10px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+          <span style="font-size: 86px; font-weight: 700; font-style: italic; color: #FFB300; text-shadow: 3px 3px 0 #d98c00; letter-spacing: -3px; transform: translateX(2px);">A</span>
+        </div>
+        <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.85);">Mini Arcade</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 11px;">
+        <div style="position: relative; width: 116px; height: 116px; border-radius: 26px; background: #2a0a55; box-shadow: 0 10px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.14); overflow: hidden; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; padding: 17px;">
+          <div style="border-radius: 13px; background: radial-gradient(120% 120% at 30% 20%, #FFE27A, #FFB300);"></div>
+          <div style="border-radius: 13px; background: radial-gradient(120% 120% at 30% 20%, #FF8FC0, #FF5DA2);"></div>
+          <div style="border-radius: 13px; background: radial-gradient(120% 120% at 30% 20%, #8defff, #38E1FF);"></div>
+          <div style="border-radius: 13px; background: radial-gradient(120% 120% at 30% 20%, #d4ff8f, #B6FF4B);"></div>
+        </div>
+        <span style="font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.85);">Mini Arcade</span>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

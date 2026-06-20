@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @keyframes mt-pulse { 0%,100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.14); opacity: 0.8; } }
+  @keyframes mt-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes mt-flag { 0%,100% { transform: scaleX(1); } 50% { transform: scaleX(0.82); } }
+  @keyframes mt-pop { 0% { transform: translate(-50%,-50%) scale(0.2); opacity: 0; } 60% { transform: translate(-50%,-50%) scale(1.18); } 100% { transform: translate(-50%,-50%) scale(1); opacity: 1; } }
+  @keyframes mt-hint { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+  @keyframes mt-ring { 0%,100% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.3); opacity: 0; } }
+  .mt-scroll::-webkit-scrollbar { display: none; }
+</style>
+</helmet>
+
+<div style="width: max-content; min-width: 100%; min-height: 100vh; box-sizing: border-box; padding: 56px; background: #e7e5df; font-family: 'Fredoka', system-ui, sans-serif;">
+  <div style="margin-bottom: 8px; font-size: 22px; font-weight: 700; color: #2b2b30; letter-spacing: -0.3px;">Mini Arcade — Trap Setup</div>
+  <div style="margin-bottom: 40px; font-size: 14px; font-weight: 500; color: #8a8a92;">Player phone · drop traps on the 2D map before tee-off · tap a trap, then tap the course</div>
+
+  <div style="flex: none; width: 402px;">
+    <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ darkMode }}" hint-size="402px,874px">
+
+      <div style="position: relative; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(135% 80% at 50% -10%, #a435ee 0%, #6d28d9 46%, #3b0d73 100%); display: flex; flex-direction: column; box-sizing: border-box; padding: 56px 20px 24px;">
+        <div style="position: absolute; top: 16px; left: 50%; transform: translateX(-50%); width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(216,112,255,0.34) 0%, rgba(216,112,255,0) 70%); animation: mt-pulse 6s ease-in-out infinite; pointer-events: none;"></div>
+
+        <!-- header -->
+        <div style="position: relative; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(150deg, #FF5DA2, #a435ee); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25);">
+              <svg width="22" height="22" viewBox="0 0 48 48" fill="none"><circle cx="18" cy="20" r="3" fill="#fff"/><circle cx="30" cy="20" r="3" fill="#fff"/><path d="M16 29q8 7 16 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+            </div>
+            <div style="line-height: 1.1;">
+              <div style="font-size: 17px; font-weight: 700; color: #fff;">Build Hole 3</div>
+              <div style="font-size: 12px; font-weight: 500; color: #B6FF4B;">Your turn to sabotage</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; padding: 8px 13px; border-radius: 999px; background: rgba(255,210,63,0.16); border: 1px solid rgba(255,210,63,0.4);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#FFD23F"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6" fill="rgba(59,13,115,0.3)"/></svg>
+            <span style="font-size: 14px; font-weight: 700; color: #FFD23F;">{{ budgetLeft }}</span>
+            <span style="font-size: 12px; font-weight: 500; color: rgba(255,210,63,0.7);">left</span>
+          </div>
+        </div>
+
+        <!-- ============ 2D MAP ============ -->
+        <div style="position: relative; border-radius: 22px; overflow: hidden; flex: 1; box-shadow: inset 0 4px 18px rgba(0,0,0,0.22), 0 0 0 1.5px rgba(255,255,255,0.14); cursor: crosshair;" onClick="{{ onPlace }}">
+          <!-- grass -->
+          <div style="position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 0%, #3f9a63, #235e3c); pointer-events: none;"></div>
+          <div style="position: absolute; inset: 0; opacity: 0.45; background: repeating-linear-gradient(135deg, rgba(255,255,255,0.04) 0 12px, transparent 12px 24px); pointer-events: none;"></div>
+
+          <!-- fairway: vertical leg + horizontal leg (dogleg) -->
+          <div style="position: absolute; left: 11%; top: 6%; width: 30%; height: 88%; border-radius: 60px; background: linear-gradient(165deg, #62cd7c, #45b466); pointer-events: none;"></div>
+          <div style="position: absolute; left: 11%; top: 6%; width: 80%; height: 34%; border-radius: 60px; background: linear-gradient(165deg, #62cd7c, #45b466); pointer-events: none;"></div>
+          <div style="position: absolute; left: 11%; top: 6%; width: 30%; height: 88%; border-radius: 60px; opacity: 0.45; background: repeating-linear-gradient(180deg, rgba(255,255,255,0.08) 0 18px, transparent 18px 36px); pointer-events: none;"></div>
+          <div style="position: absolute; left: 60%; top: 8%; width: 30%; height: 28%; border-radius: 50px; background: radial-gradient(circle at 55% 45%, #8fe6a3, #6cd286); pointer-events: none;"></div>
+
+          <!-- TEE -->
+          <div style="position: absolute; left: 21%; bottom: 6%; width: 56px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.16); border: 2px dashed rgba(255,255,255,0.6); pointer-events: none;"></div>
+          <div style="position: absolute; left: calc(21% + 20px); bottom: calc(6% + 7px); width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #ffd0e6, #FF5DA2); box-shadow: 0 3px 6px rgba(0,0,0,0.3), inset 0 0 0 2px rgba(255,255,255,0.5); pointer-events: none;"></div>
+          <div style="position: absolute; left: 21%; bottom: 1.5%; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,0.4); font-size: 10px; font-weight: 700; color: #fff; letter-spacing: 1px; pointer-events: none;">TEE</div>
+
+          <!-- HOLE + flag -->
+          <div style="position: absolute; left: 79%; top: 16%; pointer-events: none;">
+            <div style="position: absolute; left: 0; top: 18px; width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #0c1f14, #000); box-shadow: inset 0 2px 4px rgba(0,0,0,0.8), 0 0 0 3px rgba(255,255,255,0.22);"></div>
+            <div style="position: absolute; left: 12px; top: -40px; width: 3px; height: 62px; background: linear-gradient(#f5f5f5, #c9c9c9); border-radius: 2px;"></div>
+            <div style="position: absolute; left: 15px; top: -40px; width: 32px; height: 21px; background: linear-gradient(160deg, #FF5DA2, #d8327c); border-radius: 0 3px 3px 0; transform-origin: left center; animation: mt-flag 2.4s ease-in-out infinite;"></div>
+          </div>
+
+          <!-- placed traps (React nodes) -->
+          {{ placedNodes }}
+
+          <!-- empty hint -->
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ true }}">
+            <div style="position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%); display: flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 999px; background: rgba(0,0,0,0.4); animation: mt-hint 2s ease-in-out infinite; pointer-events: none;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4" stroke="#B6FF4B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+              <span style="font-size: 12px; font-weight: 600; color: #fff;">Pick a trap, tap the course</span>
+            </div>
+          </sc-if>
+
+          <!-- selected-tool indicator -->
+          <div style="position: absolute; left: 10px; top: 10px; display: flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; background: rgba(20,8,40,0.66); border: 1px solid rgba(182,255,75,0.5); pointer-events: none;">
+            <div style="position: relative; width: 7px; height: 7px;"><div style="position: absolute; inset: 0; border-radius: 50%; background: #B6FF4B;"></div><div style="position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid #B6FF4B; animation: mt-ring 1.6s ease-out infinite;"></div></div>
+            <span style="font-size: 11.5px; font-weight: 600; color: #fff;">Placing {{ selectedName }}</span>
+          </div>
+        </div>
+
+        <!-- ============ TRAP TRAY ============ -->
+        <div style="position: relative; margin-top: 14px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px;">
+            <span style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.6); letter-spacing: 1.2px;">TRAP KIT</span>
+            <button style="display: flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); font-family: 'Fredoka', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer;" onClick="{{ onClear }}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Clear
+            </button>
+          </div>
+          <div class="mt-scroll" style="display: flex; gap: 9px; overflow-x: auto; padding-bottom: 2px;">
+            {{ toolButtons }}
+          </div>
+        </div>
+
+        <!-- ready -->
+        <button style="position: relative; width: 100%; height: 62px; margin-top: 14px; border: none; border-radius: 20px; background: linear-gradient(180deg, #FFE27A, #FFC21A); color: #3b0d73; font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 7px 0 #D99700, 0 16px 22px rgba(0,0,0,0.26);" onClick="{{ onReady }}">
+          Lock In Traps
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><path d="M4 11h13M12 5l6 6-6 6" stroke="#3b0d73" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </x-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 514, &quot;height&quot;: 1000}, &quot;darkMode&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;}}">
+const ICONS = {
+  sand: '<svg width="34" height="34" viewBox="0 0 40 40"><ellipse cx="20" cy="23" rx="15" ry="11" fill="#e3c98a"/><ellipse cx="20" cy="21" rx="15" ry="11" fill="#f3e2b6"/><ellipse cx="14" cy="19" rx="3" ry="2" fill="#e0c98e"/><ellipse cx="25" cy="24" rx="3.5" ry="2.2" fill="#e0c98e"/></svg>',
+  water: '<svg width="34" height="34" viewBox="0 0 40 40"><ellipse cx="20" cy="21" rx="15" ry="11" fill="#2a9ed1"/><ellipse cx="20" cy="19" rx="15" ry="11" fill="#4fc6ee"/><path d="M9 18q5 3 11 0t11 0" stroke="rgba(255,255,255,0.6)" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 24q5 3 10 0t10 0" stroke="rgba(255,255,255,0.4)" stroke-width="2" fill="none" stroke-linecap="round"/></svg>',
+  bumper: '<svg width="32" height="32" viewBox="0 0 36 36"><circle cx="18" cy="19" r="13" fill="#d8327c"/><circle cx="18" cy="17" r="13" fill="#FF5DA2"/><circle cx="13" cy="12" r="4" fill="rgba(255,255,255,0.5)"/></svg>',
+  windmill: '<svg width="34" height="34" viewBox="0 0 40 40"><rect x="15" y="20" width="10" height="15" rx="2" fill="#e8e3d8"/><rect x="14" y="17" width="12" height="5" rx="2" fill="#FF5DA2"/><g transform="translate(20,15)"><rect x="-2" y="-13" width="4" height="13" rx="2" fill="#FFD23F"/><rect x="0" y="-2" width="13" height="4" rx="2" fill="#FFD23F"/><rect x="-2" y="0" width="4" height="13" rx="2" fill="#FFD23F"/><rect x="-13" y="-2" width="13" height="4" rx="2" fill="#FFD23F"/><circle r="3" fill="#6d28d9"/></g></svg>',
+  boost: '<svg width="32" height="32" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="#7ad13f"/><circle cx="18" cy="18" r="14" fill="#B6FF4B" opacity="0.9"/><path d="M19 8l-8 12h6l-2 8 8-12h-6z" fill="#2f7d2f"/></svg>',
+};
+const MAP_ICONS = {
+  sand: '<div style="width:46px;height:32px;border-radius:50%;background:radial-gradient(circle at 45% 40%,#f3e2b6,#e3c98a);box-shadow:inset 0 0 0 4px rgba(255,255,255,0.25),0 4px 8px rgba(0,0,0,0.2);"></div>',
+  water: '<div style="width:50px;height:34px;border-radius:50%;background:linear-gradient(160deg,#4fc6ee,#2a9ed1);box-shadow:inset 0 0 0 4px rgba(255,255,255,0.18),inset 0 6px 14px rgba(0,0,0,0.18);"></div>',
+  bumper: '<div style="width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ff8fc4,#FF5DA2);box-shadow:0 4px 8px rgba(0,0,0,0.25),inset 0 0 0 3px rgba(255,255,255,0.4);"></div>',
+  windmill: '<div style="width:44px;height:44px;position:relative;"><div style="position:absolute;left:14px;top:18px;width:16px;height:22px;border-radius:5px;background:linear-gradient(160deg,#f3f1ec,#d9d4c8);box-shadow:0 4px 10px rgba(0,0,0,0.3);"></div><div style="position:absolute;left:50%;top:14px;transform:translateX(-50%);width:38px;height:38px;animation:mt-spin 6s linear infinite;"><div style="position:absolute;left:16px;top:1px;width:6px;height:18px;border-radius:3px;background:#FFD23F;"></div><div style="position:absolute;left:19px;top:16px;width:18px;height:6px;border-radius:3px;background:#FFD23F;"></div><div style="position:absolute;left:16px;top:19px;width:6px;height:18px;border-radius:3px;background:#FFD23F;"></div><div style="position:absolute;left:1px;top:16px;width:18px;height:6px;border-radius:3px;background:#FFD23F;"></div><div style="position:absolute;left:50%;top:50%;width:10px;height:10px;border-radius:50%;background:#6d28d9;transform:translate(-50%,-50%);"></div></div></div>',
+  boost: '<div style="width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,#B6FF4B,#7ad13f);box-shadow:0 4px 8px rgba(0,0,0,0.25),inset 0 0 0 3px rgba(255,255,255,0.35);display:flex;align-items:center;justify-content:center;"><svg width="16" height="16" viewBox="0 0 36 36"><path d="M19 6l-9 14h7l-2 10 9-14h-7z" fill="#2f7d2f"/></svg></div>',
+};
+const DEFS = [
+  { id: 'sand', name: 'Sand', max: 2 },
+  { id: 'water', name: 'Water', max: 1 },
+  { id: 'bumper', name: 'Bumper', max: 4 },
+  { id: 'windmill', name: 'Windmill', max: 1 },
+  { id: 'boost', name: 'Boost', max: 2 },
+];
+const BUDGET = 6;
+
+class Component extends DCLogic {
+  state = { selected: 'bumper', placed: [], nextId: 1 };
+
+  used(id) { return this.state.placed.filter(p => p.id === id).length; }
+
+  place(e) {
+    const sel = this.state.selected;
+    if (!sel) return;
+    const def = DEFS.find(d => d.id === sel);
+    if (this.used(sel) >= def.max) return;
+    if (this.state.placed.length >= BUDGET) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    this.setState(s => ({
+      placed: [...s.placed, { key: s.nextId, id: sel, x, y }],
+      nextId: s.nextId + 1,
+    }));
+  }
+
+  renderVals() {
+    const h = React.createElement;
+    const placedNodes = this.state.placed.map(p => h('div', {
+      key: p.key,
+      style: { position: 'absolute', left: p.x + '%', top: p.y + '%', transform: 'translate(-50%,-50%)', pointerEvents: 'none', animation: 'mt-pop 0.35s cubic-bezier(.3,1.4,.5,1) both' },
+      dangerouslySetInnerHTML: { __html: MAP_ICONS[p.id] },
+    }));
+
+    const toolButtons = DEFS.map(d => {
+      const used = this.used(d.id);
+      const isSel = this.state.selected === d.id;
+      const full = used >= d.max;
+      const btnStyle = {
+        flex: 'none', width: 78, padding: '10px 6px 9px', borderRadius: 16, cursor: 'pointer',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+        fontFamily: "'Fredoka', sans-serif", position: 'relative', border: 'none', opacity: full ? 0.5 : 1,
+        background: isSel ? 'rgba(255,210,63,0.2)' : 'rgba(255,255,255,0.08)',
+        boxShadow: isSel ? 'inset 0 0 0 2px #FFD23F' : 'inset 0 0 0 1px rgba(255,255,255,0.12)',
+      };
+      return h('button', { key: d.id, style: btnStyle, onClick: () => this.setState({ selected: d.id }) }, [
+        h('div', { key: 'i', style: { width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center' }, dangerouslySetInnerHTML: { __html: ICONS[d.id] } }),
+        h('span', { key: 'n', style: { fontSize: 11, fontWeight: 600, color: '#fff' } }, d.name),
+        h('span', { key: 'c', style: { fontSize: 10, fontWeight: 600, color: full ? '#FF8F6B' : 'rgba(255,255,255,0.55)' } }, used + '/' + d.max),
+      ]);
+    });
+
+    const selDef = DEFS.find(d => d.id === this.state.selected);
+    return {
+      darkMode: this.props.darkMode ?? true,
+      placedNodes, toolButtons,
+      isEmpty: this.state.placed.length === 0,
+      selectedName: selDef ? selDef.name : '',
+      budgetLeft: BUDGET - this.state.placed.length,
+      onPlace: (e) => this.place(e),
+      onClear: () => this.setState({ placed: [] }),
+      onReady: () => {},
+    };
+  }
+}
+</script>
+</body>
+</html>

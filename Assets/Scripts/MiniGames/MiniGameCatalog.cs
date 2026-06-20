@@ -1,4 +1,5 @@
 using MiniArcade.MiniGames.CoinRush;
+using MiniArcade.MiniGames.DoubleDrive;
 using MiniArcade.MiniGames.MiniGolf;
 using MiniArcade.MiniGames.Reaction;
 
@@ -17,6 +18,7 @@ namespace MiniArcade.MiniGames
             switch (id)
             {
                 case "mini_golf": return new MiniGolfGame();
+                case "double_drive": return new DoubleDriveGame();
                 case "reaction": return new ReactionGame();
                 case "coin_rush":
                 default: return new CoinRushGame();
@@ -28,6 +30,7 @@ namespace MiniArcade.MiniGames
             switch (id)
             {
                 case "mini_golf": return "Party Mini Golf";
+                case "double_drive": return "Double Drive: Trap-Out";
                 case "reaction": return "Reaction Duel";
                 case "coin_rush": return "Coin Rush";
                 default: return id;
