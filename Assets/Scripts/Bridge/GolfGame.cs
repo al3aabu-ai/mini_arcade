@@ -18,7 +18,7 @@ namespace MiniArcade.Bridge
         const float CupDepth = 0.6f;
         const float RestSpeed = 0.12f;
         const float SettleTime = 0.40f;
-        const int BallLayer = 30;        // balls ignore each other (no unfair knock-aways), still hit the course
+        const int BallLayer = 30;        // balls DO collide with each other (real multiplayer interference); masked out of the grounded raycast
         // ---- course-specific state (set by LoadCourse; defaults = L-shape V12 so nothing breaks pre-load) ----
         int _courseId = 0;
         Vector3 _cup = new Vector3(4.5f, 0f, 4f);
@@ -48,11 +48,13 @@ namespace MiniArcade.Bridge
             public Color color;
             public Rigidbody ball;
             public Renderer rend;
+            public Collider col;
             public int strokes;
             public bool holed;
             public bool inFlight;
             public float still, flight;
             public bool enteredWell;
+            public Vector3 lie;          // resting position before the current shot — OOB returns the ball here (fair)
         }
 
         // A player-planted sabotage trap: starts HIDDEN; reveals (pops up) + acts only when a ball reaches it.
@@ -82,6 +84,11 @@ namespace MiniArcade.Bridge
         readonly List<Player> _players = new List<Player>();
         int _active = -1;
         int _maxStrokes = 8;
+        bool _shotLive;                  // true from the moment a shot is fired until EVERY ball is at rest again
+        float _shotTime;                 // seconds since the live shot started (min flight before a turn can end)
+        string _shooterId = "";          // id of the player who fired the live shot (turn-end is keyed to this, not _active)
+        const float MaxShotTime = 9f;    // hard cap: force-settle + end the turn even if a ball is stuck moving
+        GameObject _activeRing;          // bright ring under the active player's ball (clear highlight)
 
         Transform _aimShaft, _aimHead;
         Renderer _aimShaftR, _aimHeadR;
@@ -110,12 +117,16 @@ namespace MiniArcade.Bridge
         void Awake() { BuildAll(); }
 
         public void PreviewArrow() => UpdateArrow();   // editor preview: pose the active arrow without play-mode Update
+        public void PreviewRevealTraps()               // editor preview: show planted tiki traps at full size (no play mode)
+        {
+            foreach (var t in _traps) { t.revealed = true; t.anim = 0f; SetTrapVisible(t, true); if (t.visA != null) t.visA.transform.localScale = t.scaleA; }
+        }
 
         public void BuildAll()   // public so the in-editor preview renderer can build the scene without play mode
         {
             Instance = this;
             Physics.gravity = new Vector3(0f, -16f, 0f);
-            Physics.IgnoreLayerCollision(BallLayer, BallLayer, true);   // balls never collide with each other
+            Physics.IgnoreLayerCollision(BallLayer, BallLayer, false);   // balls DO hit each other (real multiplayer interference)
             RenderSettings.ambientLight = new Color(0.30f, 0.32f, 0.34f);
             ResolveShaders();
             _turfTex = MakeNoiseTex(7, new Color(0.10f, 0.245f, 0.135f), 0.05f, true);
@@ -129,6 +140,7 @@ namespace MiniArcade.Bridge
             _bumperMat = new PhysicsMaterial("bumper") { bounciness = 0.92f, dynamicFriction = 0.05f, staticFriction = 0.05f,
                 frictionCombine = PhysicsMaterialCombine.Minimum, bounceCombine = PhysicsMaterialCombine.Maximum };
             BuildCamera(); BuildLight(); BuildAim();
+            BuildActiveRing();   // after shaders/materials are ready (NewMatUnlit needs _shaderUnlit)
             LoadCourse(_courseId); BuildCourse();
             Debug.Log("[GOLF] COURSE=" + COURSE_BUILD + " SCENE=" + SCENE_NAME + " shader=" + _shaderName);
         }
@@ -555,15 +567,24 @@ namespace MiniArcade.Bridge
             go.layer = BallLayer;
             go.transform.localScale = Vector3.one * (BallR * 2f);
             p.rend = go.GetComponent<MeshRenderer>(); p.rend.material = NewMat(p.color);
-            go.GetComponent<SphereCollider>().material = _ballMat;
+            p.col = go.GetComponent<SphereCollider>(); p.col.material = _ballMat;
             p.ball = go.AddComponent<Rigidbody>(); p.ball.mass = 1f; p.ball.linearDamping = 0.32f; p.ball.angularDamping = 0.45f;
             p.ball.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic; p.ball.interpolation = RigidbodyInterpolation.Interpolate;
-            var tee = TeeFor(index); p.ball.position = tee; go.transform.position = tee;   // transform too: edit-mode preview + clean spawn
+            var tee = TeeFor(index); p.ball.position = tee; go.transform.position = tee; p.lie = tee;   // transform too: edit-mode preview + clean spawn
         }
-        // Single SHARED fair tee for every player (GDD: all drive from the same Tee Box). The old
-        // per-index fan made each player start from a different x — unfair. Non-active balls are
-        // hidden (RefreshBalls) so they never visually stack on this one spot.
-        Vector3 TeeFor(int i) => _tee;
+        // Players all drive from the same tee box, but each ball sits in a tidy cluster (offset
+        // perpendicular to tee->cup) so EVERY ball is visible and none spawn stacked — which, with
+        // ball-ball collision now ON, would otherwise explode apart. Spacing is just over a ball width.
+        Vector3 TeeFor(int i)
+        {
+            int n = Mathf.Max(1, _players.Count);
+            if (n <= 1) return _tee;
+            Vector3 toCup = new Vector3(_cup.x - _tee.x, 0f, _cup.z - _tee.z);
+            if (toCup.sqrMagnitude < 0.0001f) toCup = Vector3.forward; else toCup.Normalize();
+            Vector3 perp = new Vector3(-toCup.z, 0f, toCup.x);
+            float off = (i - (n - 1) * 0.5f) * (BallR * 2.4f);
+            return _tee + perp * off;
+        }
 
         public void OnHostMessage(string json)
         {
@@ -596,7 +617,8 @@ namespace MiniArcade.Bridge
                 }
                 for (int i = 0; i < _players.Count; i++) CreateBall(_players[i], i);
             }
-            RefreshBalls();   // _active == -1 -> all balls hidden until the first turn (no stacking on the shared tee)
+            _shotLive = false; _shotTime = 0f;
+            RefreshBalls();   // all balls visible at the tidy tee cluster (each in its colour)
             _status = "Get ready!";
             Debug.Log("[GOLF] newHole players=" + _players.Count + " max=" + _maxStrokes);
         }
@@ -604,13 +626,14 @@ namespace MiniArcade.Bridge
         void SetTurn(string id)
         {
             _active = _players.FindIndex(p => p.id == id);
-            // defensively settle every off-turn ball so none can drift invisibly between turns
+            _shotLive = false; _shotTime = 0f;   // a new turn is starting; no shot in progress
+            // defensively settle every off-turn ball so none can drift between turns (they keep their lie)
             for (int i = 0; i < _players.Count; i++)
             {
                 if (i == _active || _players[i].ball == null || _players[i].holed) continue;
                 _players[i].ball.linearVelocity = Vector3.zero; _players[i].ball.angularVelocity = Vector3.zero; _players[i].inFlight = false;
             }
-            RefreshBalls();   // show only the active player's ball; their ball stays at its lie (GDD: play it where it lies)
+            RefreshBalls();   // ALL balls stay visible at their lies; the active one gets the highlight ring
             if (_active < 0) { _status = "…"; return; }
             var p = _players[_active];
             // reset the per-turn reference + aim TOGETHER: neutral = toward the cup, aim = 0.
@@ -627,10 +650,13 @@ namespace MiniArcade.Bridge
         void Shoot(string id, float angleDeg, float power01)
         {
             int idx = _players.FindIndex(p => p.id == id);
-            if (idx < 0 || idx != _active) return;                         // only the active player may shoot
+            if (idx < 0 || idx != _active) return;                         // only the active player may shoot their own ball
             var p = _players[idx];
             if (p.ball == null || p.inFlight || p.holed) return;
-            if (p.ball.linearVelocity.magnitude > 0.2f) return;            // never shoot while moving
+            if (_shotLive || AnyBallMoving()) return;                      // never shoot while ANY ball is still moving
+            // remember every ball's resting spot: an OOB ball returns HERE (fair), an inactive knocked ball keeps its NEW spot
+            for (int i = 0; i < _players.Count; i++) if (_players[i].ball != null) _players[i].lie = _players[i].ball.position;
+            _shotLive = true; _shotTime = 0f; _shooterId = p.id;
             power01 = Mathf.Clamp01(power01); _aimAngle = angleDeg;
             float speed = Mathf.Lerp(3.5f, 15f, power01);
             Vector3 dir = WorldAim();   // neutral(toward cup) + phone swipe; the camera follows this same direction
@@ -648,16 +674,42 @@ namespace MiniArcade.Bridge
                 var p = _players[i];
                 if (p.ball == null) continue;
                 p.ball.isKinematic = false; p.ball.linearVelocity = Vector3.zero; p.ball.angularVelocity = Vector3.zero;
-                p.ball.position = TeeFor(i); p.strokes = 0; p.holed = false; p.inFlight = false; p.still = 0f; p.enteredWell = false;
+                p.ball.position = TeeFor(i); p.lie = p.ball.position; p.strokes = 0; p.holed = false; p.inFlight = false; p.still = 0f; p.enteredWell = false;
             }
-            _active = -1; _status = "Get ready!"; RefreshBalls();
+            _active = -1; _shotLive = false; _shotTime = 0f; _status = "Get ready!"; RefreshBalls();
         }
 
-        // Only the active player's ball is shown (avoids stacking on the shared tee + keeps the follow-cam clean).
+        // ALL players' balls stay visible at their lies (each in its colour). A holed ball is hidden
+        // ("in the hole") and its collider disabled so it can't block the others.
         void RefreshBalls()
         {
             for (int i = 0; i < _players.Count; i++)
-                if (_players[i].rend != null) _players[i].rend.enabled = (i == _active);
+            {
+                var p = _players[i]; bool show = !p.holed;
+                if (p.rend != null) p.rend.enabled = show;
+                if (p.col != null) p.col.enabled = show;
+            }
+            UpdateActiveRing();
+        }
+        // a bright disc that sits under the active player's ball — an unmistakable "your shot" highlight
+        void BuildActiveRing()
+        {
+            if (_activeRing != null) return;
+            _activeRing = Cyl("ActiveRing", new Vector3(0f, 0.015f, 0f), BallR * 2.3f, 0.012f, Color.white);
+            var r = _activeRing.GetComponent<MeshRenderer>();
+            if (r != null) r.material = NewMatUnlit(new Color(1f, 0.95f, 0.4f));   // unlit so it reads as a glow
+            _activeRing.SetActive(false);
+        }
+        void UpdateActiveRing()
+        {
+            if (_activeRing == null) return;
+            bool show = _active >= 0 && _active < _players.Count && _players[_active].ball != null && !_players[_active].holed;
+            _activeRing.SetActive(show);
+            if (!show) return;
+            var p = _players[_active]; Vector3 bp = p.ball.position;
+            _activeRing.transform.position = new Vector3(bp.x, 0.015f, bp.z);
+            var r = _activeRing.GetComponent<MeshRenderer>();
+            if (r != null) r.material.color = new Color(Mathf.Min(1f, p.color.r + 0.30f), Mathf.Min(1f, p.color.g + 0.30f), Mathf.Min(1f, p.color.b + 0.30f));
         }
 
         // ---- player-planted HIDDEN traps (round-scoped, WORLD coordinates) ----
@@ -683,30 +735,49 @@ namespace MiniArcade.Bridge
             }
             Debug.Log("[GOLF] setTraps -> " + _traps.Count + " hidden traps");
         }
-        // Build a trap with visuals HIDDEN (renderer off, no physics collider — the effect is applied
-        // manually on trigger). Revealed + popped only when a ball reaches it (CheckTraps).
+        // Build a TIKI-style trap with visuals HIDDEN (all child renderers off; no physics collider — the
+        // effect is applied manually on trigger). Revealed + popped (sabotage pop) only when a ball reaches it.
         void SpawnTrap(string type, float x, float z)
         {
             var t = new Trap { type = type, pos = new Vector2(x, z) };
+            var root = new GameObject(type == "boost" ? "PBoost" : "PBumper"); DDOL(root);
+            root.transform.position = new Vector3(x, 0f, z);
             if (type == "boost")
             {
-                var pad = Cyl("PBoost", new Vector3(x, 0.03f, z), BoostR, 0.04f, new Color(0.55f, 0.90f, 0.25f));
-                pad.GetComponent<MeshRenderer>().enabled = false;
-                t.visA = pad; t.scaleA = pad.transform.localScale; t.trigR = BoostR + BallR;
+                // carved tiki wind/speed pad: dark jungle-wood floor tile + glowing leaf-green wind chevrons
+                TrapPart(root, "tile",  new Vector3(0f, 0.025f, 0f), new Vector3(BoostR * 2.0f, 0.05f, BoostR * 2.0f), new Color(0.20f, 0.13f, 0.07f), false);
+                TrapPart(root, "carve", new Vector3(0f, 0.045f, 0f), new Vector3(BoostR * 1.5f, 0.05f, BoostR * 1.5f), new Color(0.13f, 0.09f, 0.05f), false);
+                for (int k = 0; k < 3; k++)
+                    TrapPart(root, "wind" + k, new Vector3(0f, 0.06f, -0.20f + k * 0.20f), new Vector3(0.36f - k * 0.06f, 0.03f, 0.09f), new Color(0.42f, 0.85f, 0.30f), true);
+                t.visA = root; t.scaleA = Vector3.one; t.trigR = BoostR + BallR;
             }
-            else   // bumper (default for any type)
+            else   // carved tiki totem (stacked dark-wood blocks with a glowing carved face)
             {
-                var post = GameObject.CreatePrimitive(PrimitiveType.Cylinder); DDOL(post); Destroy(post.GetComponent<Collider>());
-                post.name = "PBumper"; post.transform.position = new Vector3(x, 0.28f, z);
-                post.transform.localScale = new Vector3(BumperR * 2f, 0.28f, BumperR * 2f);
-                var pr = post.GetComponent<MeshRenderer>(); pr.material = NewMat(new Color(0.88f, 0.22f, 0.28f)); pr.enabled = false;
-                var cap = Cyl("PBumperCap", new Vector3(x, 0.44f, z), BumperR + 0.04f, 0.06f, new Color(0.98f, 0.98f, 0.98f));
-                cap.transform.localScale = new Vector3((BumperR + 0.04f) * 2f, 0.03f, (BumperR + 0.04f) * 2f);
-                cap.GetComponent<MeshRenderer>().enabled = false;
-                t.visA = post; t.visB = cap; t.scaleA = post.transform.localScale; t.scaleB = cap.transform.localScale;
-                t.trigR = BumperR + BallR + 0.04f;
+                TrapPart(root, "base", new Vector3(0f, 0.10f, 0f), new Vector3(BumperR * 2.0f, 0.20f, BumperR * 2.0f), new Color(0.24f, 0.16f, 0.09f), false);
+                TrapPart(root, "body", new Vector3(0f, 0.30f, 0f), new Vector3(BumperR * 1.7f, 0.22f, BumperR * 1.7f), new Color(0.30f, 0.20f, 0.10f), false);
+                TrapPart(root, "head", new Vector3(0f, 0.52f, 0f), new Vector3(BumperR * 1.9f, 0.24f, BumperR * 1.9f), new Color(0.20f, 0.27f, 0.13f), false);
+                float fz = BumperR * 0.92f;   // front face (+Z)
+                TrapPart(root, "eyeL",  new Vector3(-0.11f, 0.56f, fz), new Vector3(0.09f, 0.09f, 0.04f), new Color(0.95f, 0.80f, 0.30f), true);
+                TrapPart(root, "eyeR",  new Vector3( 0.11f, 0.56f, fz), new Vector3(0.09f, 0.09f, 0.04f), new Color(0.95f, 0.80f, 0.30f), true);
+                TrapPart(root, "mouth", new Vector3(0f, 0.45f, fz),     new Vector3(0.20f, 0.05f, 0.04f), new Color(0.08f, 0.05f, 0.03f), false);
+                t.visA = root; t.scaleA = Vector3.one; t.trigR = BumperR + BallR + 0.04f;
             }
+            SetTrapVisible(t, false);   // hidden until a ball springs it
             _traps.Add(t);
+        }
+        // one mesh part of a trap, parented under its root (so the reveal-pop scales the whole totem/pad)
+        GameObject TrapPart(GameObject parent, string name, Vector3 localPos, Vector3 localScale, Color color, bool unlit)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube); Destroy(go.GetComponent<Collider>());
+            go.name = name; go.transform.SetParent(parent.transform, false);
+            go.transform.localPosition = localPos; go.transform.localScale = localScale;
+            go.GetComponent<MeshRenderer>().material = unlit ? NewMatUnlit(color) : NewMat(color);
+            return go;
+        }
+        void SetTrapVisible(Trap t, bool show)
+        {
+            if (t.visA != null) foreach (var r in t.visA.GetComponentsInChildren<MeshRenderer>(true)) r.enabled = show;
+            if (t.visB != null) foreach (var r in t.visB.GetComponentsInChildren<MeshRenderer>(true)) r.enabled = show;
         }
         // every frame: tick re-trigger cooldowns + play the reveal pop
         void AnimateTraps(float dt)
@@ -735,8 +806,7 @@ namespace MiniArcade.Bridge
                 if (!t.revealed)
                 {
                     t.revealed = true; t.anim = RevealTime;
-                    if (t.visA != null) t.visA.GetComponent<MeshRenderer>().enabled = true;
-                    if (t.visB != null) t.visB.GetComponent<MeshRenderer>().enabled = true;
+                    SetTrapVisible(t, true);   // hidden tiki trap pops into view (all parts)
                 }
                 if (t.type == "boost")
                 {
@@ -801,68 +871,124 @@ namespace MiniArcade.Bridge
 
         void Update()
         {
+            float dt = Time.deltaTime;
             UpdateArrow();
-            UpdateCamera(Time.deltaTime);
-            AnimateTraps(Time.deltaTime);   // tick trap cooldowns + play reveal pops every frame
-            if (_fanBlades != null) _fanBlades.Rotate(0f, 0f, 150f * Time.deltaTime, Space.Self);   // map-3 fan spins always
-            if (_active < 0 || _active >= _players.Count) return;
-            var p = _players[_active];
-            if (p.ball == null || p.ball.isKinematic) return;
+            UpdateCamera(dt);
+            AnimateTraps(dt);                // tick trap cooldowns + play reveal pops every frame
+            UpdateActiveRing();              // keep the highlight under the active ball
+            if (_fanBlades != null) _fanBlades.Rotate(0f, 0f, 150f * dt, Space.Self);   // map-3 fan spins always
+            if (_players.Count == 0) return;
 
-            bool grounded = Physics.Raycast(p.ball.position, Vector3.down, BallR + 0.10f);
-            if (grounded)
+            // Step EVERY ball (the active ball AND any inactive ball knocked by a collision).
+            bool anyMoving = false;
+            for (int i = 0; i < _players.Count; i++)
             {
-                float sp = p.ball.linearVelocity.magnitude;
-                // sand slows the ball — but ONLY at ground level, so the raised map-3 bridge above the sand is fast.
-                if (OverSand(p.ball.position) && p.ball.position.y < 0.35f) p.ball.linearVelocity = Vector3.MoveTowards(p.ball.linearVelocity, Vector3.zero, 7f * Time.deltaTime);
-                else if (sp < 0.25f) p.ball.linearVelocity = Vector3.MoveTowards(p.ball.linearVelocity, Vector3.zero, 1.5f * Time.deltaTime);
+                var p = _players[i];
+                if (p.ball == null || p.holed || p.ball.isKinematic) continue;
+                if (StepBall(p, i, dt)) continue;                                  // holed / OOB handled this frame
+                if (p.ball.linearVelocity.magnitude > RestSpeed || p.still <= SettleTime) anyMoving = true;
             }
 
-            if (!p.inFlight) return;
-            p.flight += Time.deltaTime; Vector3 pos = p.ball.position; float speed = p.ball.linearVelocity.magnitude;
-
-            CheckTraps(p, pos);   // spring any hidden trap the ball reaches (reveal + bounce/boost)
-
-            // map-3 fan: bend the ball sideways while it crosses the wind zone. Predictable + modest:
-            // the push only accelerates the ball UP TO _windMax along the wind dir, so dwell time can't pile up.
-            if (_windAccel > 0f && _windRect != null &&
-                pos.x >= _windRect[0] && pos.x <= _windRect[2] && pos.z >= _windRect[1] && pos.z <= _windRect[3])
+            // A turn ends when the shot has launched AND every ball is at rest — OR a hard timeout fires so a
+            // ball wedged against a guard / a slow ball-vs-ball jitter can NEVER hang the turn (review: HIGH).
+            if (_shotLive)
             {
-                Vector3 wdir = new Vector3(_windDir.x, 0f, _windDir.y);
-                float along = Vector3.Dot(p.ball.linearVelocity, wdir);      // current speed along the wind
-                if (along < _windMax)
+                _shotTime += dt;
+                bool timeout = _shotTime > MaxShotTime;
+                if (_shotTime > 0.4f && (!anyMoving || timeout))
                 {
-                    float add = Mathf.Min(_windAccel * Time.deltaTime, _windMax - along);
-                    p.ball.linearVelocity += wdir * add;
+                    if (timeout)   // force every still-moving ball to stop so the hole can continue
+                    {
+                        for (int i = 0; i < _players.Count; i++)
+                        {
+                            var b = _players[i];
+                            if (b.ball == null || b.holed || b.ball.isKinematic) continue;
+                            b.ball.linearVelocity = Vector3.zero; b.ball.angularVelocity = Vector3.zero; b.inFlight = false; b.still = SettleTime + 1f;
+                        }
+                        Debug.Log("[GOLF] shot TIMEOUT -> force-settle + end turn");
+                    }
+                    _shotLive = false;
+                    var a = _players.Find(pl => pl.id == _shooterId);   // the player who actually shot (captured at Shoot)
+                    if (a != null)
+                    {
+                        _status = "stroke " + a.strokes;
+                        Debug.Log("[GOLF] turn over (shooter " + _shooterId + ")");
+                        Send("{\"t\":\"ballStopped\",\"id\":\"" + a.id + "\",\"strokes\":" + a.strokes + "}");   // host advances the turn
+                    }
+                }
+            }
+        }
+
+        bool AnyBallMoving()
+        {
+            for (int i = 0; i < _players.Count; i++)
+            {
+                var p = _players[i];
+                if (p.ball == null || p.holed || p.ball.isKinematic) continue;
+                if (p.ball.linearVelocity.magnitude > RestSpeed) return true;
+            }
+            return false;
+        }
+
+        // Per-ball physics + hole/OOB detection. Works for the active ball AND any inactive ball that a
+        // collision set in motion. Returns true if the ball was holed or returned to its lie this frame.
+        bool StepBall(Player p, int i, float dt)
+        {
+            Vector3 pos = p.ball.position;
+            float speed = p.ball.linearVelocity.magnitude;
+
+            // ground friction / sand — exclude OTHER balls from the down-ray so a near ball can't read as "ground"
+            if (Physics.Raycast(pos, Vector3.down, BallR + 0.10f, ~(1 << BallLayer)))
+            {
+                if (OverSand(pos) && pos.y < 0.35f) p.ball.linearVelocity = Vector3.MoveTowards(p.ball.linearVelocity, Vector3.zero, 7f * dt);
+                else if (speed < 0.25f) p.ball.linearVelocity = Vector3.MoveTowards(p.ball.linearVelocity, Vector3.zero, 1.5f * dt);
+            }
+
+            if (speed > RestSpeed || p.inFlight)
+            {
+                CheckTraps(p, pos);   // any moving ball springs a hidden trap it reaches
+                if (_windAccel > 0f && _windRect != null &&
+                    pos.x >= _windRect[0] && pos.x <= _windRect[2] && pos.z >= _windRect[1] && pos.z <= _windRect[3])
+                {
+                    Vector3 wdir = new Vector3(_windDir.x, 0f, _windDir.y);
+                    float along = Vector3.Dot(p.ball.linearVelocity, wdir);
+                    if (along < _windMax) p.ball.linearVelocity += wdir * Mathf.Min(_windAccel * dt, _windMax - along);
                 }
             }
 
+            if (speed < RestSpeed) p.still += dt; else p.still = 0f;
+
             bool inWellColumn = Mathf.Abs(pos.x - _cup.x) < CupHalf && Mathf.Abs(pos.z - _cup.z) < CupHalf;
             bool downInWell = inWellColumn && pos.y < -0.22f;
-            if (downInWell && !p.enteredWell) { p.enteredWell = true; }
-            if (speed < RestSpeed) p.still += Time.deltaTime; else p.still = 0f;
+            if (downInWell && !p.enteredWell) p.enteredWell = true;
 
+            // ANY ball knocked into the cup counts as holed for ITS player
             if (downInWell && pos.y <= (-CupDepth + BallR + 0.14f) && p.still > 0.35f)
             {
                 p.holed = true; p.inFlight = false;
                 p.ball.linearVelocity = Vector3.zero; p.ball.angularVelocity = Vector3.zero; p.ball.isKinematic = true;
-                _status = "Player " + (_active + 1) + " HOLED in " + p.strokes + "!";
-                Debug.Log("[GOLF] P" + (_active + 1) + " HOLED in " + p.strokes);
-                Send("{\"t\":\"holed\",\"id\":\"" + p.id + "\",\"strokes\":" + p.strokes + "}"); return;
+                if (p.rend != null) p.rend.enabled = false; if (p.col != null) p.col.enabled = false;   // hide ("in the hole")
+                _status = "Player " + (i + 1) + " HOLED in " + p.strokes + "!";
+                Debug.Log("[GOLF] P" + (i + 1) + " HOLED in " + p.strokes);
+                Send("{\"t\":\"holed\",\"id\":\"" + p.id + "\",\"strokes\":" + p.strokes + "}");
+                return true;
             }
+
+            // OOB (any ball) -> back to its pre-shot lie (knocked-out balls are NOT lost; only OOB resets)
             if (pos.y < -CupDepth - 3f || Mathf.Abs(pos.x) > _oobAbsX || pos.z < _oobZMin || pos.z > _oobZMax)
             {
-                p.ball.linearVelocity = Vector3.zero; p.ball.angularVelocity = Vector3.zero; p.ball.position = TeeFor(_active);
-                p.inFlight = false; Debug.Log("[GOLF] P" + (_active + 1) + " OOB -> re-tee");
-                Send("{\"t\":\"ballStopped\",\"id\":\"" + p.id + "\",\"strokes\":" + p.strokes + ",\"reset\":true}"); return;
-            }
-            if (p.still > SettleTime && p.flight > 0.4f && !downInWell)
-            {
                 p.ball.linearVelocity = Vector3.zero; p.ball.angularVelocity = Vector3.zero;
-                p.inFlight = false; _status = "Player " + (_active + 1) + " — stroke " + p.strokes;
-                Debug.Log("[GOLF] P" + (_active + 1) + " stopped at " + pos);
-                Send("{\"t\":\"ballStopped\",\"id\":\"" + p.id + "\",\"strokes\":" + p.strokes + "}");
+                p.ball.position = p.lie; p.inFlight = false; p.enteredWell = false; p.still = SettleTime + 1f;   // instantly at rest at its lie
+                Debug.Log("[GOLF] P" + (i + 1) + " OOB -> back to lie");
+                return true;
             }
+
+            if (p.still > SettleTime)   // settled: stop drift + allow the arrow next turn
+            {
+                if (speed > 0f) { p.ball.linearVelocity = Vector3.zero; p.ball.angularVelocity = Vector3.zero; }
+                p.inFlight = false;
+            }
+            return false;
         }
 
         // World shot direction = per-turn neutral (toward cup) + the phone's relative swipe angle.

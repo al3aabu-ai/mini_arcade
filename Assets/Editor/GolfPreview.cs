@@ -22,6 +22,8 @@ namespace MiniArcade.Editor
             gg.OnHostMessage("{\"t\":\"newHole\",\"players\":\"p1|#FF5DA2;p2|#38E1FF;p3|#B6FF4B;p4|#FFD23F\",\"max\":8}");
             gg.OnHostMessage("{\"t\":\"setTurn\",\"id\":\"p1\"}");
             gg.OnHostMessage("{\"t\":\"aim\",\"angle\":0,\"power\":0}");
+            gg.OnHostMessage("{\"t\":\"setTraps\",\"traps\":\"bumper,-4,-2.5;boost,-4,0.5\"}");   // plant + reveal tiki traps for the visual check
+            gg.PreviewRevealTraps();
             gg.PreviewArrow();   // pose the active (pink) arrow on Ball_0
 
             var b0 = GameObject.Find("Ball_0");
@@ -30,12 +32,14 @@ namespace MiniArcade.Editor
             var cam = GameObject.Find("Main Camera").GetComponent<Camera>();
             var sand = new Vector3(-3.7f, 0f, 4f);
             var gate = new Vector3(-4f, 0.3f, -3f);
+            var tiki = new Vector3(-4f, 0.3f, -2.5f);
             Shot(cam, "/tmp/golf-preview.png", new Vector3(0f, 18f, -13f), new Vector3(0f, 0f, -1.5f), 54f);
             Shot(cam, "/tmp/golf-cup.png", Cup + new Vector3(-1.6f, 3.0f, -3.2f), Cup, 38f);
             Shot(cam, "/tmp/golf-tee.png", bp + new Vector3(0f, 3.4f, -3.6f), bp + Vector3.forward * 1.5f, 46f);
             Shot(cam, "/tmp/golf-sand.png", sand + new Vector3(0f, 3.2f, -3.6f), sand, 44f);
             Shot(cam, "/tmp/golf-wall.png", gate + new Vector3(2.8f, 2.4f, -2.6f), gate, 44f);
-            Debug.Log("[GolfPreview] wrote /tmp/golf-preview.png, -cup, -tee, -sand, -wall");
+            Shot(cam, "/tmp/golf-traps.png", tiki + new Vector3(0f, 1.7f, -2.6f), tiki + new Vector3(0f, 0.1f, 1.2f), 46f);   // tiki trap close-up
+            Debug.Log("[GolfPreview] wrote /tmp/golf-preview.png, -cup, -tee, -sand, -wall, -traps");
 
             // ---- Tiki Guard course (map 1) ----
             gg.OnHostMessage("{\"t\":\"newHole\",\"players\":\"p1|#FF5DA2;p2|#38E1FF\",\"max\":8,\"map\":1}");
