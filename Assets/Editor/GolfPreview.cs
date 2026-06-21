@@ -50,15 +50,15 @@ namespace MiniArcade.Editor
             Shot(cam, "/tmp/golf-tiki-guard.png", new Vector3(2.8f, 3.6f, -5.6f), new Vector3(2.8f, 0.3f, -2f), 44f);
             Debug.Log("[GolfPreview] wrote /tmp/golf-tiki.png + -tiki-guard.png");
 
-            // ---- Tiki Wind Run course (map 2): top-down + close-ups of the ramp/bridge and the fan ----
+            // ---- Tiki Wind Bridge course (map 2/"Map 3"): top-down overview + ramp/water + cup approach ----
             gg.OnHostMessage("{\"t\":\"newHole\",\"players\":\"p1|#FF5DA2;p2|#38E1FF\",\"max\":8,\"map\":2}");
             gg.OnHostMessage("{\"t\":\"setTurn\",\"id\":\"p1\"}");
             gg.OnHostMessage("{\"t\":\"aim\",\"angle\":0,\"power\":0}");
             gg.PreviewArrow();
-            Shot(cam, "/tmp/golf-windrun.png", new Vector3(0f, 18.5f, -11.5f), new Vector3(0f, 0f, -2f), 58f);
-            Shot(cam, "/tmp/golf-windrun-ramp.png", new Vector3(2.0f, 2.3f, -4.6f), new Vector3(3.7f, 0.25f, 0.6f), 52f);
-            Shot(cam, "/tmp/golf-windrun-fan.png", new Vector3(2.6f, 2.6f, 0.2f), new Vector3(5.1f, 1.0f, 2.2f), 46f);
-            Debug.Log("[GolfPreview] wrote /tmp/golf-windrun.png + -ramp + -fan");
+            Shot(cam, "/tmp/golf-bridge.png", new Vector3(0f, 21f, -13.5f), new Vector3(0f, 0f, -1.5f), 62f);            // full route choice
+            Shot(cam, "/tmp/golf-bridge-ramp.png", new Vector3(1.0f, 3.0f, -5.0f), new Vector3(3.4f, 0.2f, -0.4f), 54f); // ramp + water + island
+            Shot(cam, "/tmp/golf-bridge-cup.png", new Vector3(2.4f, 3.4f, 0.6f), new Vector3(4.6f, 0.2f, 3.6f), 50f);    // fan + G2 + cup
+            Debug.Log("[GolfPreview] wrote /tmp/golf-bridge.png + -ramp + -cup");
         }
 
         static void Shot(Camera cam, string path, Vector3 pos, Vector3 look, float fov)

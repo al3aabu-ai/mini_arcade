@@ -34,6 +34,8 @@ namespace MiniArcade.Bridge
         static readonly Vector2 BumperPos = new Vector2(1.0f, 4.2f);    // L-shape static bumper
         // ---- map-3 fan/wind hazard (null/0 on the other courses, so they are untouched) ----
         float[] _windRect;                   // {xMin,zMin,xMax,zMax} push zone; null = no wind
+        float[] _waterRect;                  // {xMin,zMin,xMax,zMax} water hazard (ball at ground level here -> reset to last safe lie); null = none
+        Transform _fanArrows;                // lightweight wind-line arrows over the fan zone (rotated/scrolled for life)
         Vector2 _windDir = Vector2.zero;     // normalized push direction (xz plane)
         float _windAccel;                    // push strength (units/s^2); 0 = off
         float _windMax;                      // cap on wind-aligned carry speed (m/s) so dwell time can't pile up
@@ -149,25 +151,32 @@ namespace MiniArcade.Bridge
         void LoadCourse(int id)
         {
             _courseId = id; _turf.Clear(); _trapBlock.Clear();
-            _windRect = null; _windDir = Vector2.zero; _windAccel = 0f; _windMax = 0f; _fanBlades = null;   // off unless a course sets it
+            _windRect = null; _windDir = Vector2.zero; _windAccel = 0f; _windMax = 0f; _fanBlades = null; _fanArrows = null; _waterRect = null;   // off unless a course sets it
             if (id == 2)
             {
-                // ---- TIKI WIND RUN (map 3): 3 lanes — SAFE left, SKILL middle (sliding gate),
-                // RISKY right (raised ramp/bridge over a sand pit + a fan that blows toward the cup).
-                _tee = new Vector3(0f, BallR + 0.20f, -7.5f);
-                _cup = new Vector3(0f, 0f, 3.2f);                       // top-centre; all 3 lanes converge here
-                _sandC = new Vector2(3.6f, 0.8f); _sandR = 1.7f;        // sand pit the risky bridge crosses
-                _oobAbsX = 7f; _oobZMin = -10.5f; _oobZMax = 6f;
-                _turf.Add(new float[] { -5.5f, -9f, 5.5f, 2.85f });     // main field (below cup row)
-                _turf.Add(new float[] { -5.5f, 2.85f, -0.35f, 4.5f });  // left of cup
-                _turf.Add(new float[] { 0.35f, 2.85f, 5.5f, 4.5f });    // right of cup
-                _trapBlock.Add(new float[] { -1.9f, -4.3f, -1.5f, 1.7f });  // left lane divider
-                _trapBlock.Add(new float[] { 1.5f, -4.3f, 1.9f, 1.7f });    // right lane divider
-                _trapBlock.Add(new float[] { 2.0f, -3.7f, 5.3f, 2.7f });    // risky bridge + sand + rotating guard + fan (no traps)
-                _trapBlock.Add(new float[] { -1.3f, -1.7f, 1.3f, -0.3f });  // sliding-gate guard path (skill lane)
-                _trapBlock.Add(new float[] { -1.4f, 1.8f, 1.4f, 2.9f });    // patrol guard path near the cup
-                _windRect = new float[] { 1.9f, 0.4f, 5.3f, 2.4f };     // upper risky lane (releases BEFORE the cup row)
-                _windDir = new Vector2(-1f, 0f); _windAccel = 7f; _windMax = 2.5f;   // blow LEFT toward cup; capped carry speed
+                // ---- TIKI WIND BRIDGE (map 3): a WINDING course. Tee bottom-LEFT, cup top-RIGHT (never straight
+                // ahead). Three genuinely different routes that reach the corner cup from different sides:
+                //  SAFE  = long left corridor up the left wall, then RIGHT across the top band to the cup.
+                //  SKILL = middle, up through a narrow sliding-guard GATE, then bends right to the cup.
+                //  RISKY = up-right to a ramp/bridge over WATER -> island landing -> through the FAN zone to the cup.
+                _tee = new Vector3(-4.5f, BallR + 0.20f, -7.5f);       // bottom-left
+                _cup = new Vector3(4.5f, 0f, 4.2f);                    // top-right corner
+                _sandC = new Vector2(2.4f, 2.2f); _sandR = 1.0f;       // rough just off the island/ramp landing line
+                _oobAbsX = 7f; _oobZMin = -10f; _oobZMax = 6.5f;
+                // playable grass (for trap clamp): bottom tee fan-out, the three lanes, island, and the top band
+                _turf.Add(new float[] { -6f, -9f, 6f, -4.8f });        // open tee fan-out (clean first shot)
+                _turf.Add(new float[] { -6f, -4.8f, -2.3f, 2.6f });    // SAFE left corridor
+                _turf.Add(new float[] { -2.0f, -4.8f, 1.6f, 2.4f });   // SKILL middle lane
+                _turf.Add(new float[] { -6f, 2.6f, 6f, 5.5f });        // TOP band (all routes merge to the cup)
+                _turf.Add(new float[] { 2.0f, 1.3f, 4.6f, 2.6f });     // RISKY island landing
+                _trapBlock.Add(new float[] { 1.9f, -2.0f, 5.0f, 1.4f });    // WATER + bridge span (no traps)
+                _trapBlock.Add(new float[] { 2.6f, -4.6f, 4.4f, -2.0f });   // ramp approach (no traps)
+                _trapBlock.Add(new float[] { -0.9f, -1.7f, 0.9f, -0.6f });  // G1 sliding-gate path
+                _trapBlock.Add(new float[] { 3.2f, 1.9f, 5.6f, 3.8f });     // G2 rotating-guard sweep (cup approach)
+                _trapBlock.Add(new float[] { 3.4f, 1.6f, 6f, 3.8f });       // fan zone (no traps; matches _windRect)
+                _waterRect = new float[] { 1.9f, -1.6f, 4.9f, 1.2f };       // water hazard the bridge crosses
+                _windRect = new float[] { 3.4f, 1.6f, 6f, 3.6f };           // fan zone: right side, between island and cup
+                _windDir = new Vector2(-1f, 0f); _windAccel = 6f; _windMax = 2.3f;   // pushes LEFT (toward rough/safe); skill = bend it into the cup
             }
             else if (id == 1)
             {
@@ -259,7 +268,7 @@ namespace MiniArcade.Bridge
         {
             ClearCourse();
             _buildingCourse = true;
-            if (_courseId == 2) BuildCourseWindRun(); else if (_courseId == 1) BuildCourseTiki(); else BuildCourseLShape();
+            if (_courseId == 2) BuildCourseWindBridge(); else if (_courseId == 1) BuildCourseTiki(); else BuildCourseLShape();
             BuildCup();
             BuildGuards();
             _buildingCourse = false;
@@ -352,40 +361,73 @@ namespace MiniArcade.Bridge
         // Compact rectangle x[-5.5,5.5] z[-9,4.5]. Two free-standing dividers split THREE lanes that
         // converge at the top-centre cup (0,3.2): SAFE left (clear, indirect) / SKILL middle (sliding gate) /
         // RISKY right (a raised ramp+bridge over a sand pit + a fan blowing the ball left toward the cup).
-        void BuildCourseWindRun()
+        // TIKI WIND BRIDGE (map 3): a WINDING course — tee bottom-LEFT, cup top-RIGHT, three routes that
+        // reach the corner cup differently (SAFE left+top / SKILL middle gate / RISKY ramp-bridge over water).
+        void BuildCourseWindBridge()
         {
-            // floor: full field with ONLY the cup hole (x[-0.35,0.35] z[2.85,3.55]) left open
-            BoxTurf("WR_Floor", new Vector3(0f, -0.25f, -3.075f), new Vector3(11.0f, 0.5f, 11.85f), _turfTex, _turfMat);
-            BoxTurf("WR_CupL", new Vector3(-2.925f, -0.25f, 3.675f), new Vector3(5.15f, 0.5f, 1.65f), _turfTex, _turfMat);
-            BoxTurf("WR_CupR", new Vector3(2.925f, -0.25f, 3.675f), new Vector3(5.15f, 0.5f, 1.65f), _turfTex, _turfMat);
-            BoxTurf("WR_CupB", new Vector3(0f, -0.25f, 4.025f), new Vector3(0.7f, 0.5f, 0.95f), _turfTex, _turfMat);
+            var plank = new Color(0.52f, 0.37f, 0.19f);
+            // floor: full field, leaving ONLY the round cup hole open at (4.5,4.2)  (gap x[4.15,4.85] z[3.85,4.55])
+            BoxTurf("WB_Floor", new Vector3(0f, -0.25f, -2.575f), new Vector3(12f, 0.5f, 12.85f), _turfTex, _turfMat);
+            BoxTurf("WB_TopL", new Vector3(-0.925f, -0.25f, 4.675f), new Vector3(10.15f, 0.5f, 1.65f), _turfTex, _turfMat);
+            BoxTurf("WB_TopR", new Vector3(5.425f, -0.25f, 4.675f), new Vector3(1.15f, 0.5f, 1.65f), _turfTex, _turfMat);
+            BoxTurf("WB_TopB", new Vector3(4.5f, -0.25f, 5.025f), new Vector3(0.7f, 0.5f, 0.95f), _turfTex, _turfMat);
 
-            // bamboo perimeter
-            WallRail("WRW_Bottom", new Vector3(0f, 0.35f, -9f), new Vector3(11.3f, 0.7f, 0.3f));
-            WallRail("WRW_Top", new Vector3(0f, 0.35f, 4.5f), new Vector3(11.3f, 0.7f, 0.3f));
-            WallRail("WRW_Left", new Vector3(-5.5f, 0.35f, -2.25f), new Vector3(0.3f, 0.7f, 13.8f));
-            WallRail("WRW_Right", new Vector3(5.5f, 0.35f, -2.25f), new Vector3(0.3f, 0.7f, 13.8f));
+            // bamboo perimeter (dark olive)
+            WallRail("WBW_Bottom", new Vector3(0f, 0.35f, -9f), new Vector3(12.3f, 0.7f, 0.3f));
+            WallRail("WBW_Top", new Vector3(0f, 0.35f, 5.5f), new Vector3(12.3f, 0.7f, 0.3f));
+            WallRail("WBW_Left", new Vector3(-6f, 0.35f, -1.75f), new Vector3(0.3f, 0.7f, 15.0f));
+            WallRail("WBW_Right", new Vector3(6f, 0.35f, -1.75f), new Vector3(0.3f, 0.7f, 15.0f));
 
-            // lane dividers (free-standing; the tee mouth z<-4.2 stays OPEN so nothing blocks the first shot)
-            WallRail("WR_DivL", new Vector3(-1.7f, 0.35f, -1.3f), new Vector3(0.3f, 0.7f, 5.8f));
-            WallRail("WR_DivR", new Vector3(1.7f, 0.35f, -1.3f), new Vector3(0.3f, 0.7f, 5.8f));
+            // route shaping (tee fan-out z<-4.8 stays OPEN -> clean first shot, 3 visible directions)
+            WallRail("WB_SafeMid", new Vector3(-2.15f, 0.35f, -1.15f), new Vector3(0.3f, 0.7f, 7.3f));   // SAFE left | MIDDLE
+            WallRail("WB_MidRisky", new Vector3(1.7f, 0.35f, -1.9f), new Vector3(0.3f, 0.7f, 5.8f));     // MIDDLE | RISKY right
+            // SKILL narrow gate at z=-1 (gap x[-0.9,0.9] where G1 slides; never fully closes)
+            WallRail("WB_GateL", new Vector3(-1.525f, 0.35f, -1f), new Vector3(1.25f, 0.7f, 0.3f));
+            WallRail("WB_GateR", new Vector3(1.3f, 0.35f, -1f), new Vector3(0.8f, 0.7f, 0.3f));
+            // SAFE route bank-shot wall (angled): a good player banks off it to cut the top-left corner toward the cup
+            BankWall("WB_Bank", new Vector3(-4.3f, 0.35f, 2.9f), 42f, new Vector3(0.3f, 0.7f, 2.2f));
 
-            // RISKY shortcut: a sand pit crossed by a raised ramp + flat bridge with a drop-off near the cup
-            var sand = new GameObject("WR_Sand"); DDOL(sand);
+            // RISKY shortcut: WATER hazard crossed by a raised ramp + bridge that lands on the island
+            var water = Box("WB_Water", new Vector3(3.4f, 0.02f, -0.2f), new Vector3(3.0f, 0.04f, 2.8f), new Color(0.05f, 0.22f, 0.28f), null);
+            Destroy(water.GetComponent<Collider>());                                                     // visual only; entry is detected in StepBall
+            RampBox("WB_Ramp", 3.2f, -3.5f, 0f, -1.6f, 0.4f, 1.4f, 0.30f, plank);                        // up-ramp (surface 0 -> 0.4)
+            Box("WB_Deck", new Vector3(3.2f, 0.15f, -0.2f), new Vector3(1.4f, 0.5f, 2.8f), plank, _turfMat);   // flat bridge over the water -> island (sides OPEN: a miss falls in)
+            // rough just off the island landing line (overshoot/left-miss lands here)
+            var sand = new GameObject("WB_Sand"); DDOL(sand);
             sand.AddComponent<MeshFilter>().sharedMesh = MakeDisk(_sandR, 64);
             sand.AddComponent<MeshRenderer>().material = NewMatTrans(_sandTex);
             sand.transform.position = new Vector3(_sandC.x, 0.012f, _sandC.y);
-            var plank = new Color(0.52f, 0.37f, 0.19f);                                                              // wood: reads clearly as a BRIDGE (not green-on-green)
-            RampBox("WR_Ramp", 3.6f, -1.4f, 0f, 0.1f, 0.4f, 1.5f, 0.30f, plank);                                     // up-ramp (surface 0 -> 0.4)
-            Box("WR_Deck", new Vector3(3.6f, 0.15f, 0.95f), new Vector3(1.5f, 0.5f, 1.9f), plank, _turfMat);         // flat bridge top y=0.4 -> drop-off at z=1.9 (sides OPEN: off-centre = into the sand)
 
-            // FAN: a carved tiki wind totem against the right wall that blows LEFT across the upper risky lane
-            BuildFan(new Vector3(5.15f, 0f, 2.2f));
+            // FAN: carved tiki wind totem on the right that blows LEFT across the island->cup approach
+            BuildFan(new Vector3(5.7f, 0f, 2.6f));
+            WindStreaks(new Vector3(5.0f, 0.5f, 2.6f));   // subtle wind lines so the zone reads
 
-            // tiki dressing (all collider-free decoration)
-            BambooPost(-5.5f, -9f); BambooPost(5.5f, -9f); BambooPost(-5.5f, 4.5f); BambooPost(5.5f, 4.5f);
-            BambooPost(-1.7f, 1.9f); BambooPost(1.7f, 1.9f); BambooPost(-1.7f, -4.3f); BambooPost(1.7f, -4.3f);
-            IslandTotem(new Vector3(-1.2f, 0f, 4.05f), 0.8f); IslandTotem(new Vector3(1.2f, 0f, 4.05f), 0.8f);
+            // tiki dressing (collider-free)
+            BambooPost(-6f, -9f); BambooPost(6f, -9f); BambooPost(-6f, 5.5f); BambooPost(6f, 5.5f);
+            BambooPost(-2.15f, 2.5f); BambooPost(1.7f, 1.0f);
+            IslandTotem(new Vector3(2.2f, 0f, 2.55f), 0.7f);   // island marker
+        }
+
+        // an angled (non-axis-aligned) bank wall: rotated bouncy box for skill bank-shots
+        void BankWall(string name, Vector3 pos, float yawDeg, Vector3 size)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube); DDOL(go);
+            go.name = name; go.transform.position = pos; go.transform.rotation = Quaternion.Euler(0f, yawDeg, 0f);
+            go.transform.localScale = size;
+            go.GetComponent<MeshRenderer>().material = NewMat(new Color(0.34f, 0.35f, 0.17f));   // dark olive, matches bamboo
+            go.GetComponent<BoxCollider>().material = _wallMat;
+        }
+
+        // a few lightweight pale wind-line streaks so the fan zone is readable (no animation, collider-free)
+        void WindStreaks(Vector3 c)
+        {
+            for (int i = -1; i <= 1; i++)
+            {
+                var s = GameObject.CreatePrimitive(PrimitiveType.Cube); DDOL(s); Destroy(s.GetComponent<Collider>());
+                s.name = "WB_Wind" + i; s.transform.position = new Vector3(c.x, c.y, c.z + i * 0.6f);
+                s.transform.localScale = new Vector3(1.4f, 0.02f, 0.05f);
+                s.GetComponent<MeshRenderer>().material = NewMatUnlit(new Color(0.75f, 0.9f, 0.85f, 0.5f));
+            }
         }
 
         // a tilted ramp whose TOP SURFACE runs from (z0,ys0) up to (z1,ys1) at column x (solid roll surface)
@@ -467,10 +509,10 @@ namespace MiniArcade.Bridge
             }
             if (_courseId == 2)
             {
-                // Wind Run: SLIDING gate (skill lane) + ROTATING blocker (risky lane) + PATROL near the cup.
-                _guards.Add(MakeGuard(new Vector3(-1.0f, 0f, -1.0f), new Vector3(1.0f, 0f, -1.0f), 1.0f, 0f, 1.0f));   // sliding gate, middle
-                _guards.Add(MakeRotGuard(new Vector3(3.6f, 0f, -2.6f), 2.0f, 55f));                                    // rotating blocker, risky lane
-                _guards.Add(MakeGuard(new Vector3(-1.2f, 0f, 2.4f), new Vector3(1.2f, 0f, 2.4f), 0.7f, 1.0f, 0.9f));   // patrol near the cup
+                // Wind Bridge: G1 SLIDING tiki across the skill gate (always a timing window) + G2 ROTATING
+                // tiki guarding the cup approach. (Optional G3 patrol omitted for stability, per spec.)
+                _guards.Add(MakeGuard(new Vector3(-0.9f, 0f, -1.0f), new Vector3(0.9f, 0f, -1.0f), 0.8f, 0f, 0.9f));   // G1 slide across the gate
+                _guards.Add(MakeRotGuard(new Vector3(4.5f, 0f, 2.7f), 1.6f, 45f));                                     // G2 rotating, guards the cup's lower approach (tip stays clear of the cup lip)
                 return;
             }
         }
@@ -718,7 +760,7 @@ namespace MiniArcade.Bridge
         // x[-6,-2] z[-10,2] + horizontal band x[-6,6] z[2,6]. tee(-4,-8), cup(4.5,4).
         void ClearTraps()
         {
-            foreach (var t in _traps) { if (t.visA != null) Destroy(t.visA); if (t.visB != null) Destroy(t.visB); }
+            foreach (var t in _traps) { if (t.visA != null) Kill(t.visA); if (t.visB != null) Kill(t.visB); }   // Kill = DestroyImmediate in edit-mode (clean map switches + preview)
             _traps.Clear();
         }
         void SetTraps(string s)
@@ -971,6 +1013,17 @@ namespace MiniArcade.Bridge
                 _status = "Player " + (i + 1) + " HOLED in " + p.strokes + "!";
                 Debug.Log("[GOLF] P" + (i + 1) + " HOLED in " + p.strokes);
                 Send("{\"t\":\"holed\",\"id\":\"" + p.id + "\",\"strokes\":" + p.strokes + "}");
+                return true;
+            }
+
+            // WATER hazard (map 3): a ball that drops into the water (at ground level, NOT on the raised bridge)
+            // resets to its last safe position (pre-shot lie). Reuses the fair lie reset; no +1 penalty yet (logged).
+            if (_waterRect != null && pos.y < 0.30f &&
+                pos.x >= _waterRect[0] && pos.x <= _waterRect[2] && pos.z >= _waterRect[1] && pos.z <= _waterRect[3])
+            {
+                p.ball.linearVelocity = Vector3.zero; p.ball.angularVelocity = Vector3.zero;
+                p.ball.position = p.lie; p.inFlight = false; p.enteredWell = false; p.still = SettleTime + 1f;
+                Debug.Log("[GOLF] P" + (i + 1) + " WATER -> reset to last safe position");
                 return true;
             }
 
