@@ -50,8 +50,10 @@ namespace MiniArcade.Editor
             Shot(cam, "/tmp/golf-tiki-guard.png", new Vector3(2.8f, 3.6f, -5.6f), new Vector3(2.8f, 0.3f, -2f), 44f);
             Debug.Log("[GolfPreview] wrote /tmp/golf-tiki.png + -tiki-guard.png");
 
-            // ---- Tiki Wind Bridge course (map 2/"Map 3"): top-down overview + ramp/water + cup approach ----
-            gg.OnHostMessage("{\"t\":\"newHole\",\"players\":\"p1|#FF5DA2;p2|#38E1FF\",\"max\":8,\"map\":2}");
+            // ---- Tiki Wind Bridge course (map 2/"Map 3"): data-driven from the SAME def the phone uses ----
+            string defPath = "/Users/abdulellahhm/Desktop/games/mini-arcade-host/Resources/web/maps/map3.json";
+            string defB64 = File.Exists(defPath) ? System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(File.ReadAllText(defPath))) : "";
+            gg.OnHostMessage("{\"t\":\"newHole\",\"players\":\"p1|#FF5DA2;p2|#38E1FF\",\"max\":8,\"map\":2,\"defB64\":\"" + defB64 + "\"}");
             gg.OnHostMessage("{\"t\":\"setTurn\",\"id\":\"p1\"}");
             gg.OnHostMessage("{\"t\":\"aim\",\"angle\":0,\"power\":0}");
             gg.PreviewArrow();
