@@ -41,6 +41,39 @@
             <span style="height: 26px; padding: 0 11px; border-radius: 13px; background: rgba(255,255,255,0.14); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center;">FREE</span>
           </div>
 
+          <!-- STEP 1: room code -->
+          <div style="position: relative; flex: 1; flex-direction: column; justify-content: center; display: {{ f.step1Display }};">
+            <div style="display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 28px;">
+              <div style="width: 76px; height: 76px; border-radius: 22px; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; margin-bottom: 18px;">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5" stroke="#FFD23F" stroke-width="1.8"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke="#FFD23F" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15" r="1.6" fill="#FFD23F"/></svg>
+              </div>
+              <div style="font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.3px;">Enter room code</div>
+              <div style="font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,0.6); margin-top: 6px; line-height: 1.4;">Find the 4-letter code<br>on the TV screen.</div>
+            </div>
+            <label style="position: relative; display: flex; gap: 11px; cursor: text;">
+              <input type="text" value="{{ f.code }}" onInput="{{ fInput }}" maxlength="4" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="text" style="position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: none; background: none; cursor: text; font-size: 16px;">
+              <div style="{{ f.boxes.0.style }}">{{ f.boxes.0.ch }}</div>
+              <div style="{{ f.boxes.1.style }}">{{ f.boxes.1.ch }}</div>
+              <div style="{{ f.boxes.2.style }}">{{ f.boxes.2.ch }}</div>
+              <div style="{{ f.boxes.3.style }}">{{ f.boxes.3.ch }}</div>
+            </label>
+            <div style="text-align: center; font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.45); margin-top: 14px;">Tap the boxes to type your code</div>
+            <div style="margin-top: auto; padding-top: 20px;">
+              <button onClick="{{ fNext }}" style="{{ f.continueStyle }}">
+                Continue
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 11h13M12 5l6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- STEP 2: profile + join -->
+          <div style="position: relative; flex: 1; flex-direction: column; display: {{ f.step2Display }};">
+          <button onClick="{{ fEdit }}" style="align-self: center; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; margin-bottom: 18px; border: 1px solid rgba(255,255,255,0.2); border-radius: 17px; background: rgba(255,255,255,0.08); cursor: pointer; font-family: 'Fredoka', sans-serif;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-9" stroke="#B6FF4B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size: 13px; font-weight: 600; color: #fff; letter-spacing: 1px;">Room {{ f.code }}</span>
+            <span style="font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.5);">· edit</span>
+          </button>
+
           <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 22px;">
             <div style="width: 96px; height: 96px; border-radius: 50%; background: linear-gradient(150deg, #FF7DB6, #FF5DA2); display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 26px rgba(0,0,0,0.3), inset 0 0 0 3px rgba(255,255,255,0.3); animation: ma-pop 4s ease-in-out infinite;">
               <svg width="58" height="58" viewBox="0 0 48 48" fill="none"><circle cx="18" cy="20" r="3.2" fill="#3b0d73"/><circle cx="30" cy="20" r="3.2" fill="#3b0d73"/><path d="M16 29q8 8 16 0" stroke="#3b0d73" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
@@ -104,24 +137,12 @@
             </div>
           </div>
 
-          <!-- room code -->
-          <div style="position: relative; margin-bottom: 22px;">
-            <div style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.6); letter-spacing: 1px; margin-bottom: 10px;">ROOM CODE</div>
-            <div style="display: flex; gap: 11px;">
-              <div style="flex: 1; height: 66px; border-radius: 16px; background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.28); display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 700; color: #fff;">A</div>
-              <div style="flex: 1; height: 66px; border-radius: 16px; background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.28); display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 700; color: #fff;">B</div>
-              <div style="flex: 1; height: 66px; border-radius: 16px; background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.28); display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 700; color: #fff;">C</div>
-              <div style="flex: 1; height: 66px; border-radius: 16px; background: rgba(255,210,63,0.16); border: 2px solid #FFD23F; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px rgba(255,210,63,0.18);">
-                <span style="width: 3px; height: 32px; background: #FFD23F; border-radius: 2px; animation: ma-blink 1s step-end infinite;"></span>
-              </div>
-            </div>
-          </div>
-
           <div style="position: relative; margin-top: auto; padding-top: 6px;">
             <button style="width: 100%; height: 64px; border: none; border-radius: 20px; background: linear-gradient(180deg, #FFE27A, #FFC21A); color: #3b0d73; font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 7px 0 #D99700, 0 16px 22px rgba(0,0,0,0.28);" onClick="{{ goLobby }}">
               That's me — Join!
               <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 11h13M12 5l6 6-6 6" stroke="#3b0d73" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
+          </div>
           </div>
         </div>
       </x-import>
@@ -142,6 +163,39 @@
             <span style="height: 26px; padding: 0 10px; border-radius: 13px; background: linear-gradient(150deg, #FFE27A, #FFB300); color: #3b0d73; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center; gap: 3px;">
               <svg width="9" height="9" viewBox="0 0 24 24" fill="#3b0d73"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>PREMIUM</span>
           </div>
+
+          <!-- STEP 1: room code -->
+          <div style="position: relative; flex: 1; flex-direction: column; justify-content: center; display: {{ p.step1Display }};">
+            <div style="display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 28px;">
+              <div style="width: 76px; height: 76px; border-radius: 22px; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; margin-bottom: 18px;">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5" stroke="#FFD23F" stroke-width="1.8"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke="#FFD23F" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15" r="1.6" fill="#FFD23F"/></svg>
+              </div>
+              <div style="font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.3px;">Enter room code</div>
+              <div style="font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,0.6); margin-top: 6px; line-height: 1.4;">Find the 4-letter code<br>on the TV screen.</div>
+            </div>
+            <label style="position: relative; display: flex; gap: 11px; cursor: text;">
+              <input type="text" value="{{ p.code }}" onInput="{{ pInput }}" maxlength="4" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="text" style="position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: none; background: none; cursor: text; font-size: 16px;">
+              <div style="{{ p.boxes.0.style }}">{{ p.boxes.0.ch }}</div>
+              <div style="{{ p.boxes.1.style }}">{{ p.boxes.1.ch }}</div>
+              <div style="{{ p.boxes.2.style }}">{{ p.boxes.2.ch }}</div>
+              <div style="{{ p.boxes.3.style }}">{{ p.boxes.3.ch }}</div>
+            </label>
+            <div style="text-align: center; font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.45); margin-top: 14px;">Tap the boxes to type your code</div>
+            <div style="margin-top: auto; padding-top: 20px;">
+              <button onClick="{{ pNext }}" style="{{ p.continueStyle }}">
+                Continue
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 11h13M12 5l6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- STEP 2: profile + join -->
+          <div style="position: relative; flex: 1; flex-direction: column; display: {{ p.step2Display }};">
+          <button onClick="{{ pEdit }}" style="align-self: center; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; margin-bottom: 18px; border: 1px solid rgba(255,255,255,0.2); border-radius: 17px; background: rgba(255,255,255,0.08); cursor: pointer; font-family: 'Fredoka', sans-serif;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-9" stroke="#B6FF4B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size: 13px; font-weight: 600; color: #fff; letter-spacing: 1px;">Room {{ p.code }}</span>
+            <span style="font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.5);">· edit</span>
+          </button>
 
           <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 22px;">
             <div style="width: 96px; height: 96px; border-radius: 50%; background: linear-gradient(150deg, #c98bff, #8a2be2); display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 26px rgba(0,0,0,0.3), inset 0 0 0 3px rgba(255,210,63,0.85); animation: ma-pop 4s ease-in-out infinite;">
@@ -202,24 +256,12 @@
             </div>
           </div>
 
-          <!-- room code -->
-          <div style="position: relative; margin-bottom: 22px;">
-            <div style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.6); letter-spacing: 1px; margin-bottom: 10px;">ROOM CODE</div>
-            <div style="display: flex; gap: 11px;">
-              <div style="flex: 1; height: 66px; border-radius: 16px; background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.28); display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 700; color: #fff;">A</div>
-              <div style="flex: 1; height: 66px; border-radius: 16px; background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.28); display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 700; color: #fff;">B</div>
-              <div style="flex: 1; height: 66px; border-radius: 16px; background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.28); display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 700; color: #fff;">C</div>
-              <div style="flex: 1; height: 66px; border-radius: 16px; background: rgba(255,210,63,0.16); border: 2px solid #FFD23F; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px rgba(255,210,63,0.18);">
-                <span style="width: 3px; height: 32px; background: #FFD23F; border-radius: 2px; animation: ma-blink 1s step-end infinite;"></span>
-              </div>
-            </div>
-          </div>
-
           <div style="position: relative; margin-top: auto; padding-top: 6px;">
             <button style="width: 100%; height: 64px; border: none; border-radius: 20px; background: linear-gradient(180deg, #FFE27A, #FFC21A); color: #3b0d73; font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 7px 0 #D99700, 0 16px 22px rgba(0,0,0,0.28);" onClick="{{ goLobby }}">
               That's me — Join!
               <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 11h13M12 5l6 6-6 6" stroke="#3b0d73" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
+          </div>
           </div>
         </div>
       </x-import>
@@ -230,13 +272,53 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script>
 class Component extends DCLogic {
+  state = { fStep: 1, pStep: 1, fCode: '', pCode: '' };
+  view(step, code) {
+    const chars = code.toUpperCase().slice(0, 4).split('');
+    const boxes = [0, 1, 2, 3].map((i) => {
+      const filled = i < chars.length;
+      const active = i === chars.length;
+      return {
+        ch: filled ? chars[i] : '',
+        active,
+        style: `flex: 1; height: 66px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 700; color: #fff; transition: all 0.15s; background: ${active ? 'rgba(255,210,63,0.16)' : 'rgba(255,255,255,0.12)'}; border: 2px solid ${active ? '#FFD23F' : filled ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.28)'}; box-shadow: ${active ? '0 0 0 4px rgba(255,210,63,0.18)' : 'none'};`,
+      };
+    });
+    const ready = code.length === 4;
+    return {
+      step1Display: step === 1 ? 'flex' : 'none',
+      step2Display: step === 2 ? 'flex' : 'none',
+      code: code.toUpperCase(),
+      boxes,
+      ready,
+      continueStyle: `width: 100%; height: 64px; border: none; border-radius: 20px; font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s; cursor: ${ready ? 'pointer' : 'default'}; background: ${ready ? 'linear-gradient(180deg, #FFE27A, #FFC21A)' : 'rgba(255,255,255,0.12)'}; color: ${ready ? '#3b0d73' : 'rgba(255,255,255,0.4)'}; box-shadow: ${ready ? '0 7px 0 #D99700, 0 16px 22px rgba(0,0,0,0.28)' : 'none'};`,
+    };
+  }
+  input(which, raw) {
+    const key = which + 'Code';
+    const clean = raw.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+    this.setState({ [key]: clean });
+  }
+  next(which) {
+    const cKey = which + 'Code', sKey = which + 'Step';
+    if (this.state[cKey].length === 4) this.setState({ [sKey]: 2 });
+  }
   renderVals() {
     const go = (f) => () => { window.location.href = f; };
+    const s = this.state;
     return {
       darkMode: true,
       noop: () => {},
       goBack: go('Mini%20Arcade%20Home.dc.html'),
       goLobby: go('Mini%20Arcade%20Lobby.dc.html'),
+      f: this.view(s.fStep, s.fCode),
+      p: this.view(s.pStep, s.pCode),
+      fInput: (e) => this.input('f', e.target.value),
+      pInput: (e) => this.input('p', e.target.value),
+      fNext: () => this.next('f'),
+      pNext: () => this.next('p'),
+      fEdit: () => this.setState({ fStep: 1 }),
+      pEdit: () => this.setState({ pStep: 1 }),
     };
   }
 }

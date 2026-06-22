@@ -153,9 +153,9 @@ namespace MiniArcade.Bridge
         {
             _courseId = id; _turf.Clear(); _trapBlock.Clear(); _water.Clear();
             _windRect = null; _windDir = Vector2.zero; _windAccel = 0f; _windMax = 0f; _fanBlades = null; _fanArrows = null; _waterRect = null;   // off unless a course sets it
-            if (id == 2)
+            if (_def != null)
             {
-                LoadDef(_def);   // data-driven (the map builder); params come from the CourseDef (map3.json)
+                LoadDef(_def);   // ANY data-driven map (the map builder) — params come from the CourseDef
             }
             else if (id == 1)
             {
@@ -247,7 +247,7 @@ namespace MiniArcade.Bridge
         {
             ClearCourse();
             _buildingCourse = true;
-            if (_courseId == 2) BuildFromDef(_def); else if (_courseId == 1) BuildCourseTiki(); else BuildCourseLShape();
+            if (_def != null) BuildFromDef(_def); else if (_courseId == 1) BuildCourseTiki(); else BuildCourseLShape();   // any def map -> generic builder
             BuildCup();
             BuildGuards();
             _buildingCourse = false;
@@ -479,7 +479,7 @@ namespace MiniArcade.Bridge
                 _guards.Add(MakeGuard(new Vector3(1.7f, 0f, 1.5f), new Vector3(4.0f, 0f, 1.5f), 0.8f, 1.6f, 0.85f));
                 return;
             }
-            if (_courseId == 2 && _def != null)
+            if (_def != null)
             {
                 // data-driven guards from the def (slide/patrol = a->b sine; rotate = spinning bar)
                 foreach (var g in _def.guards)
@@ -613,6 +613,7 @@ namespace MiniArcade.Bridge
                     try { var raw = System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(defB64)); _def = JsonUtility.FromJson<CourseDef>(raw); _newDef = true; Debug.Log("[GOLF] course def loaded: " + (_def != null ? _def.name : "null")); }
                     catch (System.Exception e) { Debug.LogError("[GOLF] course def parse failed: " + e.Message); }
                 }
+                else if (_def != null) { _def = null; _newDef = true; }   // builtin map (no def) -> drop any stale def so maps 0/1 stay hardcoded
                 NewHole(JStr(json, "players"), Mathf.RoundToInt(JNum(json, "max")), Mathf.RoundToInt(JNum(json, "map")));
             }
             else if (t == "setTurn") SetTurn(JStr(json, "id"));
